@@ -40,6 +40,10 @@ PALETTE = {
     "stone": "b8b2a8",
     "mushroom": "e0574f",
     "window": "9fd8f5",
+    "ger_orange": "e8862e",
+    "copper": "5fb8a0",
+    "brick": "c08a66",
+    "velvet": "8a3b47",
 }
 
 

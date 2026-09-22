@@ -401,6 +401,12 @@ async function boot() {
       enterBuilding,
       leaveBuilding,
       teleport: (tile: number) => switchWorld(tile, player.forward.clone(), globeWorld),
+      lookAt: (tile: number) =>
+        switchWorld(
+          player.tile,
+          greatCircleDir(tileCenter(player.tile), tileCenter(tile), new Vector3()),
+          globeWorld,
+        ),
       debug: () => ({
         loc: player.world.id,
         tile: player.tile,

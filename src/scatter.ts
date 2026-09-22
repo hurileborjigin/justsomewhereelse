@@ -6,6 +6,7 @@ import {
   TILE_COUNT,
   greatCircleDir,
   isFree,
+  key as tileKey,
   neighborInDirection,
   neighborsOf,
   occupy,
@@ -25,6 +26,19 @@ const UP = new Vector3(0, 1, 0);
 const BUILDINGS = 8;
 const TREES = 60;
 const GRASS = 220;
+
+// The dedicated landmarks, at fixed tiles. Gloria's opera house sits on
+// face 3 - the exact antipode of the spawn face - half a planet away from
+// khurlee's ger and Frauenkirche, just like Sydney and Munich.
+const LANDMARKS: {
+  kind: BuildingKind;
+  tiles: [number, number, number][];
+  door: [number, number, number];
+}[] = [
+  { kind: "opera", tiles: [[3, 7, 7], [3, 8, 7]], door: [3, 6, 7] },
+  { kind: "ger", tiles: [[2, 11, 10]], door: [2, 11, 11] },
+  { kind: "frauenkirche", tiles: [[2, 13, 11], [2, 13, 10]], door: [2, 13, 12] },
+];
 
 /**
  * Seeded, tile-based world dressing. Both players run this with the same SEED,
@@ -55,9 +69,32 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
     return -1;
   };
 
-  // strange buildings first, while contiguous pairs of tiles are plentiful.
-  // Every building faces a free "door tile"; standing there lets you enter.
   const buildings: Building[] = [];
+
+  // landmarks first: fixed positions, stable ids (persisted locations inside
+  // them survive any change to the random scatter)
+  for (const lm of LANDMARKS) {
+    const tiles = lm.tiles.map(([f, i, j]) => tileKey(f, i, j));
+    const door = tileKey(...lm.door);
+    const anchor =
+      tiles.length === 1
+        ? tileCenter(tiles[0]).clone()
+        : tileCenter(tiles[0]).clone().add(tileCenter(tiles[1])).normalize();
+    const obj = assets[lm.kind].clone(true);
+    obj.position.copy(anchor).multiplyScalar(SURFACE - 0.03);
+    tangentFrameQuat(anchor.clone(), greatCircleDir(anchor, tileCenter(door), new Vector3()), obj.quaternion);
+    scene.add(obj);
+    occupy(tiles, true);
+    // keep a clear little plaza around each landmark
+    for (const t of [...tiles, door]) {
+      protectedTiles.add(t);
+      for (const n of neighborsOf(t)) if (n >= 0) protectedTiles.add(n);
+    }
+    buildings.push({ id: lm.kind, kind: lm.kind, tiles, doorTiles: [door] });
+  }
+
+  // strange buildings next, while contiguous pairs of tiles are plentiful.
+  // Every building faces a free "door tile"; standing there lets you enter.
   const kinds: BuildingKind[] = ["house_a", "house_b", "tower", "barn"];
   let guard = 0;
   while (buildings.length < BUILDINGS && guard++ < 60) {

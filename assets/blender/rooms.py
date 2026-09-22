@@ -109,11 +109,67 @@ def barn():  # barn hall: big red room with hay bales
     frame("Frame2", (5.85, -2.2, 1.55), facing_x=-1)
 
 
+def opera():  # concert hall, 7x6: stage at the far end, seat rows with an aisle
+    b = C.Build("RoomO")
+    rect_shell(b, C.mat("trunk"), C.mat("velvet"), 7, 6, door_x=0)
+    # stage with side curtains
+    b.box(C.mat("trunk"), (10, 2.4, 0.55), loc=(0, 4.6, 0.28), bevel=0.05)
+    for x in (-4.6, 4.6):
+        b.box(C.mat("mushroom"), (0.5, 2.2, 2.4), loc=(x, 4.6, 1.2))
+    # red seats: two rows each side of a center aisle (blocked in ROOM_SPECS)
+    for j in (2, 3):
+        for i in (1, 2, 4, 5):
+            x = (i - 3) * 2
+            y = -(j - 2.5) * 2
+            b.box(C.mat("mushroom"), (1.1, 0.8, 0.55), loc=(x, y, 0.28), bevel=0.05)
+            b.box(C.mat("velvet"), (1.1, 0.22, 0.7), loc=(x, y + 0.4, 0.75), bevel=0.04)
+    b.obj()
+
+
+def ger_room():  # inside the ger: round, felt walls, stove in the middle, beds
+    b = C.Build("RoomG")
+    round_shell(b, C.mat("sand"), C.mat("white", 0.9), 6.2)
+    b.tube(C.mat("ger_orange"), 6.4, 0.35, segments=20, loc=(0, 0, 1.9), inside=True)
+    # central stove with a pipe up through the toono
+    b.cylinder(C.mat("black", 0.6), 0.55, 0.7, segments=10, loc=(0, 0, 0.35))
+    b.cylinder(C.mat("black", 0.6), 0.12, 2.2, segments=8, loc=(0, 0, 1.5))
+    # beds along the sides + a rug by the stove
+    for x in (-4, 4):
+        b.box(C.mat("ger_orange"), (1.7, 2.6, 0.55), loc=(x, 0, 0.28), bevel=0.06)
+        b.box(C.mat("white", 0.8), (1.5, 2.3, 0.18), loc=(x, 0, 0.62))
+    b.cylinder(C.mat("mushroom", 1.0), 1.5, 0.06, segments=14, loc=(0, -2, 0.03))
+    b.obj()
+
+
+def frauenkirche_room():  # the nave: pews, windows, altar
+    b = C.Build("RoomF")
+    rect_shell(b, C.mat("stone"), C.mat("wall"), 5, 7, door_x=0)
+    # tall blue windows along both side walls
+    for x in (-4.97, 4.97):
+        for y in (-3, 0, 3):
+            b.panel(C.mat("window", 0.4), 1.2, 2.0, loc=(x, y, 1.5), rot=(r(90), 0, r(90) if x < 0 else r(-90)))
+    # altar at the far end with a copper cross
+    b.box(C.mat("white", 0.7), (2.2, 1.0, 0.9), loc=(0, 6.0, 0.45), bevel=0.04)
+    b.box(C.mat("copper"), (0.12, 0.12, 0.9), loc=(0, 6.0, 1.55))
+    b.box(C.mat("copper"), (0.5, 0.12, 0.12), loc=(0, 6.0, 1.7))
+    # wooden pews with a center aisle (blocked in ROOM_SPECS)
+    for j in (2, 3, 4):
+        for i in (1, 3):
+            x = (i - 2) * 2
+            y = -(j - 3) * 2
+            b.box(C.mat("trunk"), (1.6, 0.9, 0.5), loc=(x, y, 0.25))
+            b.box(C.mat("trunk"), (1.6, 0.18, 0.6), loc=(x, y + 0.42, 0.7))
+    b.obj()
+
+
 for name, build in (
     ("room_house_a", house_a),
     ("room_house_b", house_b),
     ("room_tower", tower),
     ("room_barn", barn),
+    ("room_opera", opera),
+    ("room_ger", ger_room),
+    ("room_frauenkirche", frauenkirche_room),
 ):
     C.reset_scene()
     build()

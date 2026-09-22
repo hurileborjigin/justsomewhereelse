@@ -95,7 +95,14 @@ export class GlobeWorld implements World {
 
 // ---- building interiors ---------------------------------------------------
 
-export type BuildingKind = "house_a" | "house_b" | "tower" | "barn";
+export type BuildingKind =
+  | "house_a"
+  | "house_b"
+  | "tower"
+  | "barn"
+  | "opera"
+  | "ger"
+  | "frauenkirche";
 
 export type RoomSpec = {
   /** grid size in tiles (tile size = 2 units, same feel as the globe) */
@@ -125,6 +132,24 @@ export const ROOM_SPECS: Record<BuildingKind, RoomSpec> = {
     bg: "1f2233",
   },
   barn: { w: 6, h: 8, blocked: [[1, 1], [4, 2], [2, 5]], bg: "302a22" },
+  opera: {
+    w: 7,
+    h: 6,
+    blocked: [[1, 2], [2, 2], [4, 2], [5, 2], [1, 3], [2, 3], [4, 3], [5, 3]],
+    bg: "241a20",
+  },
+  ger: {
+    w: 5,
+    h: 5,
+    blocked: [[0, 0], [4, 0], [0, 4], [4, 4], [2, 2], [0, 2], [4, 2]],
+    bg: "2c2420",
+  },
+  frauenkirche: {
+    w: 5,
+    h: 7,
+    blocked: [[2, 0], [1, 2], [3, 2], [1, 3], [3, 3], [1, 4], [3, 4]],
+    bg: "1c2030",
+  },
 };
 
 export const BUILDING_NAMES: Record<BuildingKind, string> = {
@@ -132,6 +157,9 @@ export const BUILDING_NAMES: Record<BuildingKind, string> = {
   house_b: "mushroom house",
   tower: "wizard tower",
   barn: "barn",
+  opera: "opera house",
+  ger: "ger",
+  frauenkirche: "Frauenkirche",
 };
 
 const T = 2; // tile size

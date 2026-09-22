@@ -72,6 +72,12 @@ step in, the bee flies right over (the `fly` flag in `CHARACTERS`).
 **Buildings**: a crooked house, a mushroom house, a wizard tower (one square
 each) and a long barn (two squares) — all in `assets/blender/buildings.py`.
 
+**Landmarks** (`assets/blender/landmarks.py`, fixed tiles in `src/scatter.ts`):
+Gloria's **Sydney Opera House** stands on the far side of the planet — the
+exact antipode of khurlee's corner, where his **Mongolian ger** and Munich's
+**Frauenkirche** stand side by side. All three are enterable: a velvet
+concert hall, a round ger with a stove and beds, and the church nave.
+
 ## Going inside
 
 Every building is **enterable**: walk onto its doorstep square and press
