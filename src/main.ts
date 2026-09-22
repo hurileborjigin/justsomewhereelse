@@ -1,5 +1,5 @@
 import { Clock, Quaternion, Vector3, type Scene } from "three";
-import type { CharacterId, PlayerId, StateData } from "../shared/protocol.ts";
+import { CHARACTER_OF, type PlayerId, type StateData } from "../shared/protocol.ts";
 import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
@@ -70,7 +70,6 @@ async function boot() {
   const dot = $("dot");
   const statusText = $("status-text");
   const whoText = $("who-text");
-  const swapBtn = $("swap") as HTMLButtonElement;
   const enterBtn = $("enter") as HTMLButtonElement;
 
   function updateWho() {
@@ -78,11 +77,12 @@ async function boot() {
     whoText.textContent = `${names[myId]}, you are the ${player.character} ${emoji}`;
   }
 
-  function applyCharacters(mine: CharacterId, theirs: CharacterId) {
-    player.setCharacter(mine);
-    localView.setCharacter(mine);
-    remote.character = theirs;
-    remoteView.setCharacter(theirs);
+  /** Characters are fixed: identity 0 is the bee, identity 1 the donkey. */
+  function applyCharacters() {
+    player.setCharacter(CHARACTER_OF[myId]);
+    localView.setCharacter(CHARACTER_OF[myId]);
+    remote.character = CHARACTER_OF[1 - myId];
+    remoteView.setCharacter(CHARACTER_OF[1 - myId]);
     updateWho();
   }
 
@@ -280,7 +280,7 @@ async function boot() {
           setupMode = false;
           myId = msg.id;
           names = msg.names;
-          applyCharacters(msg.assign[myId], msg.assign[1 - myId]);
+          applyCharacters();
           if (!spawned) {
             restore(msg.state);
             spawned = true;
@@ -294,13 +294,12 @@ async function boot() {
           for (const entry of msg.history) {
             chat.addMessage(
               entry.from === myId ? "me" : "peer",
-              msg.assign[entry.from],
+              CHARACTER_OF[entry.from],
               names[entry.from],
               entry.text,
               false,
             );
           }
-          swapBtn.hidden = false;
           break;
         }
         case "peer-joined": {
@@ -321,10 +320,6 @@ async function boot() {
           chat.addMessage("peer", remote.character, names[msg.from], msg.text);
           break;
         }
-        case "characters": {
-          applyCharacters(msg.assign[myId], msg.assign[1 - myId]);
-          break;
-        }
         case "names": {
           names = msg.names;
           updateWho();
@@ -335,10 +330,6 @@ async function boot() {
   });
   net.connect();
 
-  swapBtn.addEventListener("click", () => {
-    net.swap();
-    swapBtn.blur();
-  });
   $("rename").addEventListener("click", () => {
     const name = prompt("Your name on the planet:", names[myId]);
     if (name?.trim()) net.rename(name.trim());

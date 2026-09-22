@@ -55,10 +55,6 @@ export class Net {
     this.send(create ? { t: "join", id, pass, create: true } : { t: "join", id, pass });
   }
 
-  swap() {
-    this.send({ t: "swap" });
-  }
-
   chat(text: string) {
     this.send({ t: "chat", text });
   }

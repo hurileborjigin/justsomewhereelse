@@ -67,23 +67,6 @@
       #hint {
         opacity: 0.75;
       }
-      #swap {
-        position: fixed;
-        right: 16px;
-        bottom: 16px;
-        border: none;
-        border-radius: 14px;
-        padding: 10px 16px;
-        font: inherit;
-        font-size: 14px;
-        background: var(--paper);
-        color: var(--ink);
-        cursor: pointer;
-        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
-      }
-      #swap:hover {
-        transform: translateY(-1px);
-      }
       /* --- chat ------------------------------------------------------- */
       #bubbles {
         position: fixed;
@@ -349,7 +332,6 @@
       <div id="who"><span id="who-text">…</span><button id="rename" title="Change your name">✏️</button></div>
       <div id="hint">WASD / arrows to walk · Enter to chat · scroll to zoom</div>
     </div>
-    <button id="swap" hidden>Swap characters 🐝↔🫏</button>
     <button id="enter" hidden>Enter</button>
     <div id="bubbles"></div>
     <div id="chat-panel">

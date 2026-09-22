@@ -137,7 +137,6 @@ wss.on("connection", (ws) => {
         t: "welcome",
         id,
         names: store.names(),
-        assign: store.assign(),
         state: store.state(id),
         peer: {
           online: !!peerConn,
@@ -171,11 +170,6 @@ wss.on("connection", (ws) => {
       if (!text) return;
       const entry = store.addMessage(id, text);
       sendTo((1 - id) as PlayerId, { t: "chat", ...entry });
-    } else if (msg.t === "swap") {
-      const [a, b] = store.assign();
-      store.setAssign([b, a]);
-      broadcast({ t: "characters", assign: [b, a] });
-      console.log(`[planet] characters swapped: 0=${b}, 1=${a}`);
     } else if (msg.t === "rename") {
       const name = String(msg.name ?? "").slice(0, NAME_MAX_LEN).trim();
       if (!name) return;

@@ -53,16 +53,20 @@ bm.faces.ensure_lookup_table()
 
 def tile_fij(face):
     c = face.calc_center_median()
-    ax, ay, az = abs(c.x), abs(c.y), abs(c.z)
+    # The game grid lives in glTF/three.js coordinates (Y-up); the exporter
+    # maps Blender (x, y, z) -> (x, z, -y). Convert BEFORE computing the tile,
+    # or painted tiles (the lake!) land on the wrong cube face in-game.
+    x, y, z = c.x, c.z, -c.y
+    ax, ay, az = abs(x), abs(y), abs(z)
     if ax >= ay and ax >= az:
-        f = 0 if c.x >= 0 else 1
+        f = 0 if x >= 0 else 1
     elif ay >= ax and ay >= az:
-        f = 2 if c.y >= 0 else 3
+        f = 2 if y >= 0 else 3
     else:
-        f = 4 if c.z >= 0 else 5
+        f = 4 if z >= 0 else 5
     _, a, b = FACES[f]
-    u = c.x * a[0] + c.y * a[1] + c.z * a[2]
-    v = c.x * b[0] + c.y * b[1] + c.z * b[2]
+    u = x * a[0] + y * a[1] + z * a[2]
+    v = x * b[0] + y * b[1] + z * b[2]
     i = min(N - 1, max(0, int((u + 1) / 2 * N)))
     j = min(N - 1, max(0, int((v + 1) / 2 * N)))
     return f, i, j

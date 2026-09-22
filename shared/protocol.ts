@@ -12,6 +12,10 @@ export const TURN_SPEED = 8; // rad/s
 export type CharacterId = "bee" | "donkey";
 export type PlayerId = 0 | 1;
 
+// Fixed casting: identity 0 (gloria) is the bee, identity 1 (khurlee) is the
+// donkey. Forever.
+export const CHARACTER_OF: [CharacterId, CharacterId] = ["bee", "donkey"];
+
 export const CHARACTERS: Record<CharacterId, { speed: number; hover: number; fly: boolean }> = {
   bee: { speed: 4.5, hover: 0.6, fly: true },
   donkey: { speed: 4.0, hover: 0, fly: false },
@@ -51,7 +55,6 @@ export const PASS_MIN_LEN = 3;
 export type ClientMessage =
   | { t: "join"; id: PlayerId; pass: string; create?: boolean }
   | ({ t: "state" } & StateData)
-  | { t: "swap" }
   | { t: "rename"; name: string }
   | { t: "chat"; text: string };
 
@@ -63,13 +66,11 @@ export type ServerMessage =
       t: "welcome";
       id: PlayerId;
       names: [string, string];
-      assign: [CharacterId, CharacterId];
       state: StateData | null; // your persisted position (resume where you were)
       peer: { online: boolean; state: StateData | null };
       history: ChatEntry[];
     }
   | ({ t: "state"; id: PlayerId } & StateData)
-  | { t: "characters"; assign: [CharacterId, CharacterId] }
   | { t: "names"; names: [string, string] }
   | ({ t: "chat" } & ChatEntry)
   | { t: "peer-joined"; id: PlayerId }

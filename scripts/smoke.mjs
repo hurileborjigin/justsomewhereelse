@@ -97,8 +97,8 @@ try {
   a.send({ t: "join", id: 0, pass: PASS, create: true });
   const wa = await a.next();
   expect(
-    wa.t === "welcome" && wa.id === 0 && wa.assign[0] === "bee" && wa.state === null && wa.history.length === 0,
-    "gloria creates the word and is welcomed as bee",
+    wa.t === "welcome" && wa.id === 0 && wa.state === null && wa.history.length === 0,
+    "gloria creates the word and is welcomed to a fresh world",
   );
 
   const probe = client("P");
@@ -134,15 +134,10 @@ try {
   await b.next();
   expect(na.t === "names" && na.names[1] === "K 💙", "rename broadcast");
 
-  b.send({ t: "swap" });
-  const ka = await a.next();
-  await b.next();
-  expect(ka.t === "characters" && ka.assign[0] === "donkey", "swap broadcast");
-
   a.ws.close();
   expect((await b.next()).t === "peer-left", "khurlee told gloria left");
 
-  // reconnect: position, chat, rename and swap must all have persisted
+  // reconnect: position, chat and rename must all have persisted
   const a2 = client("A2");
   await a2.open;
   await a2.next(); // lobby
@@ -153,9 +148,8 @@ try {
       w2.state?.tile === 42 &&
       w2.history.length === 1 &&
       w2.history[0].text === "meet me at the lake" &&
-      w2.names[1] === "K 💙" &&
-      w2.assign[0] === "donkey",
-    "reconnect restores position, chat history, names and swap",
+      w2.names[1] === "K 💙",
+    "reconnect restores position, chat history and names",
   );
 
   console.log("SMOKE PASSED");

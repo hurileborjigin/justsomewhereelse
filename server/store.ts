@@ -6,7 +6,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { CharacterId, ChatEntry, PlayerId, StateData } from "../shared/protocol.ts";
+import type { ChatEntry, PlayerId, StateData } from "../shared/protocol.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
@@ -98,26 +98,6 @@ export class Store {
     const [saltHex, hashHex] = stored.split(":");
     const hash = scryptSync(pass, Buffer.from(saltHex, "hex"), 32);
     return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
-  }
-
-  assign(): [CharacterId, CharacterId] {
-    const row = this.db.prepare("SELECT value FROM kv WHERE key = 'assign'").get() as
-      | { value: string }
-      | undefined;
-    if (row) {
-      try {
-        return JSON.parse(row.value) as [CharacterId, CharacterId];
-      } catch {
-        /* fall through */
-      }
-    }
-    return ["bee", "donkey"];
-  }
-
-  setAssign(assign: [CharacterId, CharacterId]) {
-    this.db
-      .prepare("INSERT INTO kv (key, value) VALUES ('assign', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-      .run(JSON.stringify(assign));
   }
 
   addMessage(from: PlayerId, text: string): ChatEntry {
