@@ -122,6 +122,8 @@ export class Chat {
 
     $("chat-min").addEventListener("click", () => this.setOpen(false));
     this.openBtn.addEventListener("click", () => this.setOpen(true));
+    // the panel is an archive, not the conversation - it starts tucked away
+    this.setOpen(false);
 
     addEventListener("keydown", (e) => {
       if (e.code === "Escape" && document.activeElement === this.input) {
