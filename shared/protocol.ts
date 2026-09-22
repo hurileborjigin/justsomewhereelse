@@ -45,7 +45,11 @@ export type StateData = {
   tile: number; // current tile in that world (persisted for resume)
 };
 
-export type ChatEntry = { from: PlayerId; text: string; ts: number };
+export const MEDIA_MAX_BYTES = 25 * 1024 * 1024; // photos & videos, per file
+
+export type MediaRef = { url: string; kind: "image" | "video" };
+
+export type ChatEntry = { from: PlayerId; text: string; ts: number; media?: MediaRef };
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
@@ -56,7 +60,7 @@ export type ClientMessage =
   | { t: "join"; id: PlayerId; pass: string; create?: boolean }
   | ({ t: "state" } & StateData)
   | { t: "rename"; name: string }
-  | { t: "chat"; text: string };
+  | { t: "chat"; text: string; media?: MediaRef };
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)

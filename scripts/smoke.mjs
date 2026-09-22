@@ -129,6 +129,27 @@ try {
   const cb = await b.next();
   expect(cb.t === "chat" && cb.from === 0 && cb.text === "meet me at the lake", "chat relayed");
 
+  // media: upload guarded by the secret word, then sent as a chat message
+  const bad = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": "wrong" },
+    body: Buffer.from("not really a png"),
+  });
+  expect(bad.status === 403, "media upload rejects wrong passphrase");
+  const up = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": PASS },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]),
+  });
+  expect(up.ok, "media upload accepted");
+  const media = await up.json();
+  expect(/^\/media\/[\w.-]+\.png$/.test(media.url) && media.kind === "image", "upload returns a media ref");
+  const got = await fetch(`http://localhost:${PORT}${media.url}`);
+  expect(got.ok && (await got.arrayBuffer()).byteLength === 8, "uploaded file is served back");
+  a.send({ t: "chat", text: "look!", media });
+  const mb = await b.next();
+  expect(mb.t === "chat" && mb.media?.url === media.url && mb.media?.kind === "image", "media chat relayed");
+
   b.send({ t: "rename", name: "K 💙" });
   const na = await a.next();
   await b.next();
@@ -146,10 +167,11 @@ try {
   expect(
     w2.t === "welcome" &&
       w2.state?.tile === 42 &&
-      w2.history.length === 1 &&
+      w2.history.length === 2 &&
       w2.history[0].text === "meet me at the lake" &&
+      w2.history[1].media?.url === media.url &&
       w2.names[1] === "K 💙",
-    "reconnect restores position, chat history and names",
+    "reconnect restores position, chat history (incl. media) and names",
   );
 
   console.log("SMOKE PASSED");

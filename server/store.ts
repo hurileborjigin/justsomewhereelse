@@ -6,7 +6,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ChatEntry, PlayerId, StateData } from "../shared/protocol.ts";
+import type { ChatEntry, MediaRef, PlayerId, StateData } from "../shared/protocol.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
@@ -35,6 +35,11 @@ export class Store {
     const seed = this.db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
     seed.run(0, DEFAULT_NAMES[0]);
     seed.run(1, DEFAULT_NAMES[1]);
+    // older databases predate media messages
+    const cols = this.db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "media")) {
+      this.db.exec("ALTER TABLE messages ADD COLUMN media TEXT");
+    }
   }
 
   names(): [string, string] {
@@ -100,21 +105,33 @@ export class Store {
     return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
   }
 
-  addMessage(from: PlayerId, text: string): ChatEntry {
+  addMessage(from: PlayerId, text: string, media?: MediaRef): ChatEntry {
     const ts = Date.now();
-    this.db.prepare("INSERT INTO messages (sender, text, ts) VALUES (?, ?, ?)").run(from, text, ts);
+    this.db
+      .prepare("INSERT INTO messages (sender, text, ts, media) VALUES (?, ?, ?, ?)")
+      .run(from, text, ts, media ? JSON.stringify(media) : null);
     this.db
       .prepare(
         "DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT ?)",
       )
       .run(HISTORY_KEEP);
-    return { from, text, ts };
+    return media ? { from, text, ts, media } : { from, text, ts };
   }
 
   history(limit = 200): ChatEntry[] {
     const rows = this.db
-      .prepare("SELECT sender, text, ts FROM messages ORDER BY id DESC LIMIT ?")
-      .all(limit) as { sender: number; text: string; ts: number }[];
-    return rows.reverse().map((r) => ({ from: r.sender as PlayerId, text: r.text, ts: r.ts }));
+      .prepare("SELECT sender, text, ts, media FROM messages ORDER BY id DESC LIMIT ?")
+      .all(limit) as { sender: number; text: string; ts: number; media: string | null }[];
+    return rows.reverse().map((r) => {
+      const entry: ChatEntry = { from: r.sender as PlayerId, text: r.text, ts: r.ts };
+      if (r.media) {
+        try {
+          entry.media = JSON.parse(r.media) as MediaRef;
+        } catch {
+          /* ignore corrupt media refs */
+        }
+      }
+      return entry;
+    });
   }
 }

@@ -162,6 +162,45 @@
         cursor: pointer;
         box-shadow: 0 1px 8px rgba(30, 60, 30, 0.14);
       }
+      #chat-form button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .bubble img,
+      .bubble video,
+      .msg img,
+      .msg video {
+        display: block;
+        max-width: 180px;
+        max-height: 140px;
+        border-radius: 8px;
+        margin-top: 4px;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      .msg img,
+      .msg video {
+        max-width: 100%;
+      }
+      #lightbox[hidden] {
+        display: none;
+      }
+      #lightbox {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 10, 16, 0.88);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+      }
+      #lightbox img,
+      #lightbox video {
+        max-width: 92vw;
+        max-height: 92vh;
+        border-radius: 10px;
+      }
       #chat-panel {
         position: fixed;
         top: 14px;
@@ -351,8 +390,11 @@
     <button id="chat-open" hidden>💬<span id="chat-badge" hidden></span></button>
     <form id="chat-form" autocomplete="off">
       <input id="chat-input" maxlength="200" placeholder="Say something… (Enter)" />
+      <button type="button" id="chat-attach" title="Send a photo or video">📷</button>
       <button type="submit">Send</button>
+      <input id="chat-file" type="file" accept="image/*,video/*" hidden />
     </form>
+    <div id="lightbox" hidden></div>
     <div id="login" hidden>
       <form id="login-form">
         <h1>Who are you? 🌍</h1>

@@ -6,14 +6,23 @@
 //
 // Env: PORT (default 3001), PLANET_PASS (the shared passphrase - set a real
 // secret in production, e.g. `fly secrets set PLANET_PASS=...`), DB_PATH.
-import { existsSync } from "node:fs";
-import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sirv from "sirv";
 import { WebSocketServer, type WebSocket } from "ws";
-import { CHAT_MAX_LEN, NAME_MAX_LEN, PASS_MIN_LEN, SETUP_CREATOR } from "../shared/protocol.ts";
+import {
+  CHAT_MAX_LEN,
+  MEDIA_MAX_BYTES,
+  NAME_MAX_LEN,
+  PASS_MIN_LEN,
+  SETUP_CREATOR,
+} from "../shared/protocol.ts";
 import type {
   ClientMessage,
+  MediaRef,
   PlayerId,
   ServerMessage,
   StateData,
@@ -34,7 +43,76 @@ const store = new Store(DB_PATH);
 const distDir = fileURLToPath(new URL("../dist", import.meta.url));
 const serveStatic = existsSync(distDir) ? sirv(distDir, { single: true }) : null;
 
+// chat photos & videos live next to the database (the Fly volume in prod)
+const MEDIA_DIR =
+  process.env.MEDIA_PATH ?? join(DB_PATH === ":memory:" ? "data" : dirname(DB_PATH), "media");
+mkdirSync(MEDIA_DIR, { recursive: true });
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
+const EXT_TO_MIME = Object.fromEntries(Object.entries(MIME_TO_EXT).map(([m, e]) => [e, m]));
+
+function handleUpload(req: IncomingMessage, res: ServerResponse) {
+  if (!validPass(String(req.headers["x-planet-pass"] ?? ""))) {
+    res.statusCode = 403;
+    res.end("wrong secret word");
+    return;
+  }
+  const type = String(req.headers["content-type"] ?? "");
+  const ext = MIME_TO_EXT[type];
+  if (!ext) {
+    res.statusCode = 415;
+    res.end("only photos and videos");
+    return;
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let aborted = false;
+  req.on("data", (c: Buffer) => {
+    size += c.length;
+    if (size > MEDIA_MAX_BYTES && !aborted) {
+      aborted = true;
+      res.statusCode = 413;
+      res.end("too big (max 25 MB)");
+      req.destroy();
+      return;
+    }
+    if (!aborted) chunks.push(c);
+  });
+  req.on("end", () => {
+    if (aborted) return;
+    const name = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
+    writeFileSync(join(MEDIA_DIR, name), Buffer.concat(chunks));
+    res.setHeader("content-type", "application/json");
+    const media: MediaRef = { url: `/media/${name}`, kind: type.startsWith("video") ? "video" : "image" };
+    res.end(JSON.stringify(media));
+    console.log(`[planet] media uploaded: ${name} (${(size / 1024).toFixed(0)} KB)`);
+  });
+}
+
+function serveMedia(req: IncomingMessage, res: ServerResponse) {
+  const name = (req.url ?? "").slice("/media/".length);
+  const file = join(MEDIA_DIR, name);
+  if (!/^[\w.-]+$/.test(name) || !existsSync(file)) {
+    res.statusCode = 404;
+    res.end("not found");
+    return;
+  }
+  res.setHeader("content-type", EXT_TO_MIME[name.split(".").pop() ?? ""] ?? "application/octet-stream");
+  res.setHeader("cache-control", "public, max-age=31536000, immutable");
+  createReadStream(file).pipe(res);
+}
+
 const server = createServer((req, res) => {
+  if (req.url === "/media" && req.method === "POST") return handleUpload(req, res);
+  if (req.url?.startsWith("/media/") && req.method === "GET") return serveMedia(req, res);
   if (serveStatic) {
     serveStatic(req, res, () => {
       res.statusCode = 404;
@@ -167,8 +245,17 @@ wss.on("connection", (ws) => {
       sendTo((1 - id) as PlayerId, { t: "state", id, ...state });
     } else if (msg.t === "chat") {
       const text = String(msg.text ?? "").slice(0, CHAT_MAX_LEN).trim();
-      if (!text) return;
-      const entry = store.addMessage(id, text);
+      let media: MediaRef | undefined;
+      if (
+        msg.media &&
+        typeof msg.media.url === "string" &&
+        /^\/media\/[\w.-]+$/.test(msg.media.url) &&
+        (msg.media.kind === "image" || msg.media.kind === "video")
+      ) {
+        media = { url: msg.media.url, kind: msg.media.kind };
+      }
+      if (!text && !media) return;
+      const entry = store.addMessage(id, text, media);
       sendTo((1 - id) as PlayerId, { t: "chat", ...entry });
     } else if (msg.t === "rename") {
       const name = String(msg.name ?? "").slice(0, NAME_MAX_LEN).trim();

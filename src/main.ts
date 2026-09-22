@@ -292,6 +292,7 @@ async function boot() {
               names[entry.from],
               entry.text,
               false,
+              entry.media,
             );
           }
           break;
@@ -311,7 +312,7 @@ async function boot() {
           break;
         }
         case "chat": {
-          chat.addMessage("peer", remote.character, names[msg.from], msg.text);
+          chat.addMessage("peer", remote.character, names[msg.from], msg.text, true, msg.media);
           break;
         }
         case "names": {
@@ -325,9 +326,9 @@ async function boot() {
   net.connect();
 
   const chat = new Chat(
-    (text) => {
-      net.chat(text);
-      chat.addMessage("me", player.character, names[myId], text);
+    (text, media) => {
+      net.chat(text, media);
+      chat.addMessage("me", player.character, names[myId], text, true, media);
     },
     () => {
       const name = prompt("Your name on the planet:", names[myId]);

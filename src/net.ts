@@ -1,4 +1,10 @@
-import { SEND_HZ, type ClientMessage, type PlayerId, type ServerMessage } from "../shared/protocol.ts";
+import {
+  SEND_HZ,
+  type ClientMessage,
+  type MediaRef,
+  type PlayerId,
+  type ServerMessage,
+} from "../shared/protocol.ts";
 import type { Player } from "./player.ts";
 
 export type NetHandlers = {
@@ -55,8 +61,8 @@ export class Net {
     this.send(create ? { t: "join", id, pass, create: true } : { t: "join", id, pass });
   }
 
-  chat(text: string) {
-    this.send({ t: "chat", text });
+  chat(text: string, media?: MediaRef) {
+    this.send(media ? { t: "chat", text, media } : { t: "chat", text });
   }
 
   rename(name: string) {
