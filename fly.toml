@@ -1,0 +1,28 @@
+# Fly.io config for Tiny Planet.
+# One-time setup:
+#   fly launch --no-deploy          (creates the app; keep this file when asked)
+#   fly volumes create planet_data --size 1 --region fra
+#   fly secrets set PLANET_PASS=your-secret-word
+#   fly deploy
+app = "tiny-planet"
+primary_region = "fra"
+
+[env]
+  PORT = "3001"
+  DB_PATH = "/data/planet.db"
+
+[mounts]
+  source = "planet_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  # keep the planet awake so "meet me there" never waits for a cold start
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

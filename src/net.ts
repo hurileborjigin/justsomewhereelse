@@ -1,4 +1,4 @@
-import { SEND_HZ, type ClientMessage, type ServerMessage } from "../shared/protocol.ts";
+import { SEND_HZ, type ClientMessage, type PlayerId, type ServerMessage } from "../shared/protocol.ts";
 import type { Player } from "./player.ts";
 
 export type NetHandlers = {
@@ -9,12 +9,13 @@ export type NetHandlers = {
 /**
  * WebSocket client. The URL is derived from the page origin, so the same code
  * works in dev (Vite proxies /ws to the game server) and in production.
+ * Joining (identity + passphrase) is driven by main.ts on "lobby" messages.
  */
 export class Net {
   connected = false;
+  joined = false;
   private ws: WebSocket | null = null;
   private acc = 0;
-  private rejected = false; // server said "full" - stop reconnecting
 
   constructor(private handlers: NetHandlers) {}
 
@@ -25,7 +26,6 @@ export class Net {
     ws.onopen = () => {
       this.connected = true;
       this.handlers.onStatus(true);
-      this.send({ t: "hello" });
     };
     ws.onmessage = (ev) => {
       let msg: ServerMessage;
@@ -34,20 +34,25 @@ export class Net {
       } catch {
         return;
       }
-      if (msg.t === "full") this.rejected = true;
+      if (msg.t === "welcome") this.joined = true;
       this.handlers.onMessage(msg);
     };
     ws.onclose = () => {
       this.connected = false;
+      this.joined = false;
       this.ws = null;
       this.handlers.onStatus(false);
-      if (!this.rejected) setTimeout(() => this.connect(), 2000);
+      setTimeout(() => this.connect(), 2000);
     };
     ws.onerror = () => ws.close();
   }
 
   private send(msg: ClientMessage) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+  }
+
+  join(id: PlayerId, pass: string) {
+    this.send({ t: "join", id, pass });
   }
 
   swap() {
@@ -58,8 +63,13 @@ export class Net {
     this.send({ t: "chat", text });
   }
 
-  /** Called every frame; sends the local state at SEND_HZ. */
+  rename(name: string) {
+    this.send({ t: "rename", name });
+  }
+
+  /** Called every frame; sends the local state at SEND_HZ once joined. */
   tick(dt: number, player: Player) {
+    if (!this.joined) return;
     this.acc += dt;
     if (this.acc < 1 / SEND_HZ) return;
     this.acc = 0;
@@ -72,6 +82,7 @@ export class Net {
       q: [r(q.x), r(q.y), r(q.z), r(q.w)],
       m: player.moving ? 1 : 0,
       loc: player.world.id,
+      tile: player.tile,
     });
   }
 }

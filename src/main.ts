@@ -1,5 +1,5 @@
-import { Clock, Vector3, type Scene } from "three";
-import type { CharacterId } from "../shared/protocol.ts";
+import { Clock, Quaternion, Vector3, type Scene } from "three";
+import type { CharacterId, PlayerId, StateData } from "../shared/protocol.ts";
 import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
@@ -18,6 +18,8 @@ const $ = (id: string) => {
   if (!el) throw new Error(`missing #${id}`);
   return el;
 };
+
+const AUTH_KEY = "tp-auth";
 
 async function boot() {
   const canvas = $("game") as HTMLCanvasElement;
@@ -59,23 +61,76 @@ async function boot() {
   const remoteView = new CharacterView(assets, "donkey", scene);
   remoteView.setVisible(false);
 
-  let myId: 0 | 1 = 0;
+  let myId: PlayerId = 0;
+  let names: [string, string] = ["…", "…"];
   let spawned = false;
   let currentBuilding: Building | null = null;
   cam.snap(player);
 
   const dot = $("dot");
   const statusText = $("status-text");
-  const who = $("who");
+  const whoText = $("who-text");
   const swapBtn = $("swap") as HTMLButtonElement;
   const enterBtn = $("enter") as HTMLButtonElement;
+
+  function updateWho() {
+    const emoji = player.character === "bee" ? "🐝" : "🫏";
+    whoText.textContent = `${names[myId]}, you are the ${player.character} ${emoji}`;
+  }
 
   function applyCharacters(mine: CharacterId, theirs: CharacterId) {
     player.setCharacter(mine);
     localView.setCharacter(mine);
     remote.character = theirs;
     remoteView.setCharacter(theirs);
-    who.textContent = mine === "bee" ? "You are the bee 🐝" : "You are the donkey 🫏";
+    updateWho();
+  }
+
+  // ---- login ---------------------------------------------------------------
+
+  const loginEl = $("login");
+  const loginForm = $("login-form") as HTMLFormElement;
+  const loginPass = $("login-pass") as HTMLInputElement;
+  const loginError = $("login-error");
+  const whoButtons = [...loginForm.querySelectorAll<HTMLButtonElement>("#login-who button")];
+  let pickedId: PlayerId | null = null;
+  let pendingAuth: { id: PlayerId; pass: string } | null = null;
+  let triedStored = false;
+
+  const storedAuth = (): { id: PlayerId; pass: string } | null => {
+    try {
+      return JSON.parse(localStorage.getItem(AUTH_KEY) ?? "null");
+    } catch {
+      return null;
+    }
+  };
+
+  for (const btn of whoButtons) {
+    btn.addEventListener("click", () => {
+      pickedId = Number(btn.dataset.id) === 0 ? 0 : 1;
+      whoButtons.forEach((b) => b.classList.toggle("picked", b === btn));
+    });
+  }
+  loginForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (pickedId === null) {
+      loginError.textContent = "Pick who you are first";
+      return;
+    }
+    pendingAuth = { id: pickedId, pass: loginPass.value };
+    loginError.textContent = "";
+    net.join(pendingAuth.id, pendingAuth.pass);
+  });
+
+  function showLogin(online: [boolean, boolean], error = "") {
+    loginEl.hidden = false;
+    loginError.textContent = error;
+    whoButtons.forEach((b, i) => {
+      b.textContent = names[i] + (online[i] ? " (already here)" : "");
+      b.disabled = online[i];
+      if (online[i] && pickedId === i) pickedId = null;
+      b.classList.toggle("picked", pickedId === i);
+    });
   }
 
   // ---- entering & leaving buildings ---------------------------------------
@@ -100,6 +155,26 @@ async function boot() {
     const door = b.doorTiles[0];
     const away = greatCircleDir(tileCenter(b.tiles[0]), tileCenter(door), new Vector3());
     switchWorld(door, away, globeWorld);
+  }
+
+  /** Resume from a persisted position (or spawn fresh if it can't be applied). */
+  function restore(state: StateData | null) {
+    if (state) {
+      const building = state.loc === "globe" ? null : buildings.find((b) => b.id === state.loc);
+      const world = state.loc === "globe" ? globeWorld : building ? getRoom(building) : null;
+      if (world) {
+        currentBuilding = building ?? null;
+        const fwd = new Vector3(0, 0, 1).applyQuaternion(
+          new Quaternion(state.q[0], state.q[1], state.q[2], state.q[3]),
+        );
+        switchWorld(state.tile, fwd, world);
+        return;
+      }
+    }
+    currentBuilding = null;
+    player.spawnAt(myId);
+    localView.setScene(globeWorld.scene);
+    cam.snap(player);
   }
 
   let doorAction: (() => void) | null = null;
@@ -139,28 +214,57 @@ async function boot() {
     },
     onMessage(msg) {
       switch (msg.t) {
+        case "lobby": {
+          names = msg.names;
+          const stored = storedAuth();
+          if (!triedStored && stored && !msg.online[stored.id]) {
+            triedStored = true;
+            pendingAuth = stored;
+            net.join(stored.id, stored.pass);
+          } else {
+            showLogin(msg.online);
+          }
+          break;
+        }
+        case "deny": {
+          localStorage.removeItem(AUTH_KEY);
+          showLogin(
+            [false, false],
+            msg.reason === "pass" ? "That's not the secret word 🙈" : "That one is already playing",
+          );
+          break;
+        }
         case "welcome": {
-          myId = msg.id === 0 ? 0 : 1;
-          applyCharacters(msg.character, msg.character === "bee" ? "donkey" : "bee");
+          if (pendingAuth) localStorage.setItem(AUTH_KEY, JSON.stringify(pendingAuth));
+          loginEl.hidden = true;
+          myId = msg.id;
+          names = msg.names;
+          applyCharacters(msg.assign[myId], msg.assign[1 - myId]);
           if (!spawned) {
-            player.spawnAt(myId);
-            cam.snap(player);
+            restore(msg.state);
             spawned = true;
           }
-          if (msg.peer) {
-            remote.present = true;
-            applyCharacters(msg.character, msg.peer.character);
-            remote.spawnAt(msg.peer.id === 0 ? 0 : 1);
+          remote.present = msg.peer.online;
+          if (msg.peer.online) {
+            remote.spawnAt(myId === 0 ? 1 : 0);
             if (msg.peer.state) remote.setState(msg.peer.state);
+          }
+          chat.clear();
+          for (const entry of msg.history) {
+            chat.addMessage(
+              entry.from === myId ? "me" : "peer",
+              msg.assign[entry.from],
+              names[entry.from],
+              entry.text,
+              false,
+            );
           }
           swapBtn.hidden = false;
           break;
         }
         case "peer-joined": {
           remote.present = true;
-          remote.character = msg.character;
-          remoteView.setCharacter(msg.character);
-          remote.spawnAt(msg.id === 0 ? 0 : 1);
+          remote.spawnAt(msg.id);
           remote.loc = "globe";
           break;
         }
@@ -173,34 +277,35 @@ async function boot() {
           break;
         }
         case "chat": {
-          chat.addMessage("peer", remote.character, msg.text);
+          chat.addMessage("peer", remote.character, names[msg.from], msg.text);
           break;
         }
         case "characters": {
           applyCharacters(msg.assign[myId], msg.assign[1 - myId]);
           break;
         }
-        case "full": {
-          $("hud").hidden = true;
-          swapBtn.hidden = true;
-          const overlay = document.createElement("div");
-          overlay.id = "full-overlay";
-          overlay.textContent = "This tiny planet already has two hearts on it 💚";
-          document.body.append(overlay);
+        case "names": {
+          names = msg.names;
+          updateWho();
           break;
         }
       }
     },
   });
   net.connect();
+
   swapBtn.addEventListener("click", () => {
     net.swap();
     swapBtn.blur();
   });
+  $("rename").addEventListener("click", () => {
+    const name = prompt("Your name on the planet:", names[myId]);
+    if (name?.trim()) net.rename(name.trim());
+  });
 
   const chat = new Chat((text) => {
     net.chat(text);
-    chat.addMessage("me", player.character, text);
+    chat.addMessage("me", player.character, names[myId], text);
   });
 
   const resize = () => {

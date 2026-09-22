@@ -249,13 +249,94 @@
         font-size: 18px;
         background: linear-gradient(#8ec9ff, #fdf0dc);
       }
+      #login[hidden] {
+        display: none;
+      }
+      #login {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(#8ec9ff, #fdf0dc);
+      }
+      #login form {
+        background: var(--paper);
+        border-radius: 20px;
+        padding: 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: center;
+        box-shadow: 0 6px 30px rgba(30, 60, 30, 0.25);
+        min-width: 280px;
+      }
+      #login h1 {
+        font-size: 20px;
+      }
+      #login-who {
+        display: flex;
+        gap: 10px;
+      }
+      #login-who button {
+        border: 2px solid transparent;
+        border-radius: 14px;
+        padding: 12px 18px;
+        font: inherit;
+        font-size: 15px;
+        background: #eef0f4;
+        cursor: pointer;
+      }
+      #login-who button.picked {
+        border-color: #58b368;
+        background: #e3f3d9;
+      }
+      #login-who button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      #login input {
+        border: none;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 14px;
+        background: #eef0f4;
+        width: 100%;
+        box-sizing: border-box;
+        outline-color: #58b368;
+      }
+      #login button[type="submit"] {
+        border: none;
+        border-radius: 14px;
+        padding: 10px 22px;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        background: #58b368;
+        color: white;
+        cursor: pointer;
+      }
+      #login-error {
+        color: #d05a5a;
+        font-size: 13px;
+        min-height: 1em;
+      }
+      #rename {
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0 0 0 6px;
+        pointer-events: auto;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="hud">
       <div id="status"><span id="dot"></span><span id="status-text">connecting…</span></div>
-      <div id="who">…</div>
+      <div id="who"><span id="who-text">…</span><button id="rename" title="Change your name">✏️</button></div>
       <div id="hint">WASD / arrows to walk · Enter to chat · scroll to zoom</div>
     </div>
     <button id="swap" hidden>Swap characters 🐝↔🫏</button>
@@ -273,6 +354,18 @@
       <input id="chat-input" maxlength="200" placeholder="Say something… (Enter)" />
       <button type="submit">Send</button>
     </form>
+    <div id="login" hidden>
+      <form id="login-form">
+        <h1>Who are you? 🌍</h1>
+        <div id="login-who">
+          <button type="button" data-id="0">…</button>
+          <button type="button" data-id="1">…</button>
+        </div>
+        <input id="login-pass" type="password" placeholder="Secret word" autocomplete="current-password" />
+        <button type="submit">Step onto the planet</button>
+        <div id="login-error"></div>
+      </form>
+    </div>
     <div id="loading">Loading tiny planet…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

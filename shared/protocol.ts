@@ -10,6 +10,7 @@ export const SEND_HZ = 15;
 export const TURN_SPEED = 8; // rad/s
 
 export type CharacterId = "bee" | "donkey";
+export type PlayerId = 0 | 1;
 
 export const CHARACTERS: Record<CharacterId, { speed: number; hover: number; fly: boolean }> = {
   bee: { speed: 4.5, hover: 0.6, fly: true },
@@ -29,31 +30,41 @@ export const LAKE: [number, number, number][] = [
   [2, 5, 5],
 ];
 
+export const CHAT_MAX_LEN = 200;
+export const NAME_MAX_LEN = 24;
+
 export type StateData = {
   p: [number, number, number];
   q: [number, number, number, number];
   m: 0 | 1; // moving flag (drives remote walk animation)
   loc: string; // which world: "globe" or a building instance id
+  tile: number; // current tile in that world (persisted for resume)
 };
 
-export const CHAT_MAX_LEN = 200;
+export type ChatEntry = { from: PlayerId; text: string; ts: number };
 
 export type ClientMessage =
-  | { t: "hello" }
+  | { t: "join"; id: PlayerId; pass: string }
   | ({ t: "state" } & StateData)
   | { t: "swap" }
+  | { t: "rename"; name: string }
   | { t: "chat"; text: string };
 
 export type ServerMessage =
+  | { t: "lobby"; names: [string, string]; online: [boolean, boolean] }
+  | { t: "deny"; reason: "pass" | "taken" }
   | {
       t: "welcome";
-      id: number;
-      character: CharacterId;
-      peer?: { id: number; character: CharacterId; state?: StateData };
+      id: PlayerId;
+      names: [string, string];
+      assign: [CharacterId, CharacterId];
+      state: StateData | null; // your persisted position (resume where you were)
+      peer: { online: boolean; state: StateData | null };
+      history: ChatEntry[];
     }
-  | { t: "full" }
-  | ({ t: "state"; id: number } & StateData)
+  | ({ t: "state"; id: PlayerId } & StateData)
   | { t: "characters"; assign: [CharacterId, CharacterId] }
-  | { t: "chat"; id: number; text: string }
-  | { t: "peer-joined"; id: number; character: CharacterId }
-  | { t: "peer-left"; id: number };
+  | { t: "names"; names: [string, string] }
+  | ({ t: "chat" } & ChatEntry)
+  | { t: "peer-joined"; id: PlayerId }
+  | { t: "peer-left"; id: PlayerId };

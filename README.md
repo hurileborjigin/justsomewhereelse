@@ -13,9 +13,18 @@ npm run models   # regenerate the .glb models with Blender (only after editing t
 npm run dev      # game server on :3001 + Vite dev server on :5173
 ```
 
-Open http://localhost:5173 — first player becomes the bee, second the donkey.
+Open http://localhost:5173. You'll be asked **who you are** (the two
+identities live in the database — rename yourself anytime with the ✏️ next to
+your name) and for the **secret word** (`PLANET_PASS` env var; defaults to
+`planet` in dev). Each browser remembers you after the first login.
+
 **Walk with WASD or arrow keys** (one square per step; trees block, grass
 doesn't). The **Swap** button trades characters at any time.
+
+**Everything important persists** in SQLite (`DB_PATH`, default
+`data/planet.db`): your last position — including inside buildings, so you can
+live in a room and wake up there tomorrow — the chat history (replayed on
+login, last 1000 messages kept), your names and the character assignment.
 
 **Chat:** press Enter (or click the box at the bottom), type, Enter again to
 send — the message pops up as a speech bubble over your character's head. The
@@ -29,10 +38,23 @@ typing.
 npm run preview   # builds and serves everything on one port
 ```
 
-Then both open `http://<this-mac's-IP>:3001`. For playing over the internet,
-deploy the repo to any Node host (Fly.io / Railway / Render): `npm run build`,
-then `npm start` — one process serves the site and the `/ws` socket (the
-`PORT` env var is respected).
+Then both open `http://<this-mac's-IP>:3001`.
+
+### Deploying to Fly.io (the real thing)
+
+One process serves the site, the WebSocket and the SQLite file (on a mounted
+volume). One-time setup with [flyctl](https://fly.io/docs/flyctl/):
+
+```bash
+fly launch --no-deploy        # create the app (keep the existing fly.toml)
+fly volumes create planet_data --size 1 --region fra
+fly secrets set PLANET_PASS=your-secret-word
+fly deploy
+```
+
+After that, every update is just `fly deploy`. The app stays always-on
+(`min_machines_running = 1`) so nobody waits at the door — a shared-cpu
+256 MB machine plus the volume costs a few euros per month.
 
 ## The world is a grid
 

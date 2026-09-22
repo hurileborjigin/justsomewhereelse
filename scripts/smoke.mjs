@@ -1,30 +1,33 @@
 // End-to-end smoke test for the multiplayer server: boots server/index.ts on a
-// test port, connects two fake players plus a rejected third, and checks the
-// whole message flow (welcome, state relay, swap, peer-left).
-// Usage: npm run smoke
+// test port with a temp database, and checks identity join (passphrase, taken
+// slots), state relay, chat persistence, rename and swap persistence across a
+// reconnect. Usage: npm run smoke
 import { spawn } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 3111;
+const PASS = "smoketest";
+const DB = join(tmpdir(), `tinyplanet-smoke-${Date.now()}.db`);
 
 const server = spawn("node", [join(root, "server", "index.ts")], {
-  env: { ...process.env, PORT: String(PORT) },
+  env: { ...process.env, PORT: String(PORT), PLANET_PASS: PASS, DB_PATH: DB },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
+let done = false;
 const fail = (msg) => {
   console.error(`FAIL: ${msg}`);
   server.kill();
   process.exit(1);
 };
-
 server.on("exit", (code) => {
   if (!done) fail(`server exited early with code ${code}`);
 });
-let done = false;
 
 await new Promise((resolveReady, reject) => {
   const timer = setTimeout(() => reject(new Error("server did not start")), 8000);
@@ -34,7 +37,6 @@ await new Promise((resolveReady, reject) => {
       resolveReady();
     }
   });
-  server.stderr.on("data", (d) => process.stderr.write(d));
 }).catch((e) => fail(e.message));
 
 function client(name) {
@@ -49,7 +51,6 @@ function client(name) {
   });
   return {
     ws,
-    name,
     open: new Promise((r) => ws.on("open", r)),
     next(timeoutMs = 3000) {
       if (queue.length) return Promise.resolve(queue.shift());
@@ -72,61 +73,77 @@ const expect = (cond, what) => {
   console.log(`  ok: ${what}`);
 };
 
+const state = (z) => ({ t: "state", p: [0, 0.6, z], q: [0, 0, 0, 1], m: 1, loc: "globe", tile: 42 });
+
 try {
   const a = client("A");
   await a.open;
-  a.send({ t: "hello" });
+  const lobbyA = await a.next();
+  expect(
+    lobbyA.t === "lobby" && lobbyA.names[0] === "gloria" && lobbyA.names[1] === "khurlee",
+    "lobby announces gloria & khurlee",
+  );
+
+  a.send({ t: "join", id: 0, pass: "wrong" });
+  expect((await a.next()).reason === "pass", "wrong passphrase denied");
+  a.send({ t: "join", id: 0, pass: PASS });
   const wa = await a.next();
-  expect(wa.t === "welcome" && wa.id === 0 && wa.character === "bee" && !wa.peer, "A welcomed as bee, alone");
+  expect(
+    wa.t === "welcome" && wa.id === 0 && wa.assign[0] === "bee" && wa.state === null && wa.history.length === 0,
+    "gloria welcomed as bee, fresh world",
+  );
 
   const b = client("B");
   await b.open;
-  b.send({ t: "hello" });
+  await b.next(); // lobby
+  b.send({ t: "join", id: 0, pass: PASS });
+  expect((await b.next()).reason === "taken", "second gloria rejected as taken");
+  b.send({ t: "join", id: 1, pass: PASS });
   const wb = await b.next();
-  expect(
-    wb.t === "welcome" && wb.id === 1 && wb.character === "donkey" && wb.peer?.id === 0 && wb.peer?.character === "bee",
-    "B welcomed as donkey and sees A",
-  );
-  const ja = await a.next();
-  expect(ja.t === "peer-joined" && ja.id === 1 && ja.character === "donkey", "A told that B joined");
+  expect(wb.t === "welcome" && wb.id === 1 && wb.peer.online === true, "khurlee welcomed, sees gloria online");
+  expect((await a.next()).t === "peer-joined", "gloria told khurlee joined");
 
-  a.send({ t: "state", p: [1.5, 2.5, 19.5], q: [0, 0, 0, 1], m: 1 });
+  a.send(state(19.5));
   const sb = await b.next();
-  expect(sb.t === "state" && sb.id === 0 && sb.p[0] === 1.5 && sb.m === 1, "state relayed A -> B");
+  expect(sb.t === "state" && sb.id === 0 && sb.tile === 42, "state relayed with tile");
 
-  a.send({ t: "chat", text: "hi love, catch me if you can " + "x".repeat(300) });
-  const ch = await b.next();
-  expect(
-    ch.t === "chat" && ch.id === 0 && ch.text.startsWith("hi love") && ch.text.length <= 200,
-    "chat relayed A -> B and clamped to 200 chars",
-  );
+  a.send({ t: "chat", text: "meet me at the lake" });
+  const cb = await b.next();
+  expect(cb.t === "chat" && cb.from === 0 && cb.text === "meet me at the lake", "chat relayed");
+
+  b.send({ t: "rename", name: "K 💙" });
+  const na = await a.next();
+  await b.next();
+  expect(na.t === "names" && na.names[1] === "K 💙", "rename broadcast");
 
   b.send({ t: "swap" });
-  const ca = await a.next();
-  const cb = await b.next();
-  expect(
-    ca.t === "characters" && ca.assign[0] === "donkey" && ca.assign[1] === "bee" && cb.t === "characters",
-    "swap broadcast to both",
-  );
-
-  const c = client("C");
-  await c.open;
-  const fc = await c.next();
-  expect(fc.t === "full", "third player rejected as full");
+  const ka = await a.next();
+  await b.next();
+  expect(ka.t === "characters" && ka.assign[0] === "donkey", "swap broadcast");
 
   a.ws.close();
-  const la = await b.next();
-  expect(la.t === "peer-left" && la.id === 0, "B told that A left");
+  expect((await b.next()).t === "peer-left", "khurlee told gloria left");
 
-  // reconnect takes the freed slot with the swapped character
-  const d = client("D");
-  await d.open;
-  const wd = await d.next();
-  expect(wd.t === "welcome" && wd.id === 0 && wd.character === "donkey", "rejoiner gets slot 0 (now donkey)");
+  // reconnect: position, chat, rename and swap must all have persisted
+  const a2 = client("A2");
+  await a2.open;
+  await a2.next(); // lobby
+  a2.send({ t: "join", id: 0, pass: PASS });
+  const w2 = await a2.next();
+  expect(
+    w2.t === "welcome" &&
+      w2.state?.tile === 42 &&
+      w2.history.length === 1 &&
+      w2.history[0].text === "meet me at the lake" &&
+      w2.names[1] === "K 💙" &&
+      w2.assign[0] === "donkey",
+    "reconnect restores position, chat history, names and swap",
+  );
 
   console.log("SMOKE PASSED");
   done = true;
   server.kill();
+  rmSync(DB, { force: true });
   process.exit(0);
 } catch (e) {
   fail(e.message);

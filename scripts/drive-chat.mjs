@@ -15,6 +15,7 @@ const browser = await chromium.launch({ executablePath: SHELL, args: ["--no-sand
 
 async function openPlayer(name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript((id) => localStorage.setItem("tp-auth", JSON.stringify({ id, pass: "planet" })), name === "A" ? 0 : 1);
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log(`[${name}] pageerror: ${e.message}`));
   page.on("console", (m) => {

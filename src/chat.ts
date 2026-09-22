@@ -107,16 +107,24 @@ export class Chat {
     }
   }
 
-  addMessage(who: "me" | "peer", character: CharacterId, text: string) {
+  /** Wipe the history panel (before replaying persisted history). */
+  clear() {
+    this.log.replaceChildren();
+    this.unread = 0;
+    this.badge.hidden = true;
+  }
+
+  /** Append to the history panel; `bubble` also pops it over the head. */
+  addMessage(who: "me" | "peer", character: CharacterId, name: string, text: string, bubble = true) {
     const row = document.createElement("div");
     row.className = `msg ${who}`;
-    row.textContent = `${EMOJI[character]} ${text}`;
+    row.textContent = `${EMOJI[character]} ${name}: ${text}`;
     this.log.append(row);
     this.log.scrollTop = this.log.scrollHeight;
 
-    (who === "me" ? this.bubbleMe : this.bubblePeer).show(text);
+    if (bubble) (who === "me" ? this.bubbleMe : this.bubblePeer).show(text);
 
-    if (who === "peer" && this.panel.hidden) {
+    if (bubble && who === "peer" && this.panel.hidden) {
       this.unread++;
       this.badge.textContent = String(this.unread);
       this.badge.hidden = false;
