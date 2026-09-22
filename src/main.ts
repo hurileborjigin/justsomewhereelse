@@ -387,11 +387,11 @@ async function boot() {
     chat.update(cam.camera, player.pos, player.character, remote.pos, remote.character, together);
 
     if (world.isGlobe) {
-      // keep the sky gradient and the "sun" oriented to the player's sky
+      // keep the sky gradient and the low golden-hour sun oriented to the player
       up.copy(player.pos).normalize();
       sky.quaternion.setFromUnitVectors(Y, up);
       cam.camera.getWorldDirection(camRight).cross(up).negate();
-      sun.position.copy(player.pos).addScaledVector(up, 40).addScaledVector(camRight, 22);
+      sun.position.copy(player.pos).addScaledVector(up, 18).addScaledVector(camRight, 34);
       hemi.position.copy(up).multiplyScalar(50);
     }
 

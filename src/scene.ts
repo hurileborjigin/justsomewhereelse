@@ -24,8 +24,9 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   const scene = new Scene();
 
-  const hemi = new HemisphereLight(0xbfe3ff, 0x7ec850, 1.2);
-  const sun = new DirectionalLight(0xfff4d6, 2.2);
+  // golden hour: a warm low sun and peachy ambience
+  const hemi = new HemisphereLight(0xffd2a1, 0x8a7a50, 1.15);
+  const sun = new DirectionalLight(0xffb36b, 2.4);
   sun.position.set(0, 60, 0); // repositioned every frame relative to the player
   scene.add(hemi, sun);
 
@@ -40,8 +41,9 @@ function makeSky(): Mesh {
     side: BackSide,
     depthWrite: false,
     uniforms: {
-      top: { value: new Color("#8ec9ff") },
-      bottom: { value: new Color("#fdf0dc") },
+      top: { value: new Color("#7d85c1") }, // dusky periwinkle overhead
+      mid: { value: new Color("#f59a7e") }, // peach
+      bottom: { value: new Color("#ffc46b") }, // golden glow at the horizon
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -52,11 +54,14 @@ function makeSky(): Mesh {
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 top;
+      uniform vec3 mid;
       uniform vec3 bottom;
       varying vec3 vDir;
       void main() {
         float h = clamp(normalize(vDir).y * 0.5 + 0.5, 0.0, 1.0);
-        gl_FragColor = vec4(mix(bottom, top, pow(h, 1.4)), 1.0);
+        vec3 col = mix(bottom, mid, smoothstep(0.08, 0.52, h));
+        col = mix(col, top, smoothstep(0.52, 0.95, h));
+        gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
