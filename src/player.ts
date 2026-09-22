@@ -3,7 +3,7 @@ import { CHARACTERS, SURFACE, TURN_SPEED, type CharacterId } from "../shared/pro
 import {
   SPAWN_TILES,
   greatCircleDir,
-  isBlocked,
+  isBlockedFor,
   neighborInDirection,
   spawnForward,
   tileCenter,
@@ -85,7 +85,7 @@ export class Player {
           const from = tileCenter(this.tile);
           const to = tileCenter(target);
           greatCircleDir(from, to, this.forward);
-          if (!isBlocked(target)) {
+          if (!isBlockedFor(target, this.def.fly)) {
             const arc = from.angleTo(to) * SURFACE;
             this.tween = {
               from: from.clone(),

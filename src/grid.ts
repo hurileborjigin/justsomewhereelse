@@ -1,5 +1,5 @@
 import { Vector3 } from "three";
-import { N } from "../shared/protocol.ts";
+import { LAKE, N } from "../shared/protocol.ts";
 
 /**
  * The globe is an equal-angle spherified cube: 6 faces x N x N square tiles.
@@ -155,22 +155,31 @@ export function neighborInDirection(k: number, dir: Vector3): number {
   return best;
 }
 
-// ---- occupancy ----------------------------------------------------------
+// ---- occupancy & terrain -------------------------------------------------
 
 const blocked = new Set<number>();
 const occupiedDecor = new Set<number>(); // non-blocking props (grass)
+const water = new Set<number>();
+
+for (const [f, i, j] of LAKE) water.add(key(f, i, j));
 
 /** Mark tiles as taken by an object. Blocking objects also stop movement. */
 export function occupy(keys: number[], blocks: boolean): void {
   for (const k of keys) (blocks ? blocked : occupiedDecor).add(k);
 }
 
-export function isBlocked(k: number): boolean {
-  return blocked.has(k);
+export function isWater(k: number): boolean {
+  return water.has(k);
 }
 
+/** Can this tile be stepped onto? Water only stops characters that can't fly. */
+export function isBlockedFor(k: number, canFly: boolean): boolean {
+  return blocked.has(k) || (!canFly && water.has(k));
+}
+
+/** Free for placing scatter/buildings: no props, no water. */
 export function isFree(k: number): boolean {
-  return !blocked.has(k) && !occupiedDecor.has(k);
+  return !blocked.has(k) && !occupiedDecor.has(k) && !water.has(k);
 }
 
 // ---- spawns -------------------------------------------------------------

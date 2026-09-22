@@ -33,6 +33,13 @@ PALETTE = {
     "donkey_dark": "7a6f66",
     "snout": "cfc4ba",
     "white": "f5f2ec",
+    "water": "4fb3e8",
+    "wall": "f4e7c8",
+    "roof_red": "d96c5f",
+    "roof_blue": "7b6fd9",
+    "stone": "b8b2a8",
+    "mushroom": "e0574f",
+    "window": "9fd8f5",
 }
 
 

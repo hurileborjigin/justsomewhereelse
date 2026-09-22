@@ -10,6 +10,7 @@ import {
 } from "three";
 import { CHARACTERS, SURFACE, type CharacterId } from "../shared/protocol.ts";
 import { node, type Assets } from "./assets.ts";
+import { isWater, tileAt } from "./grid.ts";
 import { dampAngle } from "./math.ts";
 
 const _up = new Vector3();
@@ -98,7 +99,9 @@ export class CharacterView {
       this.ears[1].rotation.z = -earW;
     }
 
-    this.shadow.position.copy(up).multiplyScalar(SURFACE + 0.02);
+    // over the lake, drop the shadow onto the sunken water surface
+    const drop = isWater(tileAt(up)) ? 0.12 : 0;
+    this.shadow.position.copy(up).multiplyScalar(SURFACE + 0.02 - drop);
     this.shadow.quaternion.setFromUnitVectors(Z, up);
   }
 }

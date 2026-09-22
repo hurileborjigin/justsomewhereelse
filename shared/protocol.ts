@@ -11,10 +11,23 @@ export const TURN_SPEED = 8; // rad/s
 
 export type CharacterId = "bee" | "donkey";
 
-export const CHARACTERS: Record<CharacterId, { speed: number; hover: number }> = {
-  bee: { speed: 4.5, hover: 0.6 },
-  donkey: { speed: 4.0, hover: 0 },
+export const CHARACTERS: Record<CharacterId, { speed: number; hover: number; fly: boolean }> = {
+  bee: { speed: 4.5, hover: 0.6, fly: true },
+  donkey: { speed: 4.0, hover: 0, fly: false },
 };
+
+// Lake tiles as (face, i, j) - keep in sync with assets/blender/globe.py.
+// Water blocks walkers (the donkey); flyers (the bee) cross freely.
+export const LAKE: [number, number, number][] = [
+  [2, 3, 3],
+  [2, 4, 3],
+  [2, 5, 3],
+  [2, 3, 4],
+  [2, 4, 4],
+  [2, 5, 4],
+  [2, 4, 5],
+  [2, 5, 5],
+];
 
 export type StateData = {
   p: [number, number, number];

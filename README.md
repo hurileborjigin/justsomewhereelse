@@ -38,9 +38,17 @@ then `npm start` — one process serves the site and the `/ws` socket (the
 
 The globe is a spherified cube: 6 faces x 16 x 16 = **1536 square tiles**
 (`src/grid.ts` is the same math as `assets/blender/globe.py`). Objects occupy
-tiles — a tree takes one square (and blocks it); future buildings can take
-several (`grid.occupy([keys], blocks)`). The scatter is seeded, so both
-players always see the identical planet without sending it over the network.
+tiles — trees and buildings block their squares (the barn takes two,
+`grid.occupy([keys], blocks)` takes any footprint). The scatter is seeded, so
+both players always see the identical planet without sending it over the
+network.
+
+**The lake** (tile list in `shared/protocol.ts`, mirrored in `globe.py`) is
+sunken blue tiles with a sand beach. Water blocks walkers: the donkey can't
+step in, the bee flies right over (the `fly` flag in `CHARACTERS`).
+
+**Buildings**: a crooked house, a mushroom house, a wizard tower (one square
+each) and a long barn (two squares) — all in `assets/blender/buildings.py`.
 
 ## Adding your own models
 

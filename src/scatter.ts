@@ -1,18 +1,28 @@
 import { InstancedMesh, Object3D, Vector3, type Scene } from "three";
 import { SEED, SURFACE } from "../shared/protocol.ts";
 import { firstMesh, type Assets } from "./assets.ts";
-import { SPAWN_TILES, TILE_COUNT, isFree, neighborsOf, occupy, tileCenter } from "./grid.ts";
-import { mulberry32 } from "./math.ts";
+import {
+  SPAWN_TILES,
+  TILE_COUNT,
+  greatCircleDir,
+  isFree,
+  neighborsOf,
+  occupy,
+  tileCenter,
+} from "./grid.ts";
+import { mulberry32, tangentFrameQuat } from "./math.ts";
 
 const UP = new Vector3(0, 1, 0);
+const BUILDINGS = 8;
 const TREES = 60;
 const GRASS = 220;
 
 /**
  * Seeded, tile-based world dressing. Both players run this with the same SEED,
  * so they deterministically see the identical planet with zero network cost.
- * Trees occupy + block their square; grass occupies its square but is walkable.
- * (Future buildings: pass several tile keys to occupy() for bigger footprints.)
+ * Buildings and trees occupy + block their squares (the barn takes two);
+ * grass occupies its square but is walkable. The lake is part of the globe
+ * model itself - the grid knows its tiles from LAKE in shared/protocol.ts.
  */
 export function scatterWorld(scene: Scene, assets: Assets) {
   const rng = mulberry32(SEED);
@@ -34,6 +44,34 @@ export function scatterWorld(scene: Scene, assets: Assets) {
     }
     return -1;
   };
+
+  // strange buildings first, while contiguous pairs of tiles are plentiful
+  const kinds = ["house_a", "house_b", "tower", "barn"] as const;
+  let placedBuildings = 0;
+  let guard = 0;
+  while (placedBuildings < BUILDINGS && guard++ < 60) {
+    const kind = kinds[Math.floor(rng() * kinds.length)];
+    const k = pickFreeTile();
+    if (k < 0) break;
+    if (kind === "barn") {
+      // two-tile footprint: anchor + one free neighbor, barn oriented along it
+      const options = neighborsOf(k).filter((n) => n >= 0 && !protectedTiles.has(n) && isFree(n));
+      if (options.length === 0) continue;
+      const nb = options[Math.floor(rng() * options.length)];
+      const mid = tileCenter(k).clone().add(tileCenter(nb)).normalize();
+      const building = assets.barn.clone(true);
+      building.position.copy(mid).multiplyScalar(SURFACE - 0.03);
+      tangentFrameQuat(mid, greatCircleDir(mid, tileCenter(nb), new Vector3()), building.quaternion);
+      scene.add(building);
+      occupy([k, nb], true);
+    } else {
+      const building = assets[kind].clone(true);
+      placeOnTile(building, k, rng() * Math.PI * 2, 0.9 + rng() * 0.2);
+      scene.add(building);
+      occupy([k], true);
+    }
+    placedBuildings++;
+  }
 
   const variants = [assets.tree_a, assets.tree_b, assets.tree_c];
   for (let n = 0; n < TREES; n++) {
