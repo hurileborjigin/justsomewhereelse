@@ -100,6 +100,7 @@ async function boot() {
   let pendingAuth: { id: PlayerId; pass: string } | null = null;
   let triedStored = false;
   let setupMode = false; // true until the secret word has been created in-game
+  let openMode = false; // true when the planet requires no secret word at all
   let lobbyOnline: [boolean, boolean] = [false, false];
 
   const storedAuth = (): { id: PlayerId; pass: string } | null => {
@@ -122,7 +123,7 @@ async function boot() {
       loginError.textContent = "Pick who you are first";
       return;
     }
-    const creating = setupMode && pickedId === 0;
+    const creating = !openMode && setupMode && pickedId === 0;
     if (creating) {
       if (loginPass.value.length < 3) {
         loginError.textContent = "The secret word needs at least 3 characters";
@@ -133,7 +134,7 @@ async function boot() {
         return;
       }
     }
-    pendingAuth = { id: pickedId, pass: loginPass.value };
+    pendingAuth = { id: pickedId, pass: openMode ? "" : loginPass.value };
     loginError.textContent = "";
     net.join(pendingAuth.id, pendingAuth.pass, creating);
   });
@@ -146,14 +147,14 @@ async function boot() {
       if (lobbyOnline[i] && pickedId === i) pickedId = null;
       b.classList.toggle("picked", pickedId === i);
     });
-    const creating = setupMode && pickedId === 0;
-    const waitingForCreator = setupMode && pickedId !== 0;
-    loginNote.hidden = !setupMode;
+    const creating = !openMode && setupMode && pickedId === 0;
+    const waitingForCreator = !openMode && setupMode && pickedId !== 0;
+    loginNote.hidden = openMode || !setupMode;
     loginNote.textContent = creating
       ? `Welcome, ${names[0]}! This planet is brand new — choose the secret word you two will share.`
       : `This planet is brand new — ${names[0]} chooses the secret word first 💚`;
     loginPass.placeholder = creating ? "Choose a secret word" : "Secret word";
-    loginPass.hidden = waitingForCreator;
+    loginPass.hidden = openMode || waitingForCreator;
     loginPass2.hidden = !creating;
     loginSubmit.textContent = creating ? "Create it & step onto the planet" : "Step onto the planet";
     loginSubmit.disabled = waitingForCreator;
@@ -249,6 +250,7 @@ async function boot() {
           if (net.joined) break;
           names = msg.names;
           setupMode = msg.setup;
+          openMode = msg.open;
           lobbyOnline = msg.online;
           const stored = storedAuth();
           if (!triedStored && !msg.setup && stored && !msg.online[stored.id]) {

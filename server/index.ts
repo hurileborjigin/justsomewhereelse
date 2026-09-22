@@ -21,9 +21,11 @@ import type {
 import { Store } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
-// If PLANET_PASS is set it acts as a fixed passphrase (handy for dev/tests).
-// Otherwise the secret word is chosen in-game by identity 0 on the first
-// visit and stored (hashed) in the database.
+// PLANET_OPEN=1 disables the passphrase entirely: pick a name, walk in.
+// Otherwise: if PLANET_PASS is set it acts as a fixed passphrase (handy for
+// dev/tests); else the secret word is chosen in-game by identity 0 on the
+// first visit and stored (hashed) in the database.
+const OPEN = process.env.PLANET_OPEN === "1";
 const ENV_PASS = process.env.PLANET_PASS ?? null;
 const DB_PATH = process.env.DB_PATH ?? "data/planet.db";
 
@@ -62,8 +64,9 @@ function broadcast(msg: ServerMessage) {
 }
 
 const online = (): [boolean, boolean] => [conns.has(0), conns.has(1)];
-const setupMode = () => ENV_PASS === null && !store.hasPass();
-const validPass = (pass: string) => (ENV_PASS !== null ? pass === ENV_PASS : store.checkPass(pass));
+const setupMode = () => !OPEN && ENV_PASS === null && !store.hasPass();
+const validPass = (pass: string) =>
+  OPEN || (ENV_PASS !== null ? pass === ENV_PASS : store.checkPass(pass));
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -72,6 +75,7 @@ const lobbyMsg = (): ServerMessage => ({
   names: store.names(),
   online: online(),
   setup: setupMode(),
+  open: OPEN,
 });
 
 /** Anyone still on the login screen gets a fresh lobby (names/online/setup). */
@@ -99,7 +103,7 @@ wss.on("connection", (ws) => {
       if (id !== null) return;
       const wanted: PlayerId = msg.id === 0 ? 0 : 1;
       const pass = String(msg.pass ?? "");
-      if (msg.create) {
+      if (msg.create && !OPEN) {
         // first-visit setup: only the designated identity may choose the word
         if (!setupMode()) {
           send(ws, { t: "deny", reason: "exists" });

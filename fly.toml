@@ -10,6 +10,9 @@ primary_region = 'fra'
 [env]
   DB_PATH = '/data/planet.db'
   PORT = '3001'
+  # open door while testing - remove this line (and fly deploy) to require
+  # the secret word again
+  PLANET_OPEN = '1'
 
 [[mounts]]
   source = 'planet_data'

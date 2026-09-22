@@ -56,7 +56,8 @@ export type ClientMessage =
   | { t: "chat"; text: string };
 
 export type ServerMessage =
-  | { t: "lobby"; names: [string, string]; online: [boolean, boolean]; setup: boolean }
+  // open = the planet currently requires no secret word (PLANET_OPEN=1)
+  | { t: "lobby"; names: [string, string]; online: [boolean, boolean]; setup: boolean; open: boolean }
   | { t: "deny"; reason: "pass" | "taken" | "setup" | "exists" }
   | {
       t: "welcome";
