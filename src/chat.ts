@@ -1,5 +1,11 @@
 import { Vector3, type PerspectiveCamera } from "three";
-import { MEDIA_MAX_BYTES, type CharacterId, type MediaRef } from "../shared/protocol.ts";
+import {
+  MEDIA_MAX_BYTES,
+  RECALL_WINDOW_MS,
+  type CharacterId,
+  type ChatEntry,
+  type MediaRef,
+} from "../shared/protocol.ts";
 
 /**
  * Chat UI: a text input (Enter to focus, Enter to send, Esc to leave),
@@ -102,6 +108,7 @@ async function downscaleImage(file: File): Promise<Blob> {
 class Bubble {
   private el: HTMLDivElement;
   private hideAt = 0;
+  private msgId: number | null = null;
 
   constructor(container: HTMLElement) {
     this.el = document.createElement("div");
@@ -110,12 +117,17 @@ class Bubble {
     container.append(this.el);
   }
 
-  show(text: string, media?: MediaRef) {
+  show(id: number, text: string, media?: MediaRef) {
+    this.msgId = id;
     this.el.replaceChildren();
     if (text) this.el.append(document.createTextNode(text));
     if (media) this.el.append(mediaElement(media, "bubble"));
     this.el.hidden = false;
-    this.hideAt = now() + (media ? 12 : Math.min(10, 4 + text.length * 0.05));
+    this.hideAt = now() + (media ? 20 : Math.min(18, 8 + text.length * 0.08));
+  }
+
+  hideIf(id: number) {
+    if (this.msgId === id) this.el.hidden = true;
   }
 
   /** Reposition on screen; `screen` is null when the anchor isn't visible. */
@@ -183,8 +195,17 @@ export class Chat {
   private bubblePeer: Bubble;
   private tagMe: NameTag;
   private tagPeer: NameTag;
+  private rows = new Map<number, HTMLDivElement>();
+  private pendingFile: File | null = null;
+  private pendingUrl: string | null = null;
+  private onRecall: (id: number) => void;
 
-  constructor(onSend: (text: string, media?: MediaRef) => void, onRename: () => void) {
+  constructor(
+    onSend: (text: string, media?: MediaRef) => void,
+    onRename: () => void,
+    onRecall: (id: number) => void,
+  ) {
+    this.onRecall = onRecall;
     const $ = (id: string) => {
       const el = document.getElementById(id);
       if (!el) throw new Error(`missing #${id}`);
@@ -201,12 +222,37 @@ export class Chat {
     this.tagMe = new NameTag(bubbles, onRename);
     this.tagPeer = new NameTag(bubbles);
 
-    ($("chat-form") as HTMLFormElement).addEventListener("submit", (e) => {
+    const sendBtn = $("chat-send") as HTMLButtonElement;
+    const attachBtn = $("chat-attach") as HTMLButtonElement;
+    const setSending = (busy: boolean) => {
+      sendBtn.disabled = busy;
+      attachBtn.disabled = busy;
+      sendBtn.textContent = busy ? "⏳" : "Send";
+    };
+
+    ($("chat-form") as HTMLFormElement).addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = this.input.value.trim();
-      this.input.value = "";
-      if (text) onSend(text);
-      else this.input.blur();
+      if (this.pendingFile) {
+        // WhatsApp-style: the staged photo/video goes out only now, with the
+        // typed text as its caption
+        setSending(true);
+        try {
+          const media = await uploadMedia(this.pendingFile);
+          this.clearPending();
+          this.input.value = "";
+          onSend(text, media);
+        } catch (err) {
+          alert(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+          setSending(false);
+        }
+      } else if (text) {
+        this.input.value = "";
+        onSend(text);
+      } else {
+        this.input.blur();
+      }
     });
 
     $("chat-min").addEventListener("click", () => this.setOpen(false));
@@ -214,28 +260,21 @@ export class Chat {
     // the panel is an archive, not the conversation - it starts tucked away
     this.setOpen(false);
 
-    // photo & video attachments
-    const attachBtn = $("chat-attach") as HTMLButtonElement;
+    // photo & video attachments: picking a file only STAGES it as a preview
     const fileInput = $("chat-file") as HTMLInputElement;
     attachBtn.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", async () => {
+    fileInput.addEventListener("change", () => {
       const file = fileInput.files?.[0];
       fileInput.value = "";
       if (!file) return;
-      attachBtn.disabled = true;
-      attachBtn.textContent = "⏳";
-      try {
-        const media = await uploadMedia(file);
-        const caption = this.input.value.trim();
-        this.input.value = "";
-        onSend(caption, media);
-      } catch (err) {
-        alert(err instanceof Error ? err.message : "Upload failed");
-      } finally {
-        attachBtn.disabled = false;
-        attachBtn.textContent = "📷";
+      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+        alert("Only photos and videos can be sent");
+        return;
       }
+      this.setPending(file);
+      this.input.focus();
     });
+    $("chat-preview-x").addEventListener("click", () => this.clearPending());
 
     addEventListener("keydown", (e) => {
       if (e.code === "Escape" && document.activeElement === this.input) {
@@ -251,6 +290,35 @@ export class Chat {
     });
   }
 
+  private setPending(file: File) {
+    this.clearPending();
+    this.pendingFile = file;
+    this.pendingUrl = URL.createObjectURL(file);
+    const thumb = document.getElementById("chat-preview-thumb")!;
+    if (file.type.startsWith("video/")) {
+      const v = document.createElement("video");
+      v.src = this.pendingUrl;
+      v.muted = true;
+      v.playsInline = true;
+      thumb.replaceChildren(v);
+    } else {
+      const img = document.createElement("img");
+      img.src = this.pendingUrl;
+      thumb.replaceChildren(img);
+    }
+    document.getElementById("chat-preview")!.hidden = false;
+    this.input.placeholder = "Add a caption… (Enter to send)";
+  }
+
+  private clearPending() {
+    if (this.pendingUrl) URL.revokeObjectURL(this.pendingUrl);
+    this.pendingFile = null;
+    this.pendingUrl = null;
+    document.getElementById("chat-preview-thumb")!.replaceChildren();
+    document.getElementById("chat-preview")!.hidden = true;
+    this.input.placeholder = "Say something… (Enter)";
+  }
+
   private setOpen(open: boolean) {
     this.panel.hidden = !open;
     this.openBtn.hidden = open;
@@ -264,33 +332,44 @@ export class Chat {
   /** Wipe the history panel (before replaying persisted history). */
   clear() {
     this.log.replaceChildren();
+    this.rows.clear();
     this.unread = 0;
     this.badge.hidden = true;
   }
 
   /** Append to the history panel; `bubble` also pops it over the head. */
-  addMessage(
-    who: "me" | "peer",
-    character: CharacterId,
-    name: string,
-    text: string,
-    bubble = true,
-    media?: MediaRef,
-  ) {
+  addMessage(who: "me" | "peer", character: CharacterId, name: string, entry: ChatEntry, bubble = true) {
     const row = document.createElement("div");
     row.className = `msg ${who}`;
-    row.textContent = `${EMOJI[character]} ${name}:${text ? ` ${text}` : ""}`;
-    if (media) row.append(mediaElement(media));
+    row.textContent = `${EMOJI[character]} ${name}:${entry.text ? ` ${entry.text}` : ""}`;
+    if (entry.media) row.append(mediaElement(entry.media));
+    if (who === "me" && Date.now() - entry.ts < RECALL_WINDOW_MS) {
+      const btn = document.createElement("button");
+      btn.className = "recall";
+      btn.textContent = "↩";
+      btn.title = "Recall this message";
+      btn.addEventListener("click", () => this.onRecall(entry.id));
+      row.append(btn);
+    }
+    this.rows.set(entry.id, row);
     this.log.append(row);
     this.log.scrollTop = this.log.scrollHeight;
 
-    if (bubble) (who === "me" ? this.bubbleMe : this.bubblePeer).show(text, media);
+    if (bubble) (who === "me" ? this.bubbleMe : this.bubblePeer).show(entry.id, entry.text, entry.media);
 
     if (bubble && who === "peer" && this.panel.hidden) {
       this.unread++;
       this.badge.textContent = String(this.unread);
       this.badge.hidden = false;
     }
+  }
+
+  /** A message was recalled: remove it everywhere. */
+  removeMessage(id: number) {
+    this.rows.get(id)?.remove();
+    this.rows.delete(id);
+    this.bubbleMe.hideIf(id);
+    this.bubblePeer.hideIf(id);
   }
 
   /** The two floating labels; call whenever names change. */

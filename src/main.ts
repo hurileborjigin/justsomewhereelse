@@ -290,9 +290,8 @@ async function boot() {
               entry.from === myId ? "me" : "peer",
               CHARACTER_OF[entry.from],
               names[entry.from],
-              entry.text,
+              entry,
               false,
-              entry.media,
             );
           }
           break;
@@ -312,7 +311,16 @@ async function boot() {
           break;
         }
         case "chat": {
-          chat.addMessage("peer", remote.character, names[msg.from], msg.text, true, msg.media);
+          chat.addMessage(
+            msg.from === myId ? "me" : "peer",
+            CHARACTER_OF[msg.from],
+            names[msg.from],
+            msg,
+          );
+          break;
+        }
+        case "recalled": {
+          chat.removeMessage(msg.id);
           break;
         }
         case "names": {
@@ -325,15 +333,15 @@ async function boot() {
   });
   net.connect();
 
+  // own messages render when the server echoes them back (that echo carries
+  // the id that makes the 2h recall work)
   const chat = new Chat(
-    (text, media) => {
-      net.chat(text, media);
-      chat.addMessage("me", player.character, names[myId], text, true, media);
-    },
+    (text, media) => net.chat(text, media),
     () => {
       const name = prompt("Your name on the planet:", names[myId]);
       if (name?.trim()) net.rename(name.trim());
     },
+    (id) => net.recall(id),
   );
 
   const resize = () => {

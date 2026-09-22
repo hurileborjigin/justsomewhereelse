@@ -107,7 +107,7 @@ export class Store {
 
   addMessage(from: PlayerId, text: string, media?: MediaRef): ChatEntry {
     const ts = Date.now();
-    this.db
+    const res = this.db
       .prepare("INSERT INTO messages (sender, text, ts, media) VALUES (?, ?, ?, ?)")
       .run(from, text, ts, media ? JSON.stringify(media) : null);
     this.db
@@ -115,15 +115,39 @@ export class Store {
         "DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT ?)",
       )
       .run(HISTORY_KEEP);
-    return media ? { from, text, ts, media } : { from, text, ts };
+    const id = Number(res.lastInsertRowid);
+    return media ? { id, from, text, ts, media } : { id, from, text, ts };
+  }
+
+  getMessage(id: number): { sender: PlayerId; ts: number; media?: MediaRef } | null {
+    const row = this.db.prepare("SELECT sender, ts, media FROM messages WHERE id = ?").get(id) as
+      | { sender: number; ts: number; media: string | null }
+      | undefined;
+    if (!row) return null;
+    const out: { sender: PlayerId; ts: number; media?: MediaRef } = {
+      sender: row.sender as PlayerId,
+      ts: row.ts,
+    };
+    if (row.media) {
+      try {
+        out.media = JSON.parse(row.media) as MediaRef;
+      } catch {
+        /* ignore corrupt media refs */
+      }
+    }
+    return out;
+  }
+
+  deleteMessage(id: number) {
+    this.db.prepare("DELETE FROM messages WHERE id = ?").run(id);
   }
 
   history(limit = 200): ChatEntry[] {
     const rows = this.db
-      .prepare("SELECT sender, text, ts, media FROM messages ORDER BY id DESC LIMIT ?")
-      .all(limit) as { sender: number; text: string; ts: number; media: string | null }[];
+      .prepare("SELECT id, sender, text, ts, media FROM messages ORDER BY id DESC LIMIT ?")
+      .all(limit) as { id: number; sender: number; text: string; ts: number; media: string | null }[];
     return rows.reverse().map((r) => {
-      const entry: ChatEntry = { from: r.sender as PlayerId, text: r.text, ts: r.ts };
+      const entry: ChatEntry = { id: Number(r.id), from: r.sender as PlayerId, text: r.text, ts: r.ts };
       if (r.media) {
         try {
           entry.media = JSON.parse(r.media) as MediaRef;

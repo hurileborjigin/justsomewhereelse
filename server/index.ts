@@ -7,7 +7,7 @@
 // Env: PORT (default 3001), PLANET_PASS (the shared passphrase - set a real
 // secret in production, e.g. `fly secrets set PLANET_PASS=...`), DB_PATH.
 import { randomBytes } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ import {
   MEDIA_MAX_BYTES,
   NAME_MAX_LEN,
   PASS_MIN_LEN,
+  RECALL_WINDOW_MS,
   SETUP_CREATOR,
 } from "../shared/protocol.ts";
 import type {
@@ -256,7 +257,25 @@ wss.on("connection", (ws) => {
       }
       if (!text && !media) return;
       const entry = store.addMessage(id, text, media);
-      sendTo((1 - id) as PlayerId, { t: "chat", ...entry });
+      // echo to the sender too: the id it carries is what makes recall work
+      broadcast({ t: "chat", ...entry });
+    } else if (msg.t === "recall") {
+      const mid = Number(msg.id);
+      const m = store.getMessage(mid);
+      if (!m || m.sender !== id || Date.now() - m.ts > RECALL_WINDOW_MS) return;
+      store.deleteMessage(mid);
+      if (m.media) {
+        const name = m.media.url.split("/").pop() ?? "";
+        if (/^[\w.-]+$/.test(name)) {
+          try {
+            unlinkSync(join(MEDIA_DIR, name));
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+      broadcast({ t: "recalled", id: mid });
+      console.log(`[planet] ${store.names()[id]} recalled message ${mid}`);
     } else if (msg.t === "rename") {
       const name = String(msg.name ?? "").slice(0, NAME_MAX_LEN).trim();
       if (!name) return;

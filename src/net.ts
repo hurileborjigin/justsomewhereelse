@@ -65,6 +65,10 @@ export class Net {
     this.send(media ? { t: "chat", text, media } : { t: "chat", text });
   }
 
+  recall(id: number) {
+    this.send({ t: "recall", id });
+  }
+
   rename(name: string) {
     this.send({ t: "rename", name });
   }

@@ -46,10 +46,11 @@ export type StateData = {
 };
 
 export const MEDIA_MAX_BYTES = 25 * 1024 * 1024; // photos & videos, per file
+export const RECALL_WINDOW_MS = 2 * 60 * 60 * 1000; // messages can be recalled for 2h
 
 export type MediaRef = { url: string; kind: "image" | "video" };
 
-export type ChatEntry = { from: PlayerId; text: string; ts: number; media?: MediaRef };
+export type ChatEntry = { id: number; from: PlayerId; text: string; ts: number; media?: MediaRef };
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
@@ -60,7 +61,8 @@ export type ClientMessage =
   | { t: "join"; id: PlayerId; pass: string; create?: boolean }
   | ({ t: "state" } & StateData)
   | { t: "rename"; name: string }
-  | { t: "chat"; text: string; media?: MediaRef };
+  | { t: "chat"; text: string; media?: MediaRef }
+  | { t: "recall"; id: number };
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
@@ -77,5 +79,6 @@ export type ServerMessage =
   | ({ t: "state"; id: PlayerId } & StateData)
   | { t: "names"; names: [string, string] }
   | ({ t: "chat" } & ChatEntry)
+  | { t: "recalled"; id: number }
   | { t: "peer-joined"; id: PlayerId }
   | { t: "peer-left"; id: PlayerId };

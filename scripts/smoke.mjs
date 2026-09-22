@@ -126,6 +126,8 @@ try {
   expect(sb.t === "state" && sb.id === 0 && sb.tile === 42, "state relayed with tile");
 
   a.send({ t: "chat", text: "meet me at the lake" });
+  const ea = await a.next();
+  expect(ea.t === "chat" && ea.from === 0 && typeof ea.id === "number", "sender receives the echo with an id");
   const cb = await b.next();
   expect(cb.t === "chat" && cb.from === 0 && cb.text === "meet me at the lake", "chat relayed");
 
@@ -147,8 +149,18 @@ try {
   const got = await fetch(`http://localhost:${PORT}${media.url}`);
   expect(got.ok && (await got.arrayBuffer()).byteLength === 8, "uploaded file is served back");
   a.send({ t: "chat", text: "look!", media });
+  const me = await a.next();
   const mb = await b.next();
   expect(mb.t === "chat" && mb.media?.url === media.url && mb.media?.kind === "image", "media chat relayed");
+
+  // recall: only the sender, only within the window; recalled media is wiped
+  b.send({ t: "recall", id: me.id }); // not khurlee's message - must be ignored
+  a.send({ t: "recall", id: me.id });
+  const ra = await a.next();
+  const rb = await b.next();
+  expect(ra.t === "recalled" && ra.id === me.id && rb.t === "recalled", "recall broadcast to both");
+  const gone = await fetch(`http://localhost:${PORT}${media.url}`);
+  expect(gone.status === 404, "recalled media file deleted from disk");
 
   b.send({ t: "rename", name: "K 💙" });
   const na = await a.next();
@@ -167,11 +179,10 @@ try {
   expect(
     w2.t === "welcome" &&
       w2.state?.tile === 42 &&
-      w2.history.length === 2 &&
+      w2.history.length === 1 &&
       w2.history[0].text === "meet me at the lake" &&
-      w2.history[1].media?.url === media.url &&
       w2.names[1] === "K 💙",
-    "reconnect restores position, chat history (incl. media) and names",
+    "reconnect: history keeps the text message, not the recalled one",
   );
 
   console.log("SMOKE PASSED");
