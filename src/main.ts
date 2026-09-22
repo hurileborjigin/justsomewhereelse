@@ -67,7 +67,6 @@ async function boot() {
   const dot = $("dot");
   const statusText = $("status-text");
   const who = $("who");
-  const waiting = $("waiting");
   const swapBtn = $("swap") as HTMLButtonElement;
   const enterBtn = $("enter") as HTMLButtonElement;
 
@@ -136,10 +135,7 @@ async function boot() {
     onStatus(connected) {
       dot.classList.toggle("on", connected);
       statusText.textContent = connected ? "connected" : "offline — retrying…";
-      if (!connected) {
-        remote.present = false;
-        waiting.hidden = false;
-      }
+      if (!connected) remote.present = false;
     },
     onMessage(msg) {
       switch (msg.t) {
@@ -157,7 +153,6 @@ async function boot() {
             remote.spawnAt(msg.peer.id === 0 ? 0 : 1);
             if (msg.peer.state) remote.setState(msg.peer.state);
           }
-          waiting.hidden = remote.present;
           swapBtn.hidden = false;
           break;
         }
@@ -167,12 +162,10 @@ async function boot() {
           remoteView.setCharacter(msg.character);
           remote.spawnAt(msg.id === 0 ? 0 : 1);
           remote.loc = "globe";
-          waiting.hidden = true;
           break;
         }
         case "peer-left": {
           remote.present = false;
-          waiting.hidden = false;
           break;
         }
         case "state": {
