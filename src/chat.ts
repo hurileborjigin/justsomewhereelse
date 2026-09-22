@@ -348,7 +348,11 @@ export class Chat {
       btn.className = "recall";
       btn.textContent = "↩";
       btn.title = "Recall this message";
-      btn.addEventListener("click", () => this.onRecall(entry.id));
+      btn.addEventListener("click", () => {
+        if (confirm("Recall this message? It will disappear for both of you.")) {
+          this.onRecall(entry.id);
+        }
+      });
       row.append(btn);
     }
     this.rows.set(entry.id, row);

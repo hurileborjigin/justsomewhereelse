@@ -7,6 +7,7 @@ const _up = new Vector3();
 const _camF = new Vector3();
 const _camR = new Vector3();
 const _dir = new Vector3();
+const _query = new Vector3();
 const _axisF = new Vector3();
 const _axisR = new Vector3();
 const _targetQ = new Quaternion();
@@ -30,6 +31,8 @@ export class Player {
 
   private tween: Tween | null = null;
   private zigAxis: "f" | "r" = "f"; // alternates steps while moving diagonally
+  private lastStepDir = new Vector3(); // keeps near-45° headings walking straight
+  private hasLastStep = false;
   /** The partner's tile in the same world (-1 = none): never step onto it. */
   peerTile = -1;
 
@@ -54,6 +57,7 @@ export class Player {
     this.tile = tile;
     this.tween = null;
     this.moving = false;
+    this.hasLastStep = false;
     world.tilePos(tile, this.def.hover, this.pos);
     this.forward.copy(forward);
     tangentFrameQuat(world.up(this.pos, _up), this.forward, this.quat);
@@ -116,7 +120,14 @@ export class Player {
           }
         } else {
           this.zigAxis = input.y !== 0 ? "f" : "r";
-          const t = w.neighborInDirection(this.tile, _dir);
+          // when the camera sits near 45° to the grid, "forward" ties between
+          // two axes and would stagger; leaning the query toward the previous
+          // step direction keeps a held stick/key walking a straight line
+          _query.copy(_dir);
+          if (this.hasLastStep && this.lastStepDir.dot(_dir) > 0.3) {
+            _query.addScaledVector(this.lastStepDir, 0.35).normalize();
+          }
+          const t = w.neighborInDirection(this.tile, _query);
           if (t >= 0) {
             if (walkable(t)) target = t;
             else blockedAhead = t;
@@ -125,6 +136,8 @@ export class Player {
 
         if (target >= 0) {
           this.forward.copy(_dir); // face where the keys point, diagonals included
+          w.dirBetween(this.tile, target, this.lastStepDir);
+          this.hasLastStep = true;
           const speed = this.def.speed * (input.fast ? SPRINT : 1);
           this.tween = {
             from: this.tile,

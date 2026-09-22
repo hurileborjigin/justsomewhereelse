@@ -418,6 +418,7 @@ async function boot() {
   Object.assign(window as object, {
     __tp: {
       player,
+      input,
       buildings,
       enterBuilding,
       leaveBuilding,

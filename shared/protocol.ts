@@ -46,7 +46,7 @@ export type StateData = {
 };
 
 export const MEDIA_MAX_BYTES = 25 * 1024 * 1024; // photos & videos, per file
-export const RECALL_WINDOW_MS = 2 * 60 * 60 * 1000; // messages can be recalled for 2h
+export const RECALL_WINDOW_MS = 5 * 60 * 1000; // messages can be recalled for 5 minutes
 
 export type MediaRef = { url: string; kind: "image" | "video" };
 
