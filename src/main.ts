@@ -10,7 +10,7 @@ import { Net } from "./net.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
-import { createScene } from "./scene.ts";
+import { applySkyForHour, createScene } from "./scene.ts";
 import { BUILDING_NAMES, GlobeWorld, RoomWorld } from "./world.ts";
 
 const $ = (id: string) => {
@@ -350,6 +350,7 @@ async function boot() {
   const Y = new Vector3(0, 1, 0);
   let remoteScene: Scene | null = null;
   let wasAdjacent = false;
+  let hourOverride: number | null = null; // dev hook for testing sky phases
 
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
@@ -387,11 +388,14 @@ async function boot() {
     chat.update(cam.camera, player.pos, player.character, remote.pos, remote.character, together);
 
     if (world.isGlobe) {
-      // keep the sky gradient and the low golden-hour sun oriented to the player
+      // the sky follows YOUR local clock (hers follows Sydney, his Munich)
+      const now = new Date();
+      const hour = hourOverride ?? now.getHours() + now.getMinutes() / 60;
+      const sunHeight = applySkyForHour(hour, sky, sun, hemi);
       up.copy(player.pos).normalize();
       sky.quaternion.setFromUnitVectors(Y, up);
       cam.camera.getWorldDirection(camRight).cross(up).negate();
-      sun.position.copy(player.pos).addScaledVector(up, 18).addScaledVector(camRight, 34);
+      sun.position.copy(player.pos).addScaledVector(up, sunHeight).addScaledVector(camRight, 34);
       hemi.position.copy(up).multiplyScalar(50);
     }
 
@@ -407,6 +411,7 @@ async function boot() {
       enterBuilding,
       leaveBuilding,
       teleport: (tile: number) => switchWorld(tile, player.forward.clone(), globeWorld),
+      setHour: (h: number | null) => (hourOverride = h),
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,

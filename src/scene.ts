@@ -24,7 +24,6 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   const scene = new Scene();
 
-  // golden hour: a warm low sun and peachy ambience
   const hemi = new HemisphereLight(0xffd2a1, 0x8a7a50, 1.15);
   const sun = new DirectionalLight(0xffb36b, 2.4);
   sun.position.set(0, 60, 0); // repositioned every frame relative to the player
@@ -34,6 +33,90 @@ export function createScene(canvas: HTMLCanvasElement) {
   scene.add(sky);
 
   return { renderer, scene, sky, sun, hemi };
+}
+
+// ---- the sky follows each player's own local time ---------------------------
+// Keyframes over the 24h day; everything in between is blended smoothly.
+// Munich and Sydney are ~9h apart, so the two of you usually see different
+// skies - that is the point.
+
+type SkyStop = {
+  h: number;
+  top: Color;
+  mid: Color;
+  bottom: Color;
+  sun: Color;
+  sunI: number;
+  sunH: number; // how high the sun sits (low = long golden light)
+  hemiSky: Color;
+  hemiGround: Color;
+  hemiI: number;
+};
+
+const stop = (
+  h: number,
+  [top, mid, bottom, sunC, hemiSky, hemiGround]: string[],
+  sunI: number,
+  sunH: number,
+  hemiI: number,
+): SkyStop => ({
+  h,
+  top: new Color(top),
+  mid: new Color(mid),
+  bottom: new Color(bottom),
+  sun: new Color(sunC),
+  sunI,
+  sunH,
+  hemiSky: new Color(hemiSky),
+  hemiGround: new Color(hemiGround),
+  hemiI,
+});
+
+const NIGHT = ["#141a38", "#232a52", "#35315c", "#8fa8e8", "#2c3560", "#1c2418"];
+const DAWN = ["#6f7fc0", "#ee9d9e", "#ffce7d", "#ff9e6b", "#ffd2b0", "#6e6a4a"];
+const DAY = ["#4f9be6", "#a5d4f5", "#eaf6da", "#fff3d2", "#bfe3ff", "#7ec850"];
+const GOLDEN = ["#7d85c1", "#f59a7e", "#ffc46b", "#ffb36b", "#ffd2a1", "#8a7a50"];
+
+const SKY_STOPS: SkyStop[] = [
+  stop(0, NIGHT, 0.55, 30, 0.55),
+  stop(5, NIGHT, 0.55, 30, 0.55),
+  stop(7, DAWN, 1.9, 12, 0.95),
+  stop(9.5, DAY, 2.3, 50, 1.25),
+  stop(16.5, DAY, 2.3, 50, 1.25),
+  stop(19, GOLDEN, 2.4, 14, 1.15),
+  stop(21.5, NIGHT, 0.55, 30, 0.55),
+  stop(24, NIGHT, 0.55, 30, 0.55),
+];
+
+/** Blend the sky, sun and ambience to the given local hour; returns the
+ * sun height used to position the light. */
+export function applySkyForHour(
+  hour: number,
+  sky: Mesh,
+  sun: DirectionalLight,
+  hemi: HemisphereLight,
+): number {
+  const h = ((hour % 24) + 24) % 24;
+  let a = SKY_STOPS[0];
+  let b = SKY_STOPS[SKY_STOPS.length - 1];
+  for (let i = 0; i < SKY_STOPS.length - 1; i++) {
+    if (h >= SKY_STOPS[i].h && h <= SKY_STOPS[i + 1].h) {
+      a = SKY_STOPS[i];
+      b = SKY_STOPS[i + 1];
+      break;
+    }
+  }
+  const t = b.h === a.h ? 0 : (h - a.h) / (b.h - a.h);
+  const u = (sky.material as ShaderMaterial).uniforms;
+  (u.top.value as Color).lerpColors(a.top, b.top, t);
+  (u.mid.value as Color).lerpColors(a.mid, b.mid, t);
+  (u.bottom.value as Color).lerpColors(a.bottom, b.bottom, t);
+  sun.color.lerpColors(a.sun, b.sun, t);
+  sun.intensity = a.sunI + (b.sunI - a.sunI) * t;
+  hemi.color.lerpColors(a.hemiSky, b.hemiSky, t);
+  hemi.groundColor.lerpColors(a.hemiGround, b.hemiGround, t);
+  hemi.intensity = a.hemiI + (b.hemiI - a.hemiI) * t;
+  return a.sunH + (b.sunH - a.sunH) * t;
 }
 
 function makeSky(): Mesh {
