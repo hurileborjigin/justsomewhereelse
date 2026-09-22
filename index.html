@@ -84,6 +84,140 @@
       #swap:hover {
         transform: translateY(-1px);
       }
+      /* --- chat ------------------------------------------------------- */
+      #bubbles {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .bubble {
+        position: absolute;
+        transform: translate(-50%, calc(-100% - 12px));
+        background: var(--paper);
+        border-radius: 12px;
+        padding: 7px 11px;
+        font-size: 14px;
+        max-width: 230px;
+        width: max-content;
+        overflow-wrap: break-word;
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+        transition: opacity 0.15s;
+      }
+      .bubble::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -7px;
+        transform: translateX(-50%);
+        border: 8px solid transparent;
+        border-top-color: var(--paper);
+        border-bottom: none;
+      }
+      #chat-form {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+      }
+      #chat-input {
+        width: min(46vw, 380px);
+        border: none;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 14px;
+        background: var(--paper);
+        color: var(--ink);
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+        outline-color: #58b368;
+      }
+      #chat-form button {
+        border: none;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 14px;
+        background: var(--paper);
+        color: var(--ink);
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+      }
+      #chat-panel {
+        position: fixed;
+        top: 14px;
+        right: 14px;
+        width: 240px;
+        background: var(--paper);
+        border-radius: 14px;
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+        overflow: hidden;
+        font-size: 14px;
+      }
+      #chat-panel header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 8px 8px 12px;
+        font-weight: 600;
+      }
+      #chat-min {
+        border: none;
+        background: none;
+        font: inherit;
+        cursor: pointer;
+        padding: 0 6px;
+        color: var(--ink);
+      }
+      #chat-log {
+        max-height: 38vh;
+        overflow-y: auto;
+        padding: 0 10px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #chat-log:empty::before {
+        content: "No messages yet — say hi!";
+        opacity: 0.55;
+      }
+      .msg {
+        border-radius: 10px;
+        padding: 5px 9px;
+        overflow-wrap: break-word;
+      }
+      .msg.me {
+        background: #e3f3d9;
+        align-self: flex-end;
+      }
+      .msg.peer {
+        background: #eef0f4;
+        align-self: flex-start;
+      }
+      #chat-open {
+        position: fixed;
+        top: 14px;
+        right: 14px;
+        border: none;
+        border-radius: 14px;
+        padding: 9px 12px;
+        font-size: 16px;
+        background: var(--paper);
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+      }
+      #chat-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #d05a5a;
+        color: white;
+        font-size: 11px;
+        border-radius: 9px;
+        padding: 2px 6px;
+      }
       #loading,
       #full-overlay {
         position: fixed;
@@ -104,9 +238,22 @@
       <div id="status"><span id="dot"></span><span id="status-text">connecting…</span></div>
       <div id="who">…</div>
       <div id="waiting">Waiting for your partner…</div>
-      <div id="hint">WASD or arrow keys to walk, square by square</div>
+      <div id="hint">WASD / arrows to walk · Enter to chat</div>
     </div>
     <button id="swap" hidden>Swap characters 🐝↔🫏</button>
+    <div id="bubbles"></div>
+    <div id="chat-panel">
+      <header>
+        <span>Chat 💬</span>
+        <button id="chat-min" title="Minimize">—</button>
+      </header>
+      <div id="chat-log"></div>
+    </div>
+    <button id="chat-open" hidden>💬<span id="chat-badge" hidden></span></button>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" maxlength="200" placeholder="Say something… (Enter)" />
+      <button type="submit">Send</button>
+    </form>
     <div id="loading">Loading tiny planet…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>

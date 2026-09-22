@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import sirv from "sirv";
 import { WebSocketServer, type WebSocket } from "ws";
+import { CHAT_MAX_LEN } from "../shared/protocol.ts";
 import type {
   CharacterId,
   ClientMessage,
@@ -80,6 +81,11 @@ wss.on("connection", (ws) => {
       assign = [assign[1], assign[0]];
       for (const s of slots) if (s) send(s.ws, { t: "characters", assign });
       console.log(`[planet] characters swapped: 0=${assign[0]}, 1=${assign[1]}`);
+    } else if (msg.t === "chat") {
+      const text = String(msg.text ?? "").slice(0, CHAT_MAX_LEN).trim();
+      if (!text) return;
+      const other = slots[1 - id];
+      if (other) send(other.ws, { t: "chat", id, text });
     }
   });
 

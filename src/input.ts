@@ -7,12 +7,21 @@ export class Input {
   constructor() {
     addEventListener("keydown", (e) => {
       if (e.repeat) return;
+      // don't walk while the player is typing in the chat box
+      if (isTyping(e.target)) return;
       this.keys.add(e.code);
       this.recompute();
     });
     addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
       this.recompute();
+    });
+    // a text field grabbing focus mid-walk would otherwise leave a key stuck down
+    addEventListener("focusin", (e) => {
+      if (isTyping(e.target)) {
+        this.keys.clear();
+        this.recompute();
+      }
     });
     addEventListener("blur", () => {
       this.keys.clear();
@@ -29,4 +38,8 @@ export class Input {
     this.y = up - down;
     this.x = right - left;
   }
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }

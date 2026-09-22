@@ -94,6 +94,13 @@ try {
   const sb = await b.next();
   expect(sb.t === "state" && sb.id === 0 && sb.p[0] === 1.5 && sb.m === 1, "state relayed A -> B");
 
+  a.send({ t: "chat", text: "hi love, catch me if you can " + "x".repeat(300) });
+  const ch = await b.next();
+  expect(
+    ch.t === "chat" && ch.id === 0 && ch.text.startsWith("hi love") && ch.text.length <= 200,
+    "chat relayed A -> B and clamped to 200 chars",
+  );
+
   b.send({ t: "swap" });
   const ca = await a.next();
   const cb = await b.next();

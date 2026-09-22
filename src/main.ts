@@ -3,6 +3,7 @@ import type { CharacterId } from "../shared/protocol.ts";
 import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
+import { Chat } from "./chat.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
 import { Player } from "./player.ts";
@@ -111,6 +112,10 @@ async function boot() {
           remote.setState(msg);
           break;
         }
+        case "chat": {
+          chat.addMessage("peer", remote.character, msg.text);
+          break;
+        }
         case "characters": {
           applyCharacters(msg.assign[myId], msg.assign[1 - myId]);
           break;
@@ -131,6 +136,11 @@ async function boot() {
   swapBtn.addEventListener("click", () => {
     net.swap();
     swapBtn.blur();
+  });
+
+  const chat = new Chat((text) => {
+    net.chat(text);
+    chat.addMessage("me", player.character, text);
   });
 
   const resize = () => {
@@ -155,6 +165,7 @@ async function boot() {
 
     localView.update(dt, t, player.pos, player.quat, player.moving);
     if (remote.present) remoteView.update(dt, t, remote.pos, remote.quat, remote.moving);
+    chat.update(cam.camera, player.pos, player.character, remote.pos, remote.character, remote.present);
 
     // keep the sky gradient and the "sun" oriented to the player's sky
     up.copy(player.pos).normalize();

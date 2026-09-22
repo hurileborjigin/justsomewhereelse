@@ -17,6 +17,12 @@ Open http://localhost:5173 — first player becomes the bee, second the donkey.
 **Walk with WASD or arrow keys** (one square per step; trees block, grass
 doesn't). The **Swap** button trades characters at any time.
 
+**Chat:** press Enter (or click the box at the bottom), type, Enter again to
+send — the message pops up as a speech bubble over your character's head. The
+panel in the top-right keeps the history; minimize it and a badge counts
+unread messages. Esc leaves the chat box. Walking keys are ignored while
+typing.
+
 ### Playing from two computers (same Wi-Fi)
 
 ```bash

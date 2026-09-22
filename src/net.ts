@@ -54,6 +54,10 @@ export class Net {
     this.send({ t: "swap" });
   }
 
+  chat(text: string) {
+    this.send({ t: "chat", text });
+  }
+
   /** Called every frame; sends the local state at SEND_HZ. */
   tick(dt: number, player: Player) {
     this.acc += dt;

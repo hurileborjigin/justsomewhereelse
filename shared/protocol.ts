@@ -22,10 +22,13 @@ export type StateData = {
   m: 0 | 1; // moving flag (drives remote walk animation)
 };
 
+export const CHAT_MAX_LEN = 200;
+
 export type ClientMessage =
   | { t: "hello" }
   | ({ t: "state" } & StateData)
-  | { t: "swap" };
+  | { t: "swap" }
+  | { t: "chat"; text: string };
 
 export type ServerMessage =
   | {
@@ -37,5 +40,6 @@ export type ServerMessage =
   | { t: "full" }
   | ({ t: "state"; id: number } & StateData)
   | { t: "characters"; assign: [CharacterId, CharacterId] }
+  | { t: "chat"; id: number; text: string }
   | { t: "peer-joined"; id: number; character: CharacterId }
   | { t: "peer-left"; id: number };
