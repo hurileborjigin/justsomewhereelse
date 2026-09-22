@@ -322,6 +322,16 @@
         font-size: 13px;
         min-height: 1em;
       }
+      #login-note {
+        font-size: 13px;
+        opacity: 0.8;
+        text-align: center;
+        max-width: 240px;
+      }
+      #login button[type="submit"]:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
       #rename {
         border: none;
         background: none;
@@ -361,8 +371,10 @@
           <button type="button" data-id="0">…</button>
           <button type="button" data-id="1">…</button>
         </div>
+        <div id="login-note" hidden></div>
         <input id="login-pass" type="password" placeholder="Secret word" autocomplete="current-password" />
-        <button type="submit">Step onto the planet</button>
+        <input id="login-pass2" type="password" placeholder="Type it again" autocomplete="new-password" hidden />
+        <button type="submit" id="login-submit">Step onto the planet</button>
         <div id="login-error"></div>
       </form>
     </div>

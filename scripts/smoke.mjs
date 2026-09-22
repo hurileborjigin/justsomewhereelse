@@ -14,8 +14,12 @@ const PORT = 3111;
 const PASS = "smoketest";
 const DB = join(tmpdir(), `tinyplanet-smoke-${Date.now()}.db`);
 
+// no PLANET_PASS: the smoke test exercises the in-game "create the secret
+// word" setup flow that production uses
+const env = { ...process.env, PORT: String(PORT), DB_PATH: DB };
+delete env.PLANET_PASS;
 const server = spawn("node", [join(root, "server", "index.ts")], {
-  env: { ...process.env, PORT: String(PORT), PLANET_PASS: PASS, DB_PATH: DB },
+  env,
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -80,18 +84,32 @@ try {
   await a.open;
   const lobbyA = await a.next();
   expect(
-    lobbyA.t === "lobby" && lobbyA.names[0] === "gloria" && lobbyA.names[1] === "khurlee",
-    "lobby announces gloria & khurlee",
+    lobbyA.t === "lobby" && lobbyA.names[0] === "gloria" && lobbyA.names[1] === "khurlee" && lobbyA.setup === true,
+    "fresh world: lobby announces gloria & khurlee and asks for setup",
   );
 
-  a.send({ t: "join", id: 0, pass: "wrong" });
-  expect((await a.next()).reason === "pass", "wrong passphrase denied");
+  a.send({ t: "join", id: 1, pass: PASS, create: true });
+  expect((await a.next()).reason === "setup", "khurlee may not create the secret word");
   a.send({ t: "join", id: 0, pass: PASS });
+  expect((await a.next()).reason === "setup", "plain join denied until the word exists");
+  a.send({ t: "join", id: 0, pass: "ab", create: true });
+  expect((await a.next()).reason === "pass", "too-short secret word rejected");
+  a.send({ t: "join", id: 0, pass: PASS, create: true });
   const wa = await a.next();
   expect(
     wa.t === "welcome" && wa.id === 0 && wa.assign[0] === "bee" && wa.state === null && wa.history.length === 0,
-    "gloria welcomed as bee, fresh world",
+    "gloria creates the word and is welcomed as bee",
   );
+
+  const probe = client("P");
+  await probe.open;
+  const lobbyP = await probe.next();
+  expect(lobbyP.setup === false, "setup is over once the word exists");
+  probe.send({ t: "join", id: 1, pass: "wrong" });
+  expect((await probe.next()).reason === "pass", "wrong passphrase denied");
+  probe.send({ t: "join", id: 1, pass: PASS, create: true });
+  expect((await probe.next()).reason === "exists", "creating again is refused");
+  probe.ws.close();
 
   const b = client("B");
   await b.open;

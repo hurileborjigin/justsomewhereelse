@@ -91,11 +91,16 @@ async function boot() {
   const loginEl = $("login");
   const loginForm = $("login-form") as HTMLFormElement;
   const loginPass = $("login-pass") as HTMLInputElement;
+  const loginPass2 = $("login-pass2") as HTMLInputElement;
+  const loginNote = $("login-note");
+  const loginSubmit = $("login-submit") as HTMLButtonElement;
   const loginError = $("login-error");
   const whoButtons = [...loginForm.querySelectorAll<HTMLButtonElement>("#login-who button")];
   let pickedId: PlayerId | null = null;
   let pendingAuth: { id: PlayerId; pass: string } | null = null;
   let triedStored = false;
+  let setupMode = false; // true until the secret word has been created in-game
+  let lobbyOnline: [boolean, boolean] = [false, false];
 
   const storedAuth = (): { id: PlayerId; pass: string } | null => {
     try {
@@ -108,7 +113,7 @@ async function boot() {
   for (const btn of whoButtons) {
     btn.addEventListener("click", () => {
       pickedId = Number(btn.dataset.id) === 0 ? 0 : 1;
-      whoButtons.forEach((b) => b.classList.toggle("picked", b === btn));
+      refreshLoginForm();
     });
   }
   loginForm.addEventListener("submit", (e) => {
@@ -117,20 +122,46 @@ async function boot() {
       loginError.textContent = "Pick who you are first";
       return;
     }
+    const creating = setupMode && pickedId === 0;
+    if (creating) {
+      if (loginPass.value.length < 3) {
+        loginError.textContent = "The secret word needs at least 3 characters";
+        return;
+      }
+      if (loginPass.value !== loginPass2.value) {
+        loginError.textContent = "The two words don't match";
+        return;
+      }
+    }
     pendingAuth = { id: pickedId, pass: loginPass.value };
     loginError.textContent = "";
-    net.join(pendingAuth.id, pendingAuth.pass);
+    net.join(pendingAuth.id, pendingAuth.pass, creating);
   });
 
-  function showLogin(online: [boolean, boolean], error = "") {
-    loginEl.hidden = false;
-    loginError.textContent = error;
+  function refreshLoginForm(error?: string) {
+    if (error !== undefined) loginError.textContent = error;
     whoButtons.forEach((b, i) => {
-      b.textContent = names[i] + (online[i] ? " (already here)" : "");
-      b.disabled = online[i];
-      if (online[i] && pickedId === i) pickedId = null;
+      b.textContent = names[i] + (lobbyOnline[i] ? " (already here)" : "");
+      b.disabled = lobbyOnline[i];
+      if (lobbyOnline[i] && pickedId === i) pickedId = null;
       b.classList.toggle("picked", pickedId === i);
     });
+    const creating = setupMode && pickedId === 0;
+    const waitingForCreator = setupMode && pickedId !== 0;
+    loginNote.hidden = !setupMode;
+    loginNote.textContent = creating
+      ? `Welcome, ${names[0]}! This planet is brand new — choose the secret word you two will share.`
+      : `This planet is brand new — ${names[0]} chooses the secret word first 💚`;
+    loginPass.placeholder = creating ? "Choose a secret word" : "Secret word";
+    loginPass.hidden = waitingForCreator;
+    loginPass2.hidden = !creating;
+    loginSubmit.textContent = creating ? "Create it & step onto the planet" : "Step onto the planet";
+    loginSubmit.disabled = waitingForCreator;
+  }
+
+  function showLogin(error = "") {
+    loginEl.hidden = false;
+    refreshLoginForm(error);
   }
 
   // ---- entering & leaving buildings ---------------------------------------
@@ -215,28 +246,36 @@ async function boot() {
     onMessage(msg) {
       switch (msg.t) {
         case "lobby": {
+          if (net.joined) break;
           names = msg.names;
+          setupMode = msg.setup;
+          lobbyOnline = msg.online;
           const stored = storedAuth();
-          if (!triedStored && stored && !msg.online[stored.id]) {
+          if (!triedStored && !msg.setup && stored && !msg.online[stored.id]) {
             triedStored = true;
             pendingAuth = stored;
             net.join(stored.id, stored.pass);
           } else {
-            showLogin(msg.online);
+            showLogin();
           }
           break;
         }
         case "deny": {
           localStorage.removeItem(AUTH_KEY);
-          showLogin(
-            [false, false],
-            msg.reason === "pass" ? "That's not the secret word 🙈" : "That one is already playing",
-          );
+          if (msg.reason === "exists") setupMode = false;
+          const reasons = {
+            pass: setupMode ? "That word is too short" : "That's not the secret word 🙈",
+            taken: "That one is already playing",
+            setup: `${names[0]} chooses the secret word first 💚`,
+            exists: "The secret word is already chosen — just enter it",
+          } as const;
+          showLogin(reasons[msg.reason]);
           break;
         }
         case "welcome": {
           if (pendingAuth) localStorage.setItem(AUTH_KEY, JSON.stringify(pendingAuth));
           loginEl.hidden = true;
+          setupMode = false;
           myId = msg.id;
           names = msg.names;
           applyCharacters(msg.assign[myId], msg.assign[1 - myId]);

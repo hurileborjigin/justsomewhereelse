@@ -43,16 +43,21 @@ export type StateData = {
 
 export type ChatEntry = { from: PlayerId; text: string; ts: number };
 
+// Identity 0 (gloria by default) chooses the shared secret word on the very
+// first visit; after that everyone joins with it.
+export const SETUP_CREATOR: PlayerId = 0;
+export const PASS_MIN_LEN = 3;
+
 export type ClientMessage =
-  | { t: "join"; id: PlayerId; pass: string }
+  | { t: "join"; id: PlayerId; pass: string; create?: boolean }
   | ({ t: "state" } & StateData)
   | { t: "swap" }
   | { t: "rename"; name: string }
   | { t: "chat"; text: string };
 
 export type ServerMessage =
-  | { t: "lobby"; names: [string, string]; online: [boolean, boolean] }
-  | { t: "deny"; reason: "pass" | "taken" }
+  | { t: "lobby"; names: [string, string]; online: [boolean, boolean]; setup: boolean }
+  | { t: "deny"; reason: "pass" | "taken" | "setup" | "exists" }
   | {
       t: "welcome";
       id: PlayerId;

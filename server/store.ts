@@ -2,6 +2,7 @@
 // last, the character assignment and the chat history. SQLite via node:sqlite
 // (built into Node), one file on disk - on Fly.io it lives on the mounted
 // volume (DB_PATH=/data/planet.db).
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -64,6 +65,39 @@ export class Store {
     } catch {
       return null;
     }
+  }
+
+  // --- the shared secret word (chosen in-game on first visit) --------------
+
+  private kvGet(key: string): string | null {
+    const row = this.db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value ?? null;
+  }
+
+  private kvSet(key: string, value: string) {
+    this.db
+      .prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(key, value);
+  }
+
+  hasPass(): boolean {
+    return this.kvGet("pass") !== null;
+  }
+
+  setPass(pass: string) {
+    const salt = randomBytes(16);
+    const hash = scryptSync(pass, salt, 32);
+    this.kvSet("pass", `${salt.toString("hex")}:${hash.toString("hex")}`);
+  }
+
+  checkPass(pass: string): boolean {
+    const stored = this.kvGet("pass");
+    if (!stored) return false;
+    const [saltHex, hashHex] = stored.split(":");
+    const hash = scryptSync(pass, Buffer.from(saltHex, "hex"), 32);
+    return timingSafeEqual(hash, Buffer.from(hashHex, "hex"));
   }
 
   assign(): [CharacterId, CharacterId] {

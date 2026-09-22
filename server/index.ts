@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import sirv from "sirv";
 import { WebSocketServer, type WebSocket } from "ws";
-import { CHAT_MAX_LEN, NAME_MAX_LEN } from "../shared/protocol.ts";
+import { CHAT_MAX_LEN, NAME_MAX_LEN, PASS_MIN_LEN, SETUP_CREATOR } from "../shared/protocol.ts";
 import type {
   ClientMessage,
   PlayerId,
@@ -21,7 +21,10 @@ import type {
 import { Store } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const PASS = process.env.PLANET_PASS ?? "planet";
+// If PLANET_PASS is set it acts as a fixed passphrase (handy for dev/tests).
+// Otherwise the secret word is chosen in-game by identity 0 on the first
+// visit and stored (hashed) in the database.
+const ENV_PASS = process.env.PLANET_PASS ?? null;
 const DB_PATH = process.env.DB_PATH ?? "data/planet.db";
 
 const store = new Store(DB_PATH);
@@ -59,13 +62,30 @@ function broadcast(msg: ServerMessage) {
 }
 
 const online = (): [boolean, boolean] => [conns.has(0), conns.has(1)];
+const setupMode = () => ENV_PASS === null && !store.hasPass();
+const validPass = (pass: string) => (ENV_PASS !== null ? pass === ENV_PASS : store.checkPass(pass));
 
 const wss = new WebSocketServer({ server, path: "/ws" });
+
+const lobbyMsg = (): ServerMessage => ({
+  t: "lobby",
+  names: store.names(),
+  online: online(),
+  setup: setupMode(),
+});
+
+/** Anyone still on the login screen gets a fresh lobby (names/online/setup). */
+function refreshLobbies() {
+  const joined = new Set([...conns.values()].map((c) => c.ws));
+  for (const client of wss.clients) {
+    if (!joined.has(client as WebSocket)) send(client as WebSocket, lobbyMsg());
+  }
+}
 
 wss.on("connection", (ws) => {
   let id: PlayerId | null = null;
 
-  send(ws, { t: "lobby", names: store.names(), online: online() });
+  send(ws, lobbyMsg());
 
   ws.on("message", (data) => {
     let msg: ClientMessage;
@@ -77,11 +97,30 @@ wss.on("connection", (ws) => {
 
     if (msg.t === "join") {
       if (id !== null) return;
-      if (msg.pass !== PASS) {
-        send(ws, { t: "deny", reason: "pass" });
-        return;
-      }
       const wanted: PlayerId = msg.id === 0 ? 0 : 1;
+      const pass = String(msg.pass ?? "");
+      if (msg.create) {
+        // first-visit setup: only the designated identity may choose the word
+        if (!setupMode()) {
+          send(ws, { t: "deny", reason: "exists" });
+          return;
+        }
+        if (wanted !== SETUP_CREATOR || pass.length < PASS_MIN_LEN) {
+          send(ws, { t: "deny", reason: wanted !== SETUP_CREATOR ? "setup" : "pass" });
+          return;
+        }
+        store.setPass(pass);
+        console.log(`[planet] ${store.names()[wanted]} chose the secret word`);
+      } else {
+        if (setupMode()) {
+          send(ws, { t: "deny", reason: "setup" });
+          return;
+        }
+        if (!validPass(pass)) {
+          send(ws, { t: "deny", reason: "pass" });
+          return;
+        }
+      }
       if (conns.has(wanted)) {
         send(ws, { t: "deny", reason: "taken" });
         return;
@@ -103,6 +142,7 @@ wss.on("connection", (ws) => {
         history: store.history(200),
       });
       sendTo(peerId, { t: "peer-joined", id });
+      refreshLobbies();
       console.log(`[planet] ${store.names()[id]} (${id}) joined`);
       return;
     }
@@ -137,6 +177,7 @@ wss.on("connection", (ws) => {
       if (!name) return;
       store.rename(id, name);
       broadcast({ t: "names", names: store.names() });
+      refreshLobbies();
       console.log(`[planet] player ${id} renamed to ${name}`);
     }
   });
@@ -155,6 +196,7 @@ wss.on("connection", (ws) => {
     if (c.live) store.saveState(id, c.live);
     conns.delete(id);
     sendTo((1 - id) as PlayerId, { t: "peer-left", id });
+    refreshLobbies();
     console.log(`[planet] ${store.names()[id]} (${id}) left`);
   });
 });
@@ -172,6 +214,6 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   console.log(`[planet] listening on http://localhost:${PORT} (ws path /ws, db ${DB_PATH})`);
-  if (PASS === "planet") console.log("[planet] WARNING: using the default passphrase - set PLANET_PASS in production");
+  if (setupMode()) console.log("[planet] no secret word yet - the first visit sets it up in-game");
   if (!serveStatic) console.log("[planet] no dist/ found - run `npm run build` for production serving");
 });
