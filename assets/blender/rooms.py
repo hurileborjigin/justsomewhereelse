@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import _common as C  # noqa: E402
 
 r = math.radians
-WALL_H = 2.6
+WALL_H = 5.2
 
 
 def rect_shell(b, floor_mat, wall_mat, hx, hy, door_x):
@@ -115,7 +115,7 @@ def opera():  # concert hall, 7x6: stage at the far end, seat rows with an aisle
     # stage with side curtains
     b.box(C.mat("trunk"), (10, 2.4, 0.55), loc=(0, 4.6, 0.28), bevel=0.05)
     for x in (-4.6, 4.6):
-        b.box(C.mat("mushroom"), (0.5, 2.2, 2.4), loc=(x, 4.6, 1.2))
+        b.box(C.mat("mushroom"), (0.5, 2.2, 4.6), loc=(x, 4.6, 2.3))
     # red seats: two rows each side of a center aisle (blocked in ROOM_SPECS)
     for j in (2, 3):
         for i in (1, 2, 4, 5):
@@ -147,7 +147,7 @@ def frauenkirche_room():  # the nave: pews, windows, altar
     # tall blue windows along both side walls
     for x in (-4.97, 4.97):
         for y in (-3, 0, 3):
-            b.panel(C.mat("window", 0.4), 1.2, 2.0, loc=(x, y, 1.5), rot=(r(90), 0, r(90) if x < 0 else r(-90)))
+            b.panel(C.mat("window", 0.4), 1.2, 3.6, loc=(x, y, 2.4), rot=(r(90), 0, r(90) if x < 0 else r(-90)))
     # altar at the far end with a copper cross
     b.box(C.mat("white", 0.7), (2.2, 1.0, 0.9), loc=(0, 6.0, 0.45), bevel=0.04)
     b.box(C.mat("copper"), (0.12, 0.12, 0.9), loc=(0, 6.0, 1.55))

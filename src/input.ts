@@ -1,7 +1,9 @@
-/** Keyboard state -> {x, y} in {-1, 0, 1}. WASD and arrow keys both work. */
+/** Keyboard state -> {x, y} in {-1, 0, 1} plus `fast` (Shift/Ctrl held).
+ * WASD and arrow keys both work; diagonals come from holding two keys. */
 export class Input {
   x = 0;
   y = 0;
+  fast = false;
   private keys = new Set<string>();
 
   constructor() {
@@ -37,6 +39,8 @@ export class Input {
     const left = k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0;
     this.y = up - down;
     this.x = right - left;
+    this.fast =
+      k.has("ShiftLeft") || k.has("ShiftRight") || k.has("ControlLeft") || k.has("ControlRight");
   }
 }
 

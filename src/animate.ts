@@ -32,6 +32,8 @@ export class CharacterView {
   private legs: Object3D[] = [];
   private shadow: Mesh;
   private walkPhase = 0;
+  private lastPos = new Vector3();
+  private hasLast = false;
 
   constructor(
     private assets: Assets,
@@ -79,7 +81,12 @@ export class CharacterView {
     const model = this.model;
     if (!model || !this.character) return;
     const def = CHARACTERS[this.character];
-    this.walkPhase += dt * (moving ? def.speed * 3 : 0);
+    // drive the gait from the real velocity so sprinting animates faster
+    let vel = def.speed;
+    if (this.hasLast && dt > 0) vel = Math.min(this.lastPos.distanceTo(pos) / dt, 16);
+    this.lastPos.copy(pos);
+    this.hasLast = true;
+    this.walkPhase += dt * (moving ? Math.max(vel, def.speed * 0.6) * 3 : 0);
     const w = this.walkPhase;
     const up = world.up(pos, _up);
 

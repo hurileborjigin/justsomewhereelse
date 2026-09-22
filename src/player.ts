@@ -7,7 +7,11 @@ const _up = new Vector3();
 const _camF = new Vector3();
 const _camR = new Vector3();
 const _dir = new Vector3();
+const _axisF = new Vector3();
+const _axisR = new Vector3();
 const _targetQ = new Quaternion();
+
+const SPRINT = 2.5; // Shift/Ctrl multiplier
 
 type Tween = { from: number; target: number; t: number; dur: number };
 
@@ -25,6 +29,7 @@ export class Player {
   character: CharacterId = "bee";
 
   private tween: Tween | null = null;
+  private zigAxis: "f" | "r" = "f"; // alternates steps while moving diagonally
 
   constructor(private globe: GlobeWorld) {
     this.world = globe;
@@ -58,7 +63,7 @@ export class Player {
     if (!this.tween) this.world.tilePos(this.tile, this.def.hover, this.pos);
   }
 
-  update(dt: number, input: { x: number; y: number }, camera: Camera) {
+  update(dt: number, input: { x: number; y: number; fast?: boolean }, camera: Camera) {
     const w = this.world;
 
     // advance the current step
@@ -74,7 +79,7 @@ export class Player {
       }
     }
 
-    // start the next step (chains seamlessly while a key is held)
+    // start the next step (chains seamlessly while keys are held)
     if (!this.tween && (input.x !== 0 || input.y !== 0)) {
       const up = w.up(this.pos, _up);
       const camF = camera.getWorldDirection(_camF);
@@ -83,18 +88,49 @@ export class Player {
         camF.normalize();
         _camR.crossVectors(camF, up);
         _dir.set(0, 0, 0).addScaledVector(camF, input.y).addScaledVector(_camR, input.x).normalize();
-        const target = w.neighborInDirection(this.tile, _dir);
-        if (target >= 0) {
-          w.dirBetween(this.tile, target, this.forward);
-          if (!w.isBlockedFor(target, this.character)) {
-            this.tween = {
-              from: this.tile,
-              target,
-              t: 0,
-              dur: Math.max(w.stepLength(this.tile, target) / this.def.speed, 0.05),
-            };
+
+        let target = -1;
+        let blockedAhead = -1;
+        if (input.x !== 0 && input.y !== 0) {
+          // both axes held: move diagonally by alternating the two step
+          // directions while the character faces the diagonal itself
+          _axisF.copy(camF).multiplyScalar(Math.sign(input.y));
+          _axisR.copy(_camR).multiplyScalar(Math.sign(input.x));
+          const tf = w.neighborInDirection(this.tile, _axisF);
+          const tr = w.neighborInDirection(this.tile, _axisR);
+          const okF = tf >= 0 && !w.isBlockedFor(tf, this.character);
+          const okR = tr >= 0 && !w.isBlockedFor(tr, this.character);
+          if (okF && okR) {
+            target = this.zigAxis === "f" ? tr : tf;
+            this.zigAxis = this.zigAxis === "f" ? "r" : "f";
+          } else if (okF) {
+            target = tf;
+            this.zigAxis = "f";
+          } else if (okR) {
+            target = tr;
+            this.zigAxis = "r";
           }
+        } else {
+          this.zigAxis = input.y !== 0 ? "f" : "r";
+          const t = w.neighborInDirection(this.tile, _dir);
+          if (t >= 0) {
+            if (!w.isBlockedFor(t, this.character)) target = t;
+            else blockedAhead = t;
+          }
+        }
+
+        if (target >= 0) {
+          this.forward.copy(_dir); // face where the keys point, diagonals included
+          const speed = this.def.speed * (input.fast ? SPRINT : 1);
+          this.tween = {
+            from: this.tile,
+            target,
+            t: 0,
+            dur: Math.max(w.stepLength(this.tile, target) / speed, 0.04),
+          };
+        } else if (blockedAhead >= 0) {
           // blocked: the character still turns to face the obstacle
+          w.dirBetween(this.tile, blockedAhead, this.forward);
         }
       }
     }
