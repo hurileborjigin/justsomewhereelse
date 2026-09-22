@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>Tiny Planet</title>
     <link
       rel="icon"
@@ -30,6 +33,78 @@
         display: block;
         width: 100%;
         height: 100%;
+        touch-action: none;
+      }
+      /* --- mobile controls (shown only on touch devices via body.touch) --- */
+      #joystick,
+      #zoom-slider {
+        display: none;
+      }
+      body.touch #joystick {
+        display: block;
+        position: fixed;
+        left: 18px;
+        bottom: 92px;
+        width: 116px;
+        height: 116px;
+        border-radius: 50%;
+        background: rgba(255, 255, 253, 0.18);
+        border: 2px solid rgba(255, 255, 253, 0.35);
+        backdrop-filter: blur(4px);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #joystick-knob {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 52px;
+        height: 52px;
+        margin: -26px 0 0 -26px;
+        border-radius: 50%;
+        background: rgba(255, 255, 253, 0.45);
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.25);
+        pointer-events: none;
+      }
+      body.touch #zoom-slider {
+        display: block;
+        position: fixed;
+        right: 12px;
+        top: 26%;
+        height: 44%;
+        width: 40px;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #zoom-track {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        margin-left: -3px;
+        border-radius: 3px;
+        background: rgba(255, 255, 253, 0.3);
+      }
+      #zoom-handle {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: 30px;
+        height: 30px;
+        margin-left: -15px;
+        transform: translateY(-50%);
+        border-radius: 50%;
+        background: rgba(255, 255, 253, 0.5);
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.25);
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: rgba(43, 58, 42, 0.6);
       }
       #status {
         position: fixed;
@@ -428,6 +503,11 @@
   <body>
     <canvas id="game"></canvas>
     <div id="status"><span id="dot"></span><span id="status-text"></span></div>
+    <div id="joystick"><div id="joystick-knob"></div></div>
+    <div id="zoom-slider">
+      <div id="zoom-track"></div>
+      <div id="zoom-handle">🔍</div>
+    </div>
     <button id="enter" hidden>Enter</button>
     <div id="bubbles"></div>
     <div id="chat-panel">

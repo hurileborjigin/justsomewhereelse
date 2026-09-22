@@ -11,6 +11,7 @@ import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
 import { applySkyForHour, createScene } from "./scene.ts";
+import { setupTouchControls } from "./touch.ts";
 import { BUILDING_NAMES, GlobeWorld, RoomWorld } from "./world.ts";
 
 const $ = (id: string) => {
@@ -56,6 +57,7 @@ async function boot() {
   const player = new Player(globeWorld);
   const remote = new RemotePlayer();
   const cam = new FollowCamera();
+  setupTouchControls(input, cam);
 
   const localView = new CharacterView(assets, "bee", scene);
   const remoteView = new CharacterView(assets, "donkey", scene);

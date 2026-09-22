@@ -80,4 +80,14 @@ export class FollowCamera {
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
   }
+
+  /** Zoom as a 0..1 fraction (0 = closest) - used by the mobile slider. */
+  zoomFraction(): number {
+    return Math.log(this.targetZoom / ZOOM_MIN) / Math.log(ZOOM_MAX_GLOBE / ZOOM_MIN);
+  }
+
+  setZoomFraction(f: number) {
+    const c = Math.min(1, Math.max(0, f));
+    this.targetZoom = ZOOM_MIN * Math.pow(ZOOM_MAX_GLOBE / ZOOM_MIN, c);
+  }
 }
