@@ -13,6 +13,7 @@ import {
   isBlockedFor as globeBlocked,
   isWater as globeWater,
   neighborInDirection as globeNeighbor,
+  neighborsOf,
   spawnForward,
   tileAt,
   tileCenter,
@@ -35,6 +36,8 @@ export interface World {
   stepLength(fromK: number, toK: number): number;
   neighborInDirection(k: number, dir: Vector3): number;
   isBlockedFor(k: number, character: CharacterId): boolean;
+  /** True when the two tiles share an edge (the reunion-hop trigger). */
+  areNeighbors(a: number, b: number): boolean;
   /** Ground point directly under `pos` for the blob shadow. */
   shadowPos(pos: Vector3, out: Vector3): Vector3;
 }
@@ -80,6 +83,10 @@ export class GlobeWorld implements World {
 
   isBlockedFor(k: number, character: CharacterId) {
     return globeBlocked(k, CHARACTERS[character].fly);
+  }
+
+  areNeighbors(a: number, b: number) {
+    return neighborsOf(a).includes(b);
   }
 
   shadowPos(pos: Vector3, out: Vector3) {
@@ -251,6 +258,12 @@ export class RoomWorld implements World {
 
   isBlockedFor(k: number, _character: CharacterId) {
     return this.blocked.has(k);
+  }
+
+  areNeighbors(a: number, b: number) {
+    const [ai, aj] = this.unkey(a);
+    const [bi, bj] = this.unkey(b);
+    return Math.abs(ai - bi) + Math.abs(aj - bj) === 1;
   }
 
   shadowPos(pos: Vector3, out: Vector3) {

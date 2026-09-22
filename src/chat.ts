@@ -47,6 +47,42 @@ const _anchor = new Vector3();
 const _toAnchor = new Vector3();
 const _camDir = new Vector3();
 
+/** Small floating label above a character's head; yours carries the ✏️. */
+class NameTag {
+  private el: HTMLDivElement;
+  private text: HTMLSpanElement;
+
+  constructor(container: HTMLElement, onEdit?: () => void) {
+    this.el = document.createElement("div");
+    this.el.className = "name-tag";
+    this.text = document.createElement("span");
+    this.el.append(this.text);
+    if (onEdit) {
+      const btn = document.createElement("button");
+      btn.textContent = "✏️";
+      btn.title = "Change your name";
+      btn.addEventListener("click", onEdit);
+      this.el.append(btn);
+    }
+    this.el.style.opacity = "0";
+    container.append(this.el);
+  }
+
+  set(name: string) {
+    this.text.textContent = name;
+  }
+
+  update(screen: { x: number; y: number } | null) {
+    if (!screen) {
+      this.el.style.opacity = "0";
+      return;
+    }
+    this.el.style.opacity = "1";
+    this.el.style.left = `${screen.x}px`;
+    this.el.style.top = `${screen.y}px`;
+  }
+}
+
 export class Chat {
   private input: HTMLInputElement;
   private log: HTMLElement;
@@ -56,8 +92,10 @@ export class Chat {
   private unread = 0;
   private bubbleMe: Bubble;
   private bubblePeer: Bubble;
+  private tagMe: NameTag;
+  private tagPeer: NameTag;
 
-  constructor(onSend: (text: string) => void) {
+  constructor(onSend: (text: string) => void, onRename: () => void) {
     const $ = (id: string) => {
       const el = document.getElementById(id);
       if (!el) throw new Error(`missing #${id}`);
@@ -71,6 +109,8 @@ export class Chat {
     const bubbles = $("bubbles");
     this.bubbleMe = new Bubble(bubbles);
     this.bubblePeer = new Bubble(bubbles);
+    this.tagMe = new NameTag(bubbles, onRename);
+    this.tagPeer = new NameTag(bubbles);
 
     ($("chat-form") as HTMLFormElement).addEventListener("submit", (e) => {
       e.preventDefault();
@@ -131,7 +171,13 @@ export class Chat {
     }
   }
 
-  /** Called every frame to keep bubbles glued above the characters' heads. */
+  /** The two floating labels; call whenever names change. */
+  setNames(me: string, peer: string) {
+    this.tagMe.set(me);
+    this.tagPeer.set(peer);
+  }
+
+  /** Called every frame to keep bubbles and name tags glued above heads. */
   update(
     camera: PerspectiveCamera,
     mePos: Vector3,
@@ -140,8 +186,12 @@ export class Chat {
     peerChar: CharacterId,
     peerPresent: boolean,
   ) {
-    this.bubbleMe.update(project(camera, mePos, HEAD_HEIGHT[meChar]));
-    this.bubblePeer.update(peerPresent ? project(camera, peerPos, HEAD_HEIGHT[peerChar]) : null);
+    const me = project(camera, mePos, HEAD_HEIGHT[meChar]);
+    const peer = peerPresent ? project(camera, peerPos, HEAD_HEIGHT[peerChar]) : null;
+    this.bubbleMe.update(me);
+    this.bubblePeer.update(peer);
+    this.tagMe.update(me);
+    this.tagPeer.update(peer);
   }
 }
 

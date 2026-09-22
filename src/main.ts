@@ -69,13 +69,7 @@ async function boot() {
 
   const dot = $("dot");
   const statusText = $("status-text");
-  const whoText = $("who-text");
   const enterBtn = $("enter") as HTMLButtonElement;
-
-  function updateWho() {
-    const emoji = player.character === "bee" ? "🐝" : "🫏";
-    whoText.textContent = `${names[myId]}, you are the ${player.character} ${emoji}`;
-  }
 
   /** Characters are fixed: identity 0 is the bee, identity 1 the donkey. */
   function applyCharacters() {
@@ -83,7 +77,7 @@ async function boot() {
     localView.setCharacter(CHARACTER_OF[myId]);
     remote.character = CHARACTER_OF[1 - myId];
     remoteView.setCharacter(CHARACTER_OF[1 - myId]);
-    updateWho();
+    chat.setNames(names[myId], names[1 - myId]);
   }
 
   // ---- login ---------------------------------------------------------------
@@ -241,7 +235,7 @@ async function boot() {
   const net = new Net({
     onStatus(connected) {
       dot.classList.toggle("on", connected);
-      statusText.textContent = connected ? "connected" : "offline — retrying…";
+      statusText.textContent = connected ? "" : "reconnecting…";
       if (!connected) remote.present = false;
     },
     onMessage(msg) {
@@ -322,7 +316,7 @@ async function boot() {
         }
         case "names": {
           names = msg.names;
-          updateWho();
+          chat.setNames(names[myId], names[1 - myId]);
           break;
         }
       }
@@ -330,15 +324,16 @@ async function boot() {
   });
   net.connect();
 
-  $("rename").addEventListener("click", () => {
-    const name = prompt("Your name on the planet:", names[myId]);
-    if (name?.trim()) net.rename(name.trim());
-  });
-
-  const chat = new Chat((text) => {
-    net.chat(text);
-    chat.addMessage("me", player.character, names[myId], text);
-  });
+  const chat = new Chat(
+    (text) => {
+      net.chat(text);
+      chat.addMessage("me", player.character, names[myId], text);
+    },
+    () => {
+      const name = prompt("Your name on the planet:", names[myId]);
+      if (name?.trim()) net.rename(name.trim());
+    },
+  );
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
@@ -354,20 +349,31 @@ async function boot() {
   const camRight = new Vector3();
   const Y = new Vector3(0, 1, 0);
   let remoteScene: Scene | null = null;
+  let wasAdjacent = false;
 
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
     const world = player.world;
 
+    // the partner is visible only when you are in the same world
+    const together = remote.present && remote.loc === world.id;
+    player.peerTile = together ? remote.tile : -1;
+
     player.update(dt, input, cam.camera);
     cam.update(dt, player);
     refreshDoorAction();
 
+    // reunion hops: whenever the two end up on neighboring squares
+    const adjacent = together && remote.tile >= 0 && world.areNeighbors(player.tile, remote.tile);
+    if (adjacent && !wasAdjacent) {
+      localView.celebrate();
+      remoteView.celebrate();
+    }
+    wasAdjacent = adjacent;
+
     localView.update(dt, t, world, player.pos, player.quat, player.moving);
 
-    // the partner is visible only when you are in the same world
-    const together = remote.present && remote.loc === world.id;
     if (together) {
       if (remoteScene !== world.scene) {
         remoteView.setScene(world.scene);

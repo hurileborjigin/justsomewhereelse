@@ -11,6 +11,7 @@ export class RemotePlayer {
   present = false;
   character: CharacterId = "donkey";
   loc = "globe"; // which world the partner is in
+  tile = -1; // their current tile in that world
 
   private targetPos = new Vector3();
   private targetQuat = new Quaternion();
@@ -30,6 +31,7 @@ export class RemotePlayer {
     this.targetQuat.set(s.q[0], s.q[1], s.q[2], s.q[3]).normalize();
     this.moving = s.m === 1;
     this.loc = s.loc ?? "globe";
+    this.tile = s.tile ?? -1;
     if (this.pos.distanceTo(this.targetPos) > 3) {
       // teleport / rejoin: snap instead of gliding across the planet
       this.pos.copy(this.targetPos);

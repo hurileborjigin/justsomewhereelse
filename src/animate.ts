@@ -34,6 +34,12 @@ export class CharacterView {
   private walkPhase = 0;
   private lastPos = new Vector3();
   private hasLast = false;
+  private celebrateUntil = 0;
+
+  /** A few happy hops - played when the two characters finally meet. */
+  celebrate() {
+    this.celebrateUntil = performance.now() / 1000 + 1.5;
+  }
 
   constructor(
     private assets: Assets,
@@ -111,6 +117,14 @@ export class CharacterView {
       const earW = moving ? Math.sin(w) * 0.1 : Math.sin(t * 1.3) * 0.05;
       this.ears[0].rotation.z = earW;
       this.ears[1].rotation.z = -earW;
+    }
+
+    const partyLeft = this.celebrateUntil - performance.now() / 1000;
+    if (partyLeft > 0) {
+      // three excited hops with a little stretch at the top
+      const hop = Math.abs(Math.sin((1.5 - partyLeft) * Math.PI * 2));
+      this.container.position.addScaledVector(up, hop * 0.45);
+      model.scale.y = 1 + hop * 0.12;
     }
 
     world.shadowPos(pos, this.shadow.position);

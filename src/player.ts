@@ -30,6 +30,8 @@ export class Player {
 
   private tween: Tween | null = null;
   private zigAxis: "f" | "r" = "f"; // alternates steps while moving diagonally
+  /** The partner's tile in the same world (-1 = none): never step onto it. */
+  peerTile = -1;
 
   constructor(private globe: GlobeWorld) {
     this.world = globe;
@@ -89,6 +91,8 @@ export class Player {
         _camR.crossVectors(camF, up);
         _dir.set(0, 0, 0).addScaledVector(camF, input.y).addScaledVector(_camR, input.x).normalize();
 
+        const walkable = (t: number) =>
+          t >= 0 && t !== this.peerTile && !w.isBlockedFor(t, this.character);
         let target = -1;
         let blockedAhead = -1;
         if (input.x !== 0 && input.y !== 0) {
@@ -98,8 +102,8 @@ export class Player {
           _axisR.copy(_camR).multiplyScalar(Math.sign(input.x));
           const tf = w.neighborInDirection(this.tile, _axisF);
           const tr = w.neighborInDirection(this.tile, _axisR);
-          const okF = tf >= 0 && !w.isBlockedFor(tf, this.character);
-          const okR = tr >= 0 && !w.isBlockedFor(tr, this.character);
+          const okF = walkable(tf);
+          const okR = walkable(tr);
           if (okF && okR) {
             target = this.zigAxis === "f" ? tr : tf;
             this.zigAxis = this.zigAxis === "f" ? "r" : "f";
@@ -114,7 +118,7 @@ export class Player {
           this.zigAxis = input.y !== 0 ? "f" : "r";
           const t = w.neighborInDirection(this.tile, _dir);
           if (t >= 0) {
-            if (!w.isBlockedFor(t, this.character)) target = t;
+            if (walkable(t)) target = t;
             else blockedAhead = t;
           }
         }
