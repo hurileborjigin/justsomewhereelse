@@ -13,6 +13,10 @@ const MANIFEST = {
   house_b: "/models/house_b.glb",
   tower: "/models/tower.glb",
   barn: "/models/barn.glb",
+  room_house_a: "/models/room_house_a.glb",
+  room_house_b: "/models/room_house_b.glb",
+  room_tower: "/models/room_tower.glb",
+  room_barn: "/models/room_barn.glb",
 } as const;
 
 export type AssetName = keyof typeof MANIFEST;

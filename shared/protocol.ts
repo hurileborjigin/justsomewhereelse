@@ -33,6 +33,7 @@ export type StateData = {
   p: [number, number, number];
   q: [number, number, number, number];
   m: 0 | 1; // moving flag (drives remote walk animation)
+  loc: string; // which world: "globe" or a building instance id
 };
 
 export const CHAT_MAX_LEN = 200;

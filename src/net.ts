@@ -71,6 +71,7 @@ export class Net {
       p: [r(p.x), r(p.y), r(p.z)],
       q: [r(q.x), r(q.y), r(q.z), r(q.w)],
       m: player.moving ? 1 : 0,
+      loc: player.world.id,
     });
   }
 }

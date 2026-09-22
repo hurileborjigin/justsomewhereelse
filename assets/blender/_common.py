@@ -68,6 +68,9 @@ def mat(name, roughness=0.9):
         return m
     m = bpy.data.materials.new(name)
     m.use_nodes = True
+    # export single-sided (glTF doubleSided=false): room walls face inward so
+    # the camera can look into interiors from outside (dollhouse view)
+    m.use_backface_culling = True
     bsdf = m.node_tree.nodes["Principled BSDF"]
     hexcode = PALETTE[name]
     rgb = [int(hexcode[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
@@ -155,6 +158,30 @@ class Build:
                 profile=0.5,
                 affect="EDGES",
             )
+        self._merge_part(tmp, material)
+
+    def panel(self, material, w, h, loc=(0, 0, 0), rot=(0, 0, 0)):
+        """Single-sided rectangle (a grid facing local +Z). Used for room walls
+        that face inward: from outside the camera sees straight through them,
+        which is what makes interiors read like a dollhouse."""
+        tmp = bmesh.new()
+        bmesh.ops.create_grid(
+            tmp, x_segments=1, y_segments=1, size=1.0,
+            matrix=self._matrix(loc, rot, (w / 2, h / 2, 1)),
+        )
+        self._merge_part(tmp, material)
+
+    def tube(self, material, r, depth, segments=16, loc=(0, 0, 0), inside=False):
+        """Open cylinder shell; inside=True flips the normals inward (round
+        room walls seen from within)."""
+        tmp = bmesh.new()
+        bmesh.ops.create_cone(
+            tmp, cap_ends=False, cap_tris=False, segments=segments,
+            radius1=r, radius2=r, depth=depth,
+            matrix=self._matrix(loc, (0, 0, 0), (1, 1, 1)),
+        )
+        if inside:
+            bmesh.ops.reverse_faces(tmp, faces=list(tmp.faces))
         self._merge_part(tmp, material)
 
     def obj(self, location=(0, 0, 0)):

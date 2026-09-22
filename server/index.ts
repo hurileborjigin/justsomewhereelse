@@ -73,7 +73,7 @@ wss.on("connection", (ws) => {
       return;
     }
     if (msg.t === "state") {
-      const state: StateData = { p: msg.p, q: msg.q, m: msg.m };
+      const state: StateData = { p: msg.p, q: msg.q, m: msg.m, loc: msg.loc ?? "globe" };
       slot.state = state;
       const other = slots[1 - id];
       if (other) send(other.ws, { t: "state", id, ...state });

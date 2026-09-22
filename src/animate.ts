@@ -8,10 +8,10 @@ import {
   type Quaternion,
   type Scene,
 } from "three";
-import { CHARACTERS, SURFACE, type CharacterId } from "../shared/protocol.ts";
+import { CHARACTERS, type CharacterId } from "../shared/protocol.ts";
 import { node, type Assets } from "./assets.ts";
-import { isWater, tileAt } from "./grid.ts";
 import { dampAngle } from "./math.ts";
+import type { World } from "./world.ts";
 
 const _up = new Vector3();
 const Z = new Vector3(0, 0, 1);
@@ -43,6 +43,13 @@ export class CharacterView {
     this.setCharacter(character);
   }
 
+  /** Move this view into another world's scene (entering/leaving a building). */
+  setScene(scene: Scene) {
+    this.container.removeFromParent();
+    this.shadow.removeFromParent();
+    scene.add(this.container, this.shadow);
+  }
+
   setCharacter(c: CharacterId) {
     if (this.character === c) return;
     this.character = c;
@@ -68,13 +75,13 @@ export class CharacterView {
     this.shadow.visible = v;
   }
 
-  update(dt: number, t: number, pos: Vector3, quat: Quaternion, moving: boolean) {
+  update(dt: number, t: number, world: World, pos: Vector3, quat: Quaternion, moving: boolean) {
     const model = this.model;
     if (!model || !this.character) return;
     const def = CHARACTERS[this.character];
     this.walkPhase += dt * (moving ? def.speed * 3 : 0);
     const w = this.walkPhase;
-    const up = _up.copy(pos).normalize();
+    const up = world.up(pos, _up);
 
     this.container.position.copy(pos);
     this.container.quaternion.copy(quat);
@@ -99,9 +106,7 @@ export class CharacterView {
       this.ears[1].rotation.z = -earW;
     }
 
-    // over the lake, drop the shadow onto the sunken water surface
-    const drop = isWater(tileAt(up)) ? 0.12 : 0;
-    this.shadow.position.copy(up).multiplyScalar(SURFACE + 0.02 - drop);
+    world.shadowPos(pos, this.shadow.position);
     this.shadow.quaternion.setFromUnitVectors(Z, up);
   }
 }

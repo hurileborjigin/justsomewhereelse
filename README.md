@@ -50,6 +50,27 @@ step in, the bee flies right over (the `fly` flag in `CHARACTERS`).
 **Buildings**: a crooked house, a mushroom house, a wizard tower (one square
 each) and a long barn (two squares) — all in `assets/blender/buildings.py`.
 
+## Going inside
+
+Every building is **enterable**: walk onto its doorstep square and press
+**E** (or the green button) — you switch into that building's own interior, a
+separate little room world. Stand on the door square inside to go back out.
+
+While someone is inside a building they disappear from the globe; to find
+them, enter the same building. Chat still works across worlds (the history
+always arrives; speech bubbles only show when you're in the same place).
+
+Interiors are designed to be flexible — today's prototypes become museums or
+galleries later:
+
+- geometry lives in `assets/blender/rooms.py` (one function per type; walls
+  are inward-facing so the camera outside sees in, dollhouse-style),
+- the walkable grid + furniture tiles live in `ROOM_SPECS` in `src/world.ts`
+  (keep the `blocked` lists in sync with the props you model),
+- every room has named `Frame1`/`Frame2` nodes on the walls — the future hook
+  for hanging photos and posting text, and rooms are per-instance, so each
+  house can hold its own stuff (food, gifts, ...) down the road.
+
 ## Adding your own models
 
 Two ways, both end up in `public/models/` via `npm run models`:

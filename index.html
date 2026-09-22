@@ -122,6 +122,25 @@
         display: flex;
         gap: 6px;
       }
+      #enter {
+        position: fixed;
+        bottom: 68px;
+        left: 50%;
+        transform: translateX(-50%);
+        border: none;
+        border-radius: 14px;
+        padding: 10px 18px;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        background: #58b368;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(30, 60, 30, 0.3);
+      }
+      #enter:hover {
+        transform: translateX(-50%) translateY(-1px);
+      }
       #chat-input {
         width: min(46vw, 380px);
         border: none;
@@ -241,6 +260,7 @@
       <div id="hint">WASD / arrows to walk · Enter to chat · scroll to zoom</div>
     </div>
     <button id="swap" hidden>Swap characters 🐝↔🫏</button>
+    <button id="enter" hidden>Enter</button>
     <div id="bubbles"></div>
     <div id="chat-panel">
       <header>
