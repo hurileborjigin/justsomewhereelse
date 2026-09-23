@@ -163,6 +163,8 @@ export class Postcard {
     this.cleanup?.();
     this.cleanup = null;
     this.guard = null;
+    this.away = false;
+    this.root.classList.remove("pc-away");
   }
 
   /** A new box to fill and leave here, or (with `initial`) an existing one to change. */
@@ -338,6 +340,7 @@ export class Postcard {
       b.addEventListener("click", () => {
         size = s;
         for (const o of sizeBtns) o.classList.toggle("picked", o === b);
+        error.textContent = "";
       });
       sizes.append(b);
       return b;
