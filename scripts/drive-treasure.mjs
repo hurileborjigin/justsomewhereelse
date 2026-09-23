@@ -89,6 +89,11 @@ await shot(b, "B2-sees-box");
 const sealedForB = await b.evaluate(() => window.__tp.treasures.list()[0]);
 check(sealedForB && sealedForB.text === undefined, "B cannot read the sealed box");
 check((await b.textContent("#treasure-badge")) === "1", "B's chest badge announces one waiting box");
+const badge = await b.evaluate(() => {
+  const r = document.getElementById("treasure-badge").getBoundingClientRect();
+  return { w: Math.round(r.width), h: Math.round(r.height) };
+});
+check(badge.h >= 14 && badge.w >= 14, `the badge is a real pill, not a sliver (${badge.w}x${badge.h})`);
 
 // ---- B walks up, opens, keeps ----------------------------------------------
 await b.evaluate((tile) => {

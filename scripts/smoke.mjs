@@ -257,6 +257,40 @@ try {
   expect((await b.next()).reason === "invalid", "a note needs words");
   b.send({ t: "box-place", size: "s", style: "media", text: "just words", media: [], announce: false, loc: "globe", tiles: [301], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "a photo box needs a photo");
+  // odd dressing is tamed, an old tab without a style still leaves a postcard, notes carry no card
+  a.send({ t: "box-place", size: "s", text: "no style field", media: [], announce: false, loc: "globe", tiles: [303], fwd: [0, 0, 1] });
+  const legacy = await a.next();
+  await b.next();
+  expect(legacy.t === "box" && legacy.box.style === "postcard" && legacy.box.card === null, "a tab from before styles still leaves a postcard");
+  a.send({
+    t: "box-place",
+    size: "s",
+    style: "postcard",
+    card: { stamp: "🐝🐝🐝", place: "x".repeat(100), to: 42, from: { no: 1 } },
+    text: "odd card",
+    media: [],
+    announce: false,
+    loc: "globe",
+    tiles: [304],
+    fwd: [0, 0, 1],
+  });
+  const odd = await a.next();
+  await b.next();
+  expect(
+    odd.box.card.stamp === "🐝🐝" && odd.box.card.place.length === 40 && odd.box.card.to === "" && odd.box.card.from === "",
+    "the dressing is cut to its limits and non-strings fall back to the defaults",
+  );
+  a.send({ t: "box-place", size: "s", style: "note", card: { stamp: "x", place: "y", to: "z", from: "w" }, text: "a note", media: [], announce: false, loc: "globe", tiles: [305], fwd: [0, 0, 1] });
+  const noted = await a.next();
+  await b.next();
+  expect(noted.box.card === null, "a note never carries a card");
+  a.send({ t: "box-delete", id: 9999 });
+  expect((await a.next()).reason === "missing", "taking back a box that does not exist is refused");
+  for (const id of [legacy.box.id, odd.box.id, noted.box.id]) {
+    a.send({ t: "box-delete", id });
+    await a.next();
+    await b.next();
+  }
   a.send({ t: "box-keep", id: boxId });
   const denyCreator = await a.next();
   expect(

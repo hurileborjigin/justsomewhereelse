@@ -456,6 +456,7 @@
         background: #d9962f;
         color: white;
         font-size: 11px;
+        line-height: 1.2; /* the button beneath sets line-height 0 for its icon */
         border-radius: 9px;
         padding: 2px 6px;
       }
@@ -776,6 +777,14 @@
         pointer-events: none;
         padding: 0 10px;
       }
+      .pc-postmark span {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
       .pc-to {
         margin-top: 30px;
         font-size: 13px;
@@ -1040,6 +1049,9 @@
         line-height: 1.2;
         border-bottom: none;
       }
+      .pc-stamp .pc-two {
+        font-size: 17px;
+      }
       .pc-editing .pc-to-in {
         font-family: Caveat, cursive;
         font-size: 21px;
@@ -1079,6 +1091,7 @@
         color: #2f3a5a;
         resize: none;
         overflow: hidden;
+        min-height: 0; /* the phone rule for .pc-text must not stretch the caption */
       }
       .pc-caption-read {
         text-align: center;

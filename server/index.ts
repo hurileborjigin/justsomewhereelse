@@ -17,7 +17,7 @@ import {
   BOX_LABEL_MAX_LEN,
   BOX_MEDIA_MAX,
   BOX_PLACE_MAX_LEN,
-  BOX_STAMP_MAX_LEN,
+  BOX_STAMP_MAX,
   BOX_TEXT_MAX_LEN,
   CHAT_MAX_LEN,
   MEDIA_MAX_BYTES,
@@ -210,16 +210,27 @@ const isMediaRef = (m: unknown): m is MediaRef =>
 const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
 const isStyle = (s: unknown): s is BoxStyle => s === "postcard" || s === "note" || s === "media";
 
-/** The sender's postcard dressing: four short trimmed strings; null unless the box is a postcard. */
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * The sender's postcard dressing: four short trimmed strings; null unless the
+ * box is a postcard. Limits count what a person sees as one character (an
+ * emoji is one), so a surrogate pair is never cut in half.
+ */
 function cleanCard(raw: unknown, style: BoxStyle): BoxCard | null {
   if (style !== "postcard" || typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const field = (key: string, max: number) => {
     const v = r[key];
-    return typeof v === "string" ? v.slice(0, max).trim() : "";
+    if (typeof v !== "string") return "";
+    return [...graphemes.segment(v)]
+      .map((g) => g.segment)
+      .slice(0, max)
+      .join("")
+      .trim();
   };
   return {
-    stamp: field("stamp", BOX_STAMP_MAX_LEN),
+    stamp: field("stamp", BOX_STAMP_MAX),
     place: field("place", BOX_PLACE_MAX_LEN),
     to: field("to", NAME_MAX_LEN),
     from: field("from", NAME_MAX_LEN),
@@ -392,7 +403,8 @@ wss.on("connection", (ws) => {
       const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
       const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
       const loc = msg.loc;
-      const style = msg.style;
+      // a tab from before styles sends none: it is leaving a postcard
+      const style = (msg as { style?: BoxStyle }).style ?? "postcard";
       // a note needs words, a photo box needs photos, a postcard needs one or the other
       const filled =
         style === "note" ? text.length > 0 : style === "media" ? media.length > 0 : text.length > 0 || media.length > 0;

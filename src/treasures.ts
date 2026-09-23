@@ -15,7 +15,7 @@ import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
-import { Postcard, chestIcon, el, type Postmark } from "./postcard.ts";
+import { Postcard, TAKE_BACK_CONFIRM, chestIcon, el, type Postmark } from "./postcard.ts";
 import type { World } from "./world.ts";
 
 const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sealed
@@ -162,7 +162,7 @@ export class Treasures {
     // never forget contents we were already allowed to see
     const box =
       prev?.text !== undefined && incoming.text === undefined
-        ? { ...incoming, text: prev.text, media: prev.media }
+        ? { ...incoming, text: prev.text, media: prev.media, card: prev.card }
         : incoming;
     this.boxes.set(box.id, box);
     // re-mount, but let an already-standing lid keep its angle so update() swings it
@@ -320,7 +320,7 @@ export class Treasures {
       (b) => b.id === box.id && b.loc === world.id,
       () => this.hooks.net.putBox(box.id, world.id, tiles, vec(forward)),
     ).then(
-      () => this.toast("Placed"),
+      () => this.toast("Placed it here"),
       (e: Error) => this.toast(e.message),
     );
   }
@@ -385,7 +385,7 @@ export class Treasures {
   }
 
   private takeBack(box: Box) {
-    if (!confirm("Take this box back? It disappears for both of you.")) return;
+    if (!confirm(TAKE_BACK_CONFIRM)) return;
     this.hooks.net.deleteBox(box.id);
   }
 

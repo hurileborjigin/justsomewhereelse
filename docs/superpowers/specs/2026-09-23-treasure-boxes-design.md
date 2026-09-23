@@ -29,7 +29,7 @@ A box has these properties.
 - `loc` and `tiles`: the world id and the footprint tiles while the box stands in the world, or none while it is held in a collection.
 - `fwd`: the creator's facing direction at placement, as a unit vector, used to orient the model.
 - `style`: what the box holds: `postcard` (the full card), `note` (a plain sheet of paper with words) or `media` (photos and videos with an optional caption).
-- `card`: for postcards, the dressing the sender typed: the stamp picture (up to 4 characters), the place (up to 40), and the "To" and "from" names (up to 24 each); empty fields fall back to the defaults; null for the other styles.
+- `card`: for postcards, the dressing the sender typed: the stamp picture (one emoji, or two), the place (up to 40), and the "To" and "from" names (up to 24 each); empty fields fall back to the defaults; null for the other styles.
 
 A box is deleted only when its creator takes it back while it is still sealed; then its media files go too.
 Otherwise boxes and their media files are never removed.
@@ -75,7 +75,7 @@ Near cube corners a large footprint may fail to close, and then that size does n
 
 ### Leaving a box
 
-A 🎁 button sits in the top-left corner of the screen and opens the Treasures panel.
+A chest button, a small drawn treasure chest in the chests' own palette, sits in the top-left corner of the screen and opens the Treasures panel.
 The panel has a "Leave a treasure here" button that opens the postcard in compose mode.
 While any postcard dialog is open, walking input and the E key are ignored, the mouse wheel scrolls the dialog instead of zooming the world, and Esc closes the dialog.
 
@@ -98,7 +98,7 @@ The creator cannot keep the box afterwards, but can open it to reread it and to 
 ### Finding a box
 
 A sealed box shows no label and nothing about its contents.
-Standing on any tile that shares an edge with a footprint tile shows the action button "Open the treasure box 🎁 (E)".
+Standing on any tile that shares an edge with a footprint tile shows the action button "Open the treasure box (E)", with the chest icon after the words.
 If several boxes touch the player's tile, the one closest to the player's facing direction wins, then the lowest id.
 If a door action and a box action apply at the same time, both buttons are shown stacked, the door action first.
 E fires the first button, the second one is tapped or clicked.
@@ -109,9 +109,9 @@ The server records the first opening, answers the requester with the full box, a
 Both clients swing the lid open in the world.
 The opener sees the postcard in reading mode.
 
-Below the postcard a player who is not the creator sees an optional label field, "Keep it 🎁" and "Leave it here".
+Below the postcard a player who is not the creator sees an optional label field, "Keep it" (with the chest icon) and "Leave it here".
 The label field starts with the box's current label, and Enter in it keeps the box.
-When the reader already owns the box, because they kept it earlier and placed it here, the button reads "Pick it up 🎁" instead.
+When the reader already owns the box, because they kept it earlier and placed it here, the button reads "Pick it up" instead.
 Keeping removes the box from the world for both players and adds it to the keeper's collection with the label, if any.
 Leaving it closes the dialog and the box stays where it is with its lid open.
 The creator sees only a footer with "Still sealed" or "Opened by khurlee on 24 Sep".
@@ -125,13 +125,13 @@ Once opened, a box can no longer be taken back.
 
 ### The Treasures panel
 
-The panel opens from the 🎁 button and mirrors the chat panel on the opposite side of the screen.
+The panel opens from the chest button and mirrors the chat panel on the opposite side of the screen.
 It has three parts.
 
-1. The waiting line: "2 sealed boxes are waiting for you somewhere 🎁".
+1. The waiting line: "2 sealed boxes are waiting for you somewhere" followed by the chest icon.
    It counts boxes that stand in the world, were created by the partner, are still sealed, and have `announce` on.
    When the count is zero it reads "Nothing announced… but who knows".
-   The 🎁 button carries the same count as a badge while the panel is closed.
+   The chest button carries the same count as a badge while the panel is closed.
 2. Your collection: one row per box you own, held or placed, with its label or "no label yet", a size marker, who it is from, when you found it, where it stands, and a thumbnail of the first photo or video.
    Held boxes offer Open, Label and "Place here"; placed boxes offer Open and Label.
    Open shows the postcard in reading mode.
@@ -139,7 +139,7 @@ It has three parts.
    "Place here" puts the box into the world in front of the player with the same footprint rules as leaving a new box, and tells the player when it does not fit.
 3. Boxes you left: one row per box the player created, with its size, "sealed" or "opened", and where it is: "on the planet", the building name, or "kept by khurlee".
 
-Once a box that carries a label stands in the world, the action button reads "Open “our first trip” 🎁 (E)" for both players.
+Once a box that carries a label stands in the world, the action button reads "Open “our first trip” (E)" for both players.
 
 ## The postcard
 
@@ -172,7 +172,7 @@ In compose mode the left side is a text area styled exactly like the message, wi
 
 The right side holds the postal dressing.
 
-- A stamp in the top-right corner: a small perforated rectangle with a pastel background, the creator's character emoji inside and the words "TINY PLANET" along its bottom edge.
+- A stamp in the top-right corner: a small perforated rectangle with a pastel background, the sender's chosen picture inside (their character emoji unless they typed another) and the place in small capitals along its bottom edge.
 - A postmark: a thin ink circle with the date and the place, slightly rotated, overlapping the stamp corner in translucent ink.
   The place is "Tiny Planet" for the globe or the building name for a room.
 - Address lines: "To: khurlee" followed by three dotted lines, the second of which carries the place in handwriting.
@@ -181,7 +181,7 @@ The right side holds the postal dressing.
 Photos and videos are shown below the card as prints: white borders like instant-camera photos, alternating slight tilts of about two degrees, and a click opens the existing lightbox.
 In compose mode the prints show the staged files with a remove button each, plus an add button.
 
-Below the prints the compose mode shows the size picker with three small chest icons labeled S, M and L and their tile counts, the announce toggle "Let khurlee know a box is waiting" which defaults to on, and the send button "Leave it here 🎁".
+Below the prints the compose mode shows the size picker with three small chest icons labeled S, M and L and their tile counts, the announce toggle "Let khurlee know a box is waiting" which defaults to on, and the send button "Leave it here" with the chest icon.
 Reading mode shows the keep controls or the creator footer as described above.
 
 ### Phones
@@ -227,7 +227,7 @@ An opened box shows the lid at about 100 degrees, and the transition is a short 
   Rooms toggle entries in their private blocked set.
 - `main.ts` wires the module: passes boxes from `welcome` and `box` messages, mounts rooms on creation, and composes the action buttons from the door action and the box action.
 - `net.ts` gains one method per new client message.
-- `index.html` gains the 🎁 button, the Treasures panel, the postcard dialog container and their styles.
+- `index.html` gains the chest button (an inline SVG symbol reused wherever a chest is named), the Treasures panel, the postcard dialog container and their styles.
 - `assets.ts` registers the three chests.
 - `input.ts` gains a way to mute movement while a dialog is open.
 - `restore` in `main.ts` nudges the player to the nearest free neighbor when the persisted tile is now inside a footprint.
@@ -257,7 +257,7 @@ A new `boxes` table is created on start with `CREATE TABLE IF NOT EXISTS`, next 
 | style | TEXT NOT NULL DEFAULT 'postcard' | `postcard`, `note` or `media`; older databases gain the column on start |
 | card | TEXT | JSON of the sender's dressing, or NULL |
 
-The store offers: add a box, get one, list all, list those standing in a world, mark opened, keep, label, and put back.
+The store offers: add a box, get one, list all, list those standing in a world, mark opened, keep, label, put back, and delete.
 
 ### Protocol
 
@@ -276,7 +276,7 @@ New server messages.
 
 - `welcome` gains `boxes`, the full list filtered for the recipient.
 - `box` with one box, sent to both players after every change, filtered per recipient.
-- `box-deny` with `op` (which request it answers: place, open, keep, label or put), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
+- `box-deny` with `op` (which request it answers: place, open, keep, label, put or delete), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
   Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`, `notcreator` (taking back someone else's box), `opened` (taking back a box that has been opened).
 - `box-gone` with `id`, sent to both players when a sealed box was taken back.
 

@@ -3,7 +3,7 @@ import {
   BOX_LABEL_MAX_LEN,
   BOX_MEDIA_MAX,
   BOX_PLACE_MAX_LEN,
-  BOX_STAMP_MAX_LEN,
+  BOX_STAMP_MAX,
   BOX_TEXT_MAX_LEN,
   MEDIA_MAX_BYTES,
   NAME_MAX_LEN,
@@ -62,6 +62,14 @@ const STYLE_LABEL: Record<BoxStyle, string> = { postcard: "Postcard", note: "Not
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const fmtDate = (d: Date) => d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** What a person sees as characters: one emoji counts once, however many code units it takes. */
+export function graphemes(v: string): string[] {
+  return [...segmenter.segment(v)].map((g) => g.segment);
+}
+
+export const TAKE_BACK_CONFIRM = "Take this box back? It disappears for both of you.";
 
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -337,9 +345,14 @@ export class Postcard {
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), styles, body, controls);
+    const dressed = () =>
+      fields.stamp.value.trim() !== opts.mark.stamp ||
+      fields.place.value.trim() !== opts.mark.place ||
+      fields.to.value.trim() !== opts.mark.to ||
+      fields.from.value.trim() !== opts.mark.from;
     this.guard = () => {
       if (busy) return false;
-      return (!textarea.value.trim() && files.length === 0) || confirm("Throw this away?");
+      return (!textarea.value.trim() && files.length === 0 && !dressed()) || confirm("Throw this away?");
     };
     this.cleanup = () => {
       this.fileInput.removeEventListener("change", onFiles);
@@ -423,7 +436,7 @@ export class Postcard {
         take.id = "pc-take";
         take.type = "button";
         take.addEventListener("click", () => {
-          if (!confirm("Take this box back? It disappears for both of you.")) return;
+          if (!confirm(TAKE_BACK_CONFIRM)) return;
           opts.onDelete?.();
           this.close();
         });
@@ -458,29 +471,38 @@ export class Postcard {
 
   /** The four things a sender may change on the card, prefilled with the defaults. */
   private cardInputs(mark: Postmark): CardInputs {
-    // the names and the stamp grow and shrink with what is typed, so the
-    // dashed underline hugs the word instead of trailing across the card
+    // the names grow and shrink with what is typed, so the dashed underline
+    // hugs the word instead of trailing across the card
     const fit = (i: HTMLInputElement) => {
-      i.size = Math.max(2, [...i.value].length + 1);
+      i.size = Math.max(2, graphemes(i.value).length + 1);
     };
-    const make = (cls: string, value: string, max: number, title: string) => {
+    const make = (cls: string, value: string, max: number, title: string, grows: boolean) => {
       const i = el("input", cls);
       i.value = value;
       i.maxLength = max;
       i.title = title;
       i.spellcheck = false;
       i.autocomplete = "off";
-      if (cls !== "pc-place-in") {
+      if (grows) {
         i.addEventListener("input", () => fit(i));
         fit(i);
       }
       return i;
     };
+    // the stamp holds one emoji, or two at a smaller size; anything more is dropped as typed
+    const stamp = make("pc-stamp-in", mark.stamp, 16, "Change the stamp", false);
+    const trimStamp = () => {
+      const g = graphemes(stamp.value);
+      if (g.length > BOX_STAMP_MAX) stamp.value = g.slice(0, BOX_STAMP_MAX).join("");
+      stamp.classList.toggle("pc-two", graphemes(stamp.value).length > 1);
+    };
+    stamp.addEventListener("input", trimStamp);
+    trimStamp();
     return {
-      stamp: make("pc-stamp-in", mark.stamp, BOX_STAMP_MAX_LEN, "Change the stamp"),
-      place: make("pc-place-in", mark.place, BOX_PLACE_MAX_LEN, "Change the place"),
-      to: make("pc-to-in", mark.to, NAME_MAX_LEN, "Change who it is for"),
-      from: make("pc-from-in", mark.from, NAME_MAX_LEN, "Change how you sign"),
+      stamp,
+      place: make("pc-place-in", mark.place, BOX_PLACE_MAX_LEN, "Change the place", false),
+      to: make("pc-to-in", mark.to, NAME_MAX_LEN, "Change who it is for", true),
+      from: make("pc-from-in", mark.from, NAME_MAX_LEN, "Change how you sign", true),
     };
   }
 
@@ -510,15 +532,24 @@ export class Postcard {
       to.append("To: ", edit.to);
       placeLine.append(edit.place);
       from.append("from ", edit.from);
+      // property handlers, not addEventListener: the card is rebuilt on every
+      // style switch and the inputs live on, so listeners must not pile up
       const sync = () => {
         const place = edit.place.value.trim() || mark.place;
         caption.textContent = place;
         postmarkPlace.textContent = place;
       };
-      edit.place.addEventListener("input", sync);
+      edit.place.oninput = sync;
       sync();
+      const greet = () => {
+        if (message instanceof HTMLTextAreaElement) message.placeholder = `Dear ${edit.to.value.trim() || mark.to},`;
+      };
+      edit.to.oninput = greet;
+      greet();
     } else {
-      stamp.append(el("span", undefined, mark.stamp), caption);
+      const glyph = el("span", undefined, mark.stamp);
+      if (graphemes(mark.stamp).length > 1) glyph.classList.add("pc-two");
+      stamp.append(glyph, caption);
       to.append("To: ", el("b", undefined, mark.to));
       placeLine.textContent = mark.place;
       from.textContent = `from ${mark.from}`;

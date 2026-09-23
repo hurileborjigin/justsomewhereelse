@@ -60,7 +60,7 @@ export type Vec3 = [number, number, number];
 export const BOX_TEXT_MAX_LEN = 2000;
 export const BOX_MEDIA_MAX = 6;
 export const BOX_LABEL_MAX_LEN = 40;
-export const BOX_STAMP_MAX_LEN = 4; // an emoji or two on the stamp
+export const BOX_STAMP_MAX = 2; // graphemes on the stamp: one emoji, or two
 export const BOX_PLACE_MAX_LEN = 40; // the place written on the postmark and the address line
 
 // What a box holds: a full postcard, a plain sheet of paper with words, or
