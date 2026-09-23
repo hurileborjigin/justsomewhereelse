@@ -89,6 +89,7 @@ export class Treasures {
   private me: PlayerId = 0;
   private names: [string, string] = ["…", "…"];
   private pendingOpen: number | null = null; // box we asked the server to open
+  private reading: number | null = null; // box shown in the read view, redrawn or closed when it changes
   private pending: Pending | null = null; // a place / put waiting for its answer
   private toastTimer = 0;
   private ui: {
@@ -104,7 +105,10 @@ export class Treasures {
   constructor(assets: Assets, hooks: TreasureHooks) {
     this.assets = assets;
     this.hooks = hooks;
-    this.postcard = new Postcard((open) => hooks.onDialog(open));
+    this.postcard = new Postcard((open) => {
+      hooks.onDialog(open);
+      if (!open) this.reading = null;
+    });
     const $ = (id: string) => {
       const e = document.getElementById(id);
       if (!e) throw new Error(`missing #${id}`);
@@ -181,6 +185,19 @@ export class Treasures {
       this.pendingOpen = null;
       this.showRead(box);
     }
+    this.refreshReading(box);
+  }
+
+  /** The box on the reader's screen changed under them: redraw its buttons, or close it once it left their reach. */
+  private refreshReading(box: Box) {
+    if (this.reading !== box.id || !this.postcard.isOpen) return;
+    const mine = box.creator === this.me;
+    if (!mine && box.loc === null && box.owner !== this.me) {
+      this.postcard.close();
+      this.toast(`${this.names[box.creator]} picked that box up.`);
+      return;
+    }
+    if (box.text !== undefined) this.showRead(box);
   }
 
   /** The server refused a box request; matched to the pending place/put by op and id, or toasted otherwise. */
@@ -201,6 +218,10 @@ export class Treasures {
     this.unmount(id);
     this.boxes.delete(id);
     if (this.pendingOpen === id) this.pendingOpen = null;
+    if (this.reading === id && this.postcard.isOpen) {
+      this.postcard.close();
+      this.toast("That box was taken back.");
+    }
     this.renderPanel();
   }
 
@@ -277,9 +298,10 @@ export class Treasures {
       mark: this.mark(this.me, world.id, new Date()),
       fits,
       onSend: async (draft) => {
-        if (!draft.size) throw new Error("Pick a size first");
+        const size = draft.size;
+        if (!size) throw new Error("Pick a size first");
         const media = await this.uploadAll(draft);
-        const tiles = footprintFor(world, tile, forward, draft.size, free);
+        const tiles = footprintFor(world, tile, forward, size, free);
         if (!tiles) throw new Error("No room for that size here anymore");
         await this.request(
           "place",
@@ -287,7 +309,7 @@ export class Treasures {
           (b, isNew) => isNew && b.creator === this.me,
           () =>
             this.hooks.net.placeBox({
-              size: draft.size!,
+              size,
               style: draft.style,
               card: draft.card,
               text: draft.text,
@@ -326,10 +348,12 @@ export class Treasures {
       },
       onSend: async (draft) => {
         const media = await this.uploadAll(draft);
+        // only a still-sealed, still-unkept update is the answer to a save; an opened
+        // box arriving first means the partner beat the edit and the refusal follows
         await this.request(
           "edit",
           box.id,
-          (b) => b.id === box.id,
+          (b) => b.id === box.id && b.opened === null && b.owner === null,
           () =>
             this.hooks.net.editBox(box.id, {
               style: draft.style,
@@ -395,6 +419,7 @@ export class Treasures {
   // ---- reading ----------------------------------------------------------------
 
   private showRead(box: Box) {
+    this.reading = box.id;
     const role = box.creator === this.me ? "creator" : box.loc !== null ? "finder" : "owner";
     const base = this.mark(box.creator, box.origin, new Date(box.created));
     // whatever the sender typed on the card wins; empty fields keep the defaults

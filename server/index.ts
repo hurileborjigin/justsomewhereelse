@@ -447,6 +447,11 @@ wss.on("connection", (ws) => {
         deny(ws, "open", "missing", boxId);
         return;
       }
+      // a box in its creator's pocket is out of sight: nobody else opens it there
+      if (box.creator !== id && box.loc === null && box.owner !== id) {
+        deny(ws, "open", "missing", boxId);
+        return;
+      }
       if (box.opened === null && box.creator !== id) {
         store.openBox(box.id, Date.now());
         broadcastBox(store.getBox(box.id)!);

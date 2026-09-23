@@ -342,10 +342,38 @@ try {
   const la = await a.next();
   await b.next();
   expect(la.t === "box" && la.box.loc === null && la.box.tiles.length === 0 && la.box.owner === null, "lifted: in the creator's pocket, still nobody's");
+  b.send({ t: "box-open", id: boxId });
+  expect((await b.next()).reason === "missing", "a box in the creator's pocket cannot be opened by the partner");
+  b.send({ t: "box-put", id: boxId, loc: "globe", tiles: [43], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "owner", "the partner cannot put the creator's lifted box down");
   a.send({ t: "box-put", id: boxId, loc: "globe", tiles: [43], fwd: [0, 0, 1] });
   const put2 = await a.next();
   await b.next();
   expect(put2.t === "box" && put2.box.loc === "globe" && put2.box.tiles[0] === 43, "the creator puts her unkept box down again");
+  a.send({ t: "box-put", id: boxId, loc: "globe", tiles: [44], fwd: [0, 0, 1] });
+  expect((await a.next()).reason === "invalid", "a standing box is not put down again without lifting it first");
+  // a second edit keeps one photo and adds another; the kept file must survive
+  const up5 = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": PASS },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 5, 5, 5, 5]),
+  });
+  const media5 = await up5.json();
+  a.send({
+    t: "box-edit",
+    id: boxId,
+    style: "postcard",
+    card: { stamp: "🐝", place: "the lake", to: "sweetheart", from: "your bee" },
+    text: "meet me where the lake is bluest, at dusk",
+    media: [media4, media5],
+    announce: false,
+  });
+  const again = await a.next();
+  await b.next();
+  expect(
+    again.box.media.length === 2 && (await fetch(`http://localhost:${PORT}${media4.url}`)).status === 200,
+    "a photo kept through an edit stays on disk",
+  );
 
   // opening reveals the postcard to both and records the moment
   b.send({ t: "box-open", id: boxId });
@@ -361,6 +389,16 @@ try {
   expect(oa.t === "box" && oa.box.opened === ob.box.opened, "the creator learns it was opened");
   a.send({ t: "box-edit", id: boxId, style: "postcard", text: "too late", media: [], announce: true });
   expect((await a.next()).reason === "opened", "an opened box cannot be edited");
+  a.send({ t: "box-lift", id: boxId });
+  const liftedOpen = await a.next();
+  await b.next();
+  expect(
+    liftedOpen.t === "box" && liftedOpen.box.loc === null && liftedOpen.box.opened !== null,
+    "an opened box that nobody kept can still be picked up",
+  );
+  a.send({ t: "box-put", id: boxId, loc: "globe", tiles: [43], fwd: [0, 0, 1] });
+  await a.next();
+  await b.next();
 
   // keeping with a label takes it out of the world
   b.send({ t: "box-keep", id: boxId, label: "the lake one" });

@@ -66,7 +66,8 @@ Near cube corners a large footprint may fail to close, and then that size does n
 
 - Anyone standing next to a box may open it.
 - Only a player who is not the creator may keep a box.
-- Only the owner may label a box or place a held box back into the world.
+- Only the owner may label a box.
+- A held box is placed back into the world by its owner, or by its creator while nobody has kept it.
 - A placed box keeps its owner, so the owner may pick it up again and the creator still may not.
 - Contents are visible to a player only if they created the box or the box has been opened.
 - Only the creator may take a box back, and only while it is still sealed.
@@ -151,7 +152,8 @@ It has three parts.
    Open shows the postcard in reading mode.
    Label asks for the note in a prompt, the way renaming does.
    "Place here" puts the box into the world in front of the player with the same footprint rules as leaving a new box, and tells the player when it does not fit.
-3. Boxes you left: one row per box the player created, with its size, "sealed" or "opened", and where it is: "on the planet", the building name, or "kept by khurlee".
+3. Boxes you left: one row per box the player created, with its size, "sealed" or "opened", and where it is: "on the planet", the building name, "in your pocket" after you picked it up, or "kept by khurlee".
+   Sealed rows offer Edit and Take back; unkept rows offer Pick up while the box stands and Place here while it is in your pocket.
 
 Once a box that carries a label stands in the world, the action button reads "Open “our first trip” (E)" for both players.
 
@@ -316,7 +318,9 @@ The server enforces everything it can.
 - No footprint overlap with another box standing in the same world.
 - The footprint does not contain the partner's tile in that world: the live tile when the partner is online, otherwise the persisted one.
 - Keep is refused for the creator.
-- Label and put are refused for anyone but the owner, and put is refused when the box is not held.
+- Label is refused for anyone but the owner.
+- Put is refused for anyone but the owner of a kept box or the creator of an unkept one, and when the box is not held.
+- Open is refused for anyone but the creator while the box is in the creator's pocket.
 - Open on a missing box is refused.
 
 ## Edge cases
