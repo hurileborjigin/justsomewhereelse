@@ -113,6 +113,11 @@ export class Treasures {
     this.ui.openBtn.addEventListener("click", () => this.setPanelOpen(true));
     $("treasure-min").addEventListener("click", () => this.setPanelOpen(false));
     $("treasure-leave").addEventListener("click", () => this.compose());
+    // the toast floats above the door/box buttons however many are showing
+    const actions = $("actions");
+    new ResizeObserver(() =>
+      document.documentElement.style.setProperty("--actions-h", `${actions.offsetHeight}px`),
+    ).observe(actions);
     this.setPanelOpen(false);
   }
 
