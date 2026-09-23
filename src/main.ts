@@ -13,6 +13,7 @@ import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
 import { applySkyForHour, createScene } from "./scene.ts";
 import { setupTouchControls } from "./touch.ts";
+import { chestIcon } from "./postcard.ts";
 import { Treasures } from "./treasures.ts";
 import { BUILDING_NAMES, GlobeWorld, RoomWorld, nearestFreeTile } from "./world.ts";
 
@@ -233,8 +234,12 @@ async function boot() {
       const box = treasures.actionAt(player.world, player.tile, player.forward);
       if (box) {
         // E fires the first visible button, so the box only claims it when alone
-        const key = doorAction ? "" : " (E)";
-        setText(boxBtn, box.label ? `Open “${box.label}” 🎁${key}` : `Open the treasure box 🎁${key}`);
+        const before = box.label ? `Open “${box.label}” ` : "Open the treasure box ";
+        const after = doorAction ? "" : " (E)";
+        if (boxBtn.dataset.label !== before + after) {
+          boxBtn.dataset.label = before + after;
+          boxBtn.replaceChildren(before, chestIcon(), ...(after ? [after] : []));
+        }
         boxAction = () => treasures.open(box);
       }
     }

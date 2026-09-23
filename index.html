@@ -747,6 +747,10 @@
         padding-bottom: 3px;
         font-weight: 600;
         opacity: 0.7;
+        text-transform: uppercase;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .pc-postmark {
         position: absolute;
@@ -947,6 +951,153 @@
         color: rgba(255, 255, 253, 0.7);
         font-size: 12px;
       }
+      /* --- the chest icon ------------------------------------------------ */
+      .chest-icon {
+        width: 1.2em;
+        height: 1.05em;
+        vertical-align: -0.16em;
+        display: inline-block;
+        flex: none;
+      }
+      #treasure-open {
+        padding: 7px 9px 5px;
+        line-height: 0;
+      }
+      #treasure-open .chest-icon {
+        width: 30px;
+        height: 26px;
+        display: block;
+        filter: drop-shadow(0 1px 1px rgba(60, 40, 10, 0.25));
+      }
+      /* --- what kind of box: postcard, note, just photos ------------------ */
+      .pc-styles {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+      }
+      .pc-styles button {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 6px 12px;
+        background: rgba(255, 255, 253, 0.85);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .pc-styles button.picked {
+        border-color: #58b368;
+        background: #e3f3d9;
+      }
+      .pc-body {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      /* the plain sheet of paper */
+      .pc-note {
+        position: relative;
+        background-color: #fffdf8;
+        background-image: repeating-linear-gradient(transparent 0 29px, rgba(47, 58, 90, 0.13) 29px 30px);
+        background-position: 0 28px;
+        border-radius: 4px;
+        box-shadow: 0 12px 32px rgba(20, 30, 40, 0.4);
+        padding: 28px 30px 34px;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+      .pc-note .pc-text {
+        line-height: 30px;
+        height: 240px;
+      }
+      .pc-note div.pc-text {
+        height: auto;
+        min-height: 120px;
+        overflow: visible;
+      }
+      .pc-note .pc-count {
+        left: 30px;
+        bottom: 10px;
+      }
+      /* the sender types the dressing straight onto the card */
+      .pc-editing input {
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: none;
+        outline: none;
+        padding: 0;
+        border-bottom: 1px dashed rgba(47, 58, 90, 0.35);
+      }
+      .pc-editing input:focus {
+        border-bottom-color: #58b368;
+      }
+      .pc-stamp .pc-stamp-in {
+        width: 44px !important;
+        margin: auto 0;
+        text-align: center;
+        font-size: 24px;
+        line-height: 1.2;
+        border-bottom: none;
+      }
+      .pc-editing .pc-to-in {
+        font-family: Caveat, cursive;
+        font-size: 21px;
+        font-weight: 500;
+        max-width: 100%;
+      }
+      .pc-line .pc-place-in {
+        font-family: Caveat, cursive;
+        font-size: 18px;
+        width: 100%;
+        height: 24px;
+        padding-left: 4px;
+        border-bottom: none;
+      }
+      .pc-editing .pc-from-in {
+        font-family: Caveat, cursive;
+        font-size: 20px;
+        max-width: 160px;
+      }
+      /* just photos: big prints and a caption */
+      .pc-prints.pc-big .pc-print img,
+      .pc-prints.pc-big .pc-print video {
+        width: 280px;
+        height: 280px;
+      }
+      textarea.pc-caption {
+        display: block;
+        width: min(100%, 440px);
+        height: 48px;
+        margin: 0 auto;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: rgba(255, 255, 253, 0.92);
+        font-family: Caveat, cursive;
+        font-size: 20px;
+        line-height: 1.3;
+        color: #2f3a5a;
+        resize: none;
+        overflow: hidden;
+      }
+      .pc-caption-read {
+        text-align: center;
+        font-family: Caveat, cursive;
+        font-size: 24px;
+        color: rgba(255, 255, 253, 0.95);
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+        white-space: pre-wrap;
+      }
+      .pc-danger {
+        border: none;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 14px;
+        background: rgba(208, 90, 90, 0.9);
+        color: white;
+        cursor: pointer;
+      }
       @media (max-width: 560px) {
         .pc-card {
           aspect-ratio: auto;
@@ -983,6 +1134,17 @@
         .pc-print video {
           width: 120px;
           height: 120px;
+        }
+        .pc-prints.pc-big .pc-print img,
+        .pc-prints.pc-big .pc-print video {
+          width: 200px;
+          height: 200px;
+        }
+        .pc-note {
+          padding: 22px 20px 28px;
+        }
+        .pc-note .pc-text {
+          height: 200px;
         }
       }
       #loading,
@@ -1084,6 +1246,19 @@
   </head>
   <body>
     <canvas id="game"></canvas>
+    <!-- the treasure chest icon, drawn once and reused with <use href="#i-chest"> -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-chest" viewBox="0 0 32 28">
+        <path d="M3 12 C3 5.5 8 3 16 3 C24 3 29 5.5 29 12 Z" fill="#b5763f" stroke="#7d4f2a" stroke-width="1.6" stroke-linejoin="round" />
+        <rect x="3" y="12" width="26" height="13" rx="1.5" fill="#a86a38" stroke="#7d4f2a" stroke-width="1.6" />
+        <path d="M6.5 9.8 C8 6.8 11.5 5.3 15 5.2" fill="none" stroke="#d6a061" stroke-width="1.2" stroke-linecap="round" />
+        <rect x="8" y="4.4" width="3.2" height="20.6" fill="#e2b34a" stroke="#8a6a20" stroke-width="1" />
+        <rect x="20.8" y="4.4" width="3.2" height="20.6" fill="#e2b34a" stroke="#8a6a20" stroke-width="1" />
+        <rect x="13.4" y="10.6" width="5.2" height="6.4" rx="1.2" fill="#e2b34a" stroke="#8a6a20" stroke-width="1" />
+        <circle cx="16" cy="13" r="1" fill="#4a3a2a" />
+        <rect x="15.5" y="13.4" width="1" height="2.1" fill="#4a3a2a" />
+      </symbol>
+    </svg>
     <div id="status"><span id="dot"></span><span id="status-text"></span></div>
     <div id="dpad">
       <button data-dir="up" style="grid-area: u">▲</button>
@@ -1098,18 +1273,18 @@
     </div>
     <div id="actions">
       <button id="enter" hidden>Enter</button>
-      <button id="box-btn" hidden>Open the treasure box 🎁 (E)</button>
+      <button id="box-btn" hidden>Open the treasure box (E)</button>
     </div>
     <div id="bubbles"></div>
-    <button id="treasure-open" title="Treasures">🎁<span id="treasure-badge" hidden></span></button>
+    <button id="treasure-open" title="Treasures"><svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg><span id="treasure-badge" hidden></span></button>
     <div id="treasure-panel" hidden>
       <header>
-        <span>Treasures 🎁</span>
+        <span>Treasures <svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg></span>
         <button id="treasure-min" title="Minimize">–</button>
       </header>
       <div id="treasure-body">
         <p id="treasure-waiting"></p>
-        <button id="treasure-leave">Leave a treasure here 🎁</button>
+        <button id="treasure-leave">Leave a treasure here <svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg></button>
         <h3>Your collection</h3>
         <div id="treasure-mine" class="tr-list" data-empty="Nothing kept yet. Go looking!"></div>
         <h3>Boxes you left</h3>

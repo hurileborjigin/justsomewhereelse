@@ -11,11 +11,11 @@ import {
   type Vec3,
 } from "../shared/protocol.ts";
 import { node, type AssetName, type Assets } from "./assets.ts";
-import { mediaElement, uploadMedia } from "./chat.ts";
+import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
-import { Postcard, el, type Postmark } from "./postcard.ts";
+import { Postcard, chestIcon, el, type Postmark } from "./postcard.ts";
 import type { World } from "./world.ts";
 
 const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sealed
@@ -287,8 +287,8 @@ export class Treasures {
           () =>
             this.hooks.net.placeBox({
               size: draft.size,
-              style: "postcard",
-              card: null,
+              style: draft.style,
+              card: draft.card,
               text: draft.text,
               media,
               announce: draft.announce,
@@ -320,7 +320,7 @@ export class Treasures {
       (b) => b.id === box.id && b.loc === world.id,
       () => this.hooks.net.putBox(box.id, world.id, tiles, vec(forward)),
     ).then(
-      () => this.toast("Placed 🎁"),
+      () => this.toast("Placed"),
       (e: Error) => this.toast(e.message),
     );
   }
@@ -349,24 +349,44 @@ export class Treasures {
 
   private showRead(box: Box) {
     const role = box.creator === this.me ? "creator" : box.loc !== null ? "finder" : "owner";
+    const base = this.mark(box.creator, box.origin, new Date(box.created));
+    // whatever the sender typed on the card wins; empty fields keep the defaults
+    const card = box.card;
+    const mark: Postmark = card
+      ? {
+          stamp: card.stamp || base.stamp,
+          from: card.from || base.from,
+          to: card.to || base.to,
+          place: card.place || base.place,
+          date: base.date,
+        }
+      : base;
+    const mine = box.creator === this.me;
     this.postcard.read({
       box,
-      mark: this.mark(box.creator, box.origin, new Date(box.created)),
+      mark,
       role,
       openedBy: this.names[1 - box.creator],
       isOwner: box.owner === this.me,
       onKeep: (label) => this.hooks.net.keepBox(box.id, label || undefined),
+      ...(mine && box.opened === null ? { onDelete: () => this.hooks.net.deleteBox(box.id) } : {}),
     });
   }
 
+  /** The default dressing: the sender's character on the stamp, the world's name, the players' names. */
   private mark(from: PlayerId, loc: string, date: Date): Postmark {
     return {
+      stamp: EMOJI[CHARACTER_OF[from]],
       from: this.names[from],
-      fromChar: CHARACTER_OF[from],
       to: this.names[1 - from],
       place: this.hooks.placeName(loc),
       date,
     };
+  }
+
+  private takeBack(box: Box) {
+    if (!confirm("Take this box back? It disappears for both of you.")) return;
+    this.hooks.net.deleteBox(box.id);
   }
 
   // ---- 3D ---------------------------------------------------------------------
@@ -410,12 +430,11 @@ export class Treasures {
     const me = this.me;
     const all = [...this.boxes.values()].sort((a, b) => b.created - a.created);
     const waiting = all.filter((b) => b.loc !== null && b.creator !== me && b.opened === null && b.announce).length;
-    this.ui.waiting.textContent =
-      waiting === 0
-        ? "Nothing announced… but who knows 👀"
-        : waiting === 1
-          ? "1 sealed box is waiting for you somewhere 🎁"
-          : `${waiting} sealed boxes are waiting for you somewhere 🎁`;
+    if (waiting === 0) this.ui.waiting.textContent = "Nothing announced… but who knows 👀";
+    else {
+      const line = waiting === 1 ? "1 sealed box is waiting for you somewhere " : `${waiting} sealed boxes are waiting for you somewhere `;
+      this.ui.waiting.replaceChildren(line, chestIcon());
+    }
     this.ui.badge.hidden = waiting === 0;
     this.ui.badge.textContent = String(waiting);
     this.ui.mine.replaceChildren(...all.filter((b) => b.owner === me).map((b) => this.row(b, "mine")));
@@ -432,7 +451,7 @@ export class Treasures {
     const thumb = el("div", "tr-thumb");
     const first = box.media?.[0];
     if (first) thumb.append(mediaElement(first, "row"));
-    else thumb.textContent = "🎁";
+    else thumb.append(chestIcon());
 
     const main = el("div");
     const title = el("div", "tr-title");
@@ -469,6 +488,8 @@ export class Treasures {
     if (kind === "mine") {
       actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
       if (box.loc === null) actions.append(button("Place here", "tr-place", () => this.place(box)));
+    } else if (box.opened === null) {
+      actions.append(button("Take back", "tr-take", () => this.takeBack(box)));
     }
     row.append(thumb, main, actions);
     return row;
