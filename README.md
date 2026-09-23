@@ -99,6 +99,33 @@ galleries later:
   for hanging photos and posting text, and rooms are per-instance, so each
   house can hold its own stuff (food, gifts, ...) down the road.
 
+## Treasure boxes 🎁
+
+Write a postcard, tuck photos or videos into it, and leave it as a treasure
+chest anywhere: on the globe or on the floor of any room.
+The 🎁 button (top left) opens your Treasures panel; **Leave a treasure here**
+puts a chest on the squares in front of you.
+Three sizes: **S** takes one square, **M** four (2 x 2), **L** twelve (3 x 4) -
+the card only offers sizes that fit where you stand.
+Chests block walking like trees do.
+
+A sealed chest tells the finder nothing.
+Walk up to it and press **E**: the lid swings open (for both of you) and the
+postcard appears, handwritten, stamped and postmarked with where and when it
+was left.
+**Keep it** to take it into your collection, optionally with a label;
+**Leave it here** and it stays, open.
+You can't keep a box you left yourself, but you can reread it and see whether
+it has been opened.
+From the panel you can relabel a kept box, reread it, or **Place here** to put
+it down again - in your own house, say, which makes it a treasure house you
+can wander through together.
+
+When leaving a box you choose whether the other player gets told that a
+sealed box is waiting (they see a count, never a location).
+Boxes and their media live in SQLite / the media folder next to the chat
+history.
+
 ## Adding your own models
 
 Two ways, both end up in `public/models/` via `npm run models`:
@@ -122,9 +149,11 @@ bee's `WingL`/`WingR`) — see `src/animate.ts`.
 | `npm run models` | regenerate all `.glb` from Blender, headless |
 | `npm run build` / `npm start` | production build / serve on :3001 |
 | `npm run preview` | build + serve (what a deploy runs) |
-| `npm run typecheck` | TypeScript over client, shared and server |
+| `npm run typecheck` | TypeScript over client, shared and server (erasable syntax only, so Node can run the tests) |
+| `npm test` | unit tests (store, footprints, worlds) with the Node test runner |
 | `npm run smoke` | end-to-end test of the multiplayer server |
 | `node scripts/drive.mjs` | two headless browsers walk around and screenshot to `/tmp/tinyplanet-*.png` |
+| `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/tinyplanet-treasure-*.png` |
 
 Roadmap ideas: hide-and-seek mode (the tile occupancy is already in place),
 buildings with multi-tile footprints, day/night, more animals.

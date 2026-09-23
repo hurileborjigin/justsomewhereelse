@@ -1,3 +1,4 @@
+# Every push to main is tested, then deployed to Fly.io.
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
 name: Fly Deploy
@@ -7,10 +8,24 @@ on:
       - main
       - master
 jobs:
+  test:
+    name: Typecheck, unit tests, smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run smoke
   deploy:
     name: Deploy app
+    needs: test
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-group # only one deploy at a time
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
