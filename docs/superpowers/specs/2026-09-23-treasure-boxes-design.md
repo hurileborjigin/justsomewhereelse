@@ -76,6 +76,7 @@ The panel has a "Leave a treasure here" button that opens the postcard in compos
 While any postcard dialog is open, walking input and the E key are ignored, and Esc closes the dialog.
 
 The compose dialog shows the sizes that fit where the player currently stands and disables the others with the hint "no room here".
+When any size is disabled, a line under the size picker reads "Sizes greyed out do not fit where you stand", so phone users see the hint too.
 Sending uploads the attached files one by one through the existing `/media` endpoint, then sends the placement to the server.
 The box appears for both players at once.
 If the server rejects the placement, the dialog stays open and shows why.
@@ -97,6 +98,8 @@ Both clients swing the lid open in the world.
 The opener sees the postcard in reading mode.
 
 Below the postcard a player who is not the creator sees an optional label field, "Keep it 🎁" and "Leave it here".
+The label field starts with the box's current label, and Enter in it keeps the box.
+When the reader already owns the box, because they kept it earlier and placed it here, the button reads "Pick it up 🎁" instead.
 Keeping removes the box from the world for both players and adds it to the keeper's collection with the label, if any.
 Leaving it closes the dialog and the box stays where it is with its lid open.
 The creator sees only a footer with "Still sealed" or "Opened by khurlee on 24 Sep".
@@ -244,7 +247,7 @@ New server messages.
 
 - `welcome` gains `boxes`, the full list filtered for the recipient.
 - `box` with one box, sent to both players after every change, filtered per recipient.
-- `box-deny` with `reason`, sent only to the requester when a request is refused.
+- `box-deny` with `op` (which request it answers: place, open, keep, label or put), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
   Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`.
 
 Filtering means the server omits `text` and `media` unless the recipient created the box or the box has been opened.
@@ -254,8 +257,10 @@ Filtering means the server omits `text` and `media` unless the recipient created
 The server does not know the terrain, so terrain rules are the client's job, in line with the existing trust model between the two players.
 The server enforces everything it can.
 
-- Text length, media count, media reference shape, label length, size value, `fwd` shape.
-- The tile count matches the size and all tiles are distinct non-negative integers.
+- Text length, media count, label length (a string or nothing), size value, `fwd` shape.
+- Each media reference has the upload endpoint's shape and names a file that endpoint actually stored.
+- `loc` looks like a building id: 1 to 32 characters of lowercase letters, digits, `_` or `-`.
+- The tile count matches the size and all tiles are distinct non-negative integers, below `6 * N * N` on the globe.
 - No footprint overlap with another box standing in the same world.
 - The footprint does not contain the partner's tile in that world: the live tile when the partner is online, otherwise the persisted one.
 - Keep is refused for the creator.
