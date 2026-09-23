@@ -11,19 +11,27 @@ import {
   type BoxCard,
   type BoxSize,
   type BoxStyle,
+  type MediaRef,
 } from "../shared/protocol.ts";
 import { mediaElement } from "./chat.ts";
 
 /** The postcard's dressing as it should read: the stamp picture, the names, the place, the date. */
 export type Postmark = { stamp: string; from: string; to: string; place: string; date: Date };
 
+/** What a box holds, as the compose dialog sees it: the part an edit may change. */
+export type Contents = { style: BoxStyle; card: BoxCard | null; text: string; media: MediaRef[]; announce: boolean };
+
 export type Draft = {
   style: BoxStyle;
   /** The dressing the sender typed (postcards only); empty fields mean "the default". */
   card: BoxCard | null;
   text: string;
+  /** Photos and videos already on the server that stay (editing). */
+  keep: MediaRef[];
+  /** New photos and videos to upload. */
   files: File[];
-  size: BoxSize;
+  /** The chest size; null when editing, since the chest already stands. */
+  size: BoxSize | null;
   announce: boolean;
 };
 
@@ -31,7 +39,9 @@ export type ComposeOptions = {
   mark: Postmark;
   /** Which sizes fit where the player stands right now. */
   fits: Record<BoxSize, boolean>;
-  /** Resolve once the box stands in the world; reject with a message to show. */
+  /** Editing a box that already exists: prefill from it and hide the size picker. */
+  initial?: Contents;
+  /** Resolve once the box stands in the world (or the edit is saved); reject with a message to show. */
   onSend: (draft: Draft) => Promise<void>;
 };
 
@@ -46,6 +56,10 @@ export type ReadOptions = {
   onKeep: (label: string) => void;
   /** Present only when the reader may take the box back: their own box, still sealed. */
   onDelete?: () => void;
+  /** Present only when the reader may change the box: their own box, still sealed. */
+  onEdit?: () => void;
+  /** Present only when the reader may pick the box up to move it: their own box, not yet kept. */
+  onLift?: () => void;
 };
 
 type CardInputs = {
@@ -149,24 +163,29 @@ export class Postcard {
     this.guard = null;
   }
 
-  /** A new box to fill and leave here. */
+  /** A new box to fill and leave here, or (with `initial`) an existing one to change. */
   compose(opts: ComposeOptions) {
     this.teardown();
+    const initial = opts.initial;
+    const editing = initial !== undefined;
+    const keep: MediaRef[] = [...(initial?.media ?? [])];
     const files: File[] = [];
     const urls: string[] = [];
-    let size: BoxSize | null = ORDER.find((s) => opts.fits[s]) ?? null;
-    let style: BoxStyle = "postcard";
+    let size: BoxSize | null = editing ? null : (ORDER.find((s) => opts.fits[s]) ?? null);
+    let style: BoxStyle = initial?.style ?? "postcard";
     let busy = false;
+    const total = () => keep.length + files.length;
 
     const error = el("div", "pc-error");
     // one text field travels between the three layouts, so switching keeps the words
     const textarea = el("textarea", "pc-text");
     textarea.maxLength = BOX_TEXT_MAX_LEN;
-    const count = el("span", "pc-count", `0 / ${BOX_TEXT_MAX_LEN}`);
+    textarea.value = initial?.text ?? "";
+    const count = el("span", "pc-count", `${textarea.value.length} / ${BOX_TEXT_MAX_LEN}`);
     textarea.addEventListener("input", () => {
       count.textContent = `${textarea.value.length} / ${BOX_TEXT_MAX_LEN}`;
     });
-    const fields = this.cardInputs(opts.mark);
+    const fields = this.cardInputs(opts.mark, initial?.card ?? null);
 
     // photos & videos as instant-camera prints, staged until "Leave it here"
     const prints = el("div", "pc-prints");
@@ -175,6 +194,19 @@ export class Postcard {
     addBtn.addEventListener("click", () => this.fileInput.click());
     const renderPrints = () => {
       prints.replaceChildren();
+      // photos already on the server (editing) come first, each removable
+      keep.forEach((m, i) => {
+        const print = el("div", "pc-print");
+        const x = el("button", "pc-x", "✕");
+        x.type = "button";
+        x.title = "Remove";
+        x.addEventListener("click", () => {
+          keep.splice(i, 1);
+          renderPrints();
+        });
+        print.append(mediaElement(m, "row"), x);
+        prints.append(print);
+      });
       files.forEach((f, i) => {
         const print = el("div", "pc-print");
         let media: HTMLImageElement | HTMLVideoElement;
@@ -200,12 +232,12 @@ export class Postcard {
         print.append(media, x);
         prints.append(print);
       });
-      addBtn.hidden = files.length >= BOX_MEDIA_MAX;
+      addBtn.hidden = total() >= BOX_MEDIA_MAX;
       prints.append(addBtn);
     };
     const onFiles = () => {
       for (const f of this.fileInput.files ?? []) {
-        if (files.length >= BOX_MEDIA_MAX) {
+        if (total() >= BOX_MEDIA_MAX) {
           error.textContent = `A box holds at most ${BOX_MEDIA_MAX} photos or videos`;
           break;
         }
@@ -264,7 +296,7 @@ export class Postcard {
     });
     render();
 
-    // size, announce, send
+    // size (new boxes only), announce, send
     const controls = el("div", "pc-controls");
     const sizes = el("div", "pc-sizes");
     const sizeBtns = ORDER.map((s) => {
@@ -282,24 +314,26 @@ export class Postcard {
       return b;
     });
     // the per-button "no room here" tooltip never shows on a phone
-    const hint = ORDER.every((s) => opts.fits[s])
-      ? null
-      : el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
+    const hint =
+      editing || ORDER.every((s) => opts.fits[s])
+        ? null
+        : el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
     const announce = el("label", "pc-announce");
     const check = el("input");
     check.type = "checkbox";
-    check.checked = true;
+    check.checked = initial?.announce ?? true;
     announce.append(check, `Let ${opts.mark.to} know a box is waiting`);
     const send = el("button", "pc-primary");
-    withChest(send, "Leave it here ");
+    const sendLabel = () => (editing ? (send.textContent = "Save changes") : withChest(send, "Leave it here "));
+    sendLabel();
     send.id = "pc-send";
     send.type = "button";
-    if (!size) {
+    if (!editing && !size) {
       send.disabled = true;
       error.textContent = "No room for a box here. Step somewhere more open.";
     }
     send.addEventListener("click", async () => {
-      if (busy || !size) return;
+      if (busy || (!editing && !size)) return;
       const text = textarea.value.trim();
       const missing =
         style === "note"
@@ -307,10 +341,10 @@ export class Postcard {
             ? null
             : "Write something first"
           : style === "media"
-            ? files.length
+            ? total()
               ? null
               : "Add a photo or video first"
-            : text || files.length
+            : text || total()
               ? null
               : "Write something or add a photo first";
       if (missing) {
@@ -331,28 +365,44 @@ export class Postcard {
             }
           : null;
       try {
-        await opts.onSend({ style, card, text, files: [...files], size, announce: check.checked });
+        await opts.onSend({ style, card, text, keep: [...keep], files: [...files], size, announce: check.checked });
         this.guard = null;
         this.close();
       } catch (err) {
         error.textContent = err instanceof Error ? err.message : "Something went wrong";
         busy = false;
         send.disabled = false;
-        withChest(send, "Leave it here ");
+        sendLabel();
       }
     });
-    controls.append(sizes, ...(hint ? [hint] : []), announce, send, error);
+    controls.append(...(editing ? [] : [sizes]), ...(hint ? [hint] : []), announce, send, error);
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), styles, body, controls);
-    const dressed = () =>
-      fields.stamp.value.trim() !== opts.mark.stamp ||
-      fields.place.value.trim() !== opts.mark.place ||
-      fields.to.value.trim() !== opts.mark.to ||
-      fields.from.value.trim() !== opts.mark.from;
+    // what the card started as: the defaults for a new box, the box itself when editing
+    const start = {
+      style: initial?.style ?? "postcard",
+      text: initial?.text ?? "",
+      media: initial?.media.length ?? 0,
+      announce: initial?.announce ?? true,
+      stamp: initial?.card?.stamp || opts.mark.stamp,
+      place: initial?.card?.place || opts.mark.place,
+      to: initial?.card?.to || opts.mark.to,
+      from: initial?.card?.from || opts.mark.from,
+    };
+    const changed = () =>
+      style !== start.style ||
+      textarea.value.trim() !== start.text ||
+      files.length > 0 ||
+      keep.length !== start.media ||
+      check.checked !== start.announce ||
+      fields.stamp.value.trim() !== start.stamp ||
+      fields.place.value.trim() !== start.place ||
+      fields.to.value.trim() !== start.to ||
+      fields.from.value.trim() !== start.from;
     this.guard = () => {
       if (busy) return false;
-      return (!textarea.value.trim() && files.length === 0 && !dressed()) || confirm("Throw this away?");
+      return !changed() || confirm(editing ? "Drop these changes?" : "Throw this away?");
     };
     this.cleanup = () => {
       this.fileInput.removeEventListener("change", onFiles);
@@ -431,6 +481,24 @@ export class Postcard {
           ),
         );
       }
+      if (opts.onLift) {
+        const lift = el("button", "pc-primary");
+        withChest(lift, "Pick it up ");
+        lift.id = "pc-lift";
+        lift.type = "button";
+        lift.addEventListener("click", () => {
+          opts.onLift?.();
+          this.close();
+        });
+        controls.append(lift);
+      }
+      if (opts.onEdit) {
+        const change = el("button", "pc-secondary", "Edit");
+        change.id = "pc-edit";
+        change.type = "button";
+        change.addEventListener("click", () => opts.onEdit?.());
+        controls.append(change);
+      }
       if (opts.onDelete) {
         const take = el("button", "pc-danger", "Take it back");
         take.id = "pc-take";
@@ -469,8 +537,8 @@ export class Postcard {
     return b;
   }
 
-  /** The four things a sender may change on the card, prefilled with the defaults. */
-  private cardInputs(mark: Postmark): CardInputs {
+  /** The four things a sender may change on the card, prefilled with the defaults or with what they typed before. */
+  private cardInputs(mark: Postmark, card: BoxCard | null): CardInputs {
     // the names grow and shrink with what is typed, so the dashed underline
     // hugs the word instead of trailing across the card
     const fit = (i: HTMLInputElement) => {
@@ -490,7 +558,7 @@ export class Postcard {
       return i;
     };
     // the stamp holds one emoji, or two at a smaller size; anything more is dropped as typed
-    const stamp = make("pc-stamp-in", mark.stamp, 16, "Change the stamp", false);
+    const stamp = make("pc-stamp-in", card?.stamp || mark.stamp, 16, "Change the stamp", false);
     const trimStamp = () => {
       const g = graphemes(stamp.value);
       if (g.length > BOX_STAMP_MAX) stamp.value = g.slice(0, BOX_STAMP_MAX).join("");
@@ -500,9 +568,9 @@ export class Postcard {
     trimStamp();
     return {
       stamp,
-      place: make("pc-place-in", mark.place, BOX_PLACE_MAX_LEN, "Change the place", false),
-      to: make("pc-to-in", mark.to, NAME_MAX_LEN, "Change who it is for", true),
-      from: make("pc-from-in", mark.from, NAME_MAX_LEN, "Change how you sign", true),
+      place: make("pc-place-in", card?.place || mark.place, BOX_PLACE_MAX_LEN, "Change the place", false),
+      to: make("pc-to-in", card?.to || mark.to, NAME_MAX_LEN, "Change who it is for", true),
+      from: make("pc-from-in", card?.from || mark.from, NAME_MAX_LEN, "Change how you sign", true),
     };
   }
 

@@ -15,7 +15,7 @@ import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
-import { Postcard, TAKE_BACK_CONFIRM, chestIcon, el, type Postmark } from "./postcard.ts";
+import { Postcard, TAKE_BACK_CONFIRM, chestIcon, el, type Draft, type Postmark } from "./postcard.ts";
 import type { World } from "./world.ts";
 
 const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sealed
@@ -277,8 +277,8 @@ export class Treasures {
       mark: this.mark(this.me, world.id, new Date()),
       fits,
       onSend: async (draft) => {
-        const media: MediaRef[] = [];
-        for (const f of draft.files) media.push(await uploadMedia(f));
+        if (!draft.size) throw new Error("Pick a size first");
+        const media = await this.uploadAll(draft);
         const tiles = footprintFor(world, tile, forward, draft.size, free);
         if (!tiles) throw new Error("No room for that size here anymore");
         await this.request(
@@ -287,7 +287,7 @@ export class Treasures {
           (b, isNew) => isNew && b.creator === this.me,
           () =>
             this.hooks.net.placeBox({
-              size: draft.size,
+              size: draft.size!,
               style: draft.style,
               card: draft.card,
               text: draft.text,
@@ -300,6 +300,52 @@ export class Treasures {
         );
       },
     });
+  }
+
+  /** The photos and videos a draft ends up with: the ones kept plus the new uploads. */
+  private async uploadAll(draft: Draft): Promise<MediaRef[]> {
+    const media: MediaRef[] = [...draft.keep];
+    for (const f of draft.files) media.push(await uploadMedia(f));
+    return media;
+  }
+
+  /** Change a sealed box you left: the same dialog, prefilled, without the size picker. */
+  private edit(box: Box) {
+    if (this.postcard.isOpen) this.postcard.close();
+    if (this.postcard.isOpen) return; // the reader kept the dialog (a send in flight)
+    this.setPanelOpen(false);
+    this.postcard.compose({
+      mark: this.mark(box.creator, box.origin, new Date(box.created)),
+      fits: { s: false, m: false, l: false },
+      initial: {
+        style: box.style,
+        card: box.card ?? null,
+        text: box.text ?? "",
+        media: box.media ?? [],
+        announce: box.announce,
+      },
+      onSend: async (draft) => {
+        const media = await this.uploadAll(draft);
+        await this.request(
+          "edit",
+          box.id,
+          (b) => b.id === box.id,
+          () =>
+            this.hooks.net.editBox(box.id, {
+              style: draft.style,
+              card: draft.card,
+              text: draft.text,
+              media,
+              announce: draft.announce,
+            }),
+        );
+      },
+    });
+  }
+
+  /** Pick your own box up to move it; "Place here" puts it down again. */
+  private lift(box: Box) {
+    this.hooks.net.liftBox(box.id);
   }
 
   private place(box: Box) {
@@ -363,6 +409,8 @@ export class Treasures {
         }
       : base;
     const mine = box.creator === this.me;
+    const sealed = box.opened === null;
+    const unkept = box.owner === null;
     this.postcard.read({
       box,
       mark,
@@ -370,7 +418,8 @@ export class Treasures {
       openedBy: this.names[1 - box.creator],
       isOwner: box.owner === this.me,
       onKeep: (label) => this.hooks.net.keepBox(box.id, label || undefined),
-      ...(mine && box.opened === null ? { onDelete: () => this.hooks.net.deleteBox(box.id) } : {}),
+      ...(mine && sealed ? { onDelete: () => this.hooks.net.deleteBox(box.id), onEdit: () => this.edit(box) } : {}),
+      ...(mine && unkept && box.loc !== null ? { onLift: () => this.lift(box) } : {}),
     });
   }
 
@@ -443,7 +492,8 @@ export class Treasures {
   }
 
   private whereText(box: Box): string {
-    if (box.loc === null) return box.owner === this.me ? "in your pocket" : `kept by ${this.names[box.owner ?? 0]}`;
+    // held: by its owner, or by its creator while nobody has kept it
+    if (box.loc === null) return box.owner === null || box.owner === this.me ? "in your pocket" : `kept by ${this.names[box.owner]}`;
     return box.loc === "globe" ? "on the planet" : `in ${this.hooks.placeName(box.loc)}`;
   }
 
@@ -489,8 +539,14 @@ export class Treasures {
     if (kind === "mine") {
       actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
       if (box.loc === null) actions.append(button("Place here", "tr-place", () => this.place(box)));
-    } else if (box.opened === null) {
-      actions.append(button("Take back", "tr-take", () => this.takeBack(box)));
+    } else {
+      // your own box: change it while sealed, move it until your partner keeps it
+      if (box.opened === null) actions.append(button("Edit", "tr-edit", () => this.edit(box)));
+      if (box.owner === null) {
+        if (box.loc !== null) actions.append(button("Pick up", "tr-lift", () => this.lift(box)));
+        else actions.append(button("Place here", "tr-place", () => this.place(box)));
+      }
+      if (box.opened === null) actions.append(button("Take back", "tr-take", () => this.takeBack(box)));
     }
     row.append(thumb, main, actions);
     return row;
