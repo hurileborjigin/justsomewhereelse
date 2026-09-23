@@ -12,6 +12,7 @@
     "preview": "npm run build && npm start",
     "models": "node scripts/models.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "node --test 'server/*.test.ts' 'src/*.test.ts'",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

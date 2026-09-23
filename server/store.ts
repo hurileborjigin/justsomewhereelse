@@ -6,10 +6,76 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ChatEntry, MediaRef, PlayerId, StateData } from "../shared/protocol.ts";
+import type {
+  Box,
+  BoxSize,
+  ChatEntry,
+  MediaRef,
+  PlayerId,
+  StateData,
+  Vec3,
+} from "../shared/protocol.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
+
+/** A box as stored: contents always present (the server strips them per viewer). */
+export type FullBox = Box & { text: string; media: MediaRef[] };
+
+export type NewBox = {
+  creator: PlayerId;
+  size: BoxSize;
+  text: string;
+  media: MediaRef[];
+  announce: boolean;
+  loc: string;
+  tiles: number[];
+  fwd: Vec3;
+};
+
+type BoxRow = {
+  id: number;
+  creator: number;
+  owner: number | null;
+  size: string;
+  text: string;
+  media: string;
+  announce: number;
+  created: number;
+  opened: number | null;
+  label: string | null;
+  origin: string;
+  loc: string | null;
+  tiles: string;
+  fwd: string;
+};
+
+function parseJson<T>(s: string, fallback: T): T {
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToBox(r: BoxRow): FullBox {
+  return {
+    id: Number(r.id),
+    creator: r.creator as PlayerId,
+    owner: r.owner === null ? null : (r.owner as PlayerId),
+    size: r.size as BoxSize,
+    announce: r.announce === 1,
+    created: r.created,
+    opened: r.opened,
+    label: r.label,
+    origin: r.origin,
+    loc: r.loc,
+    tiles: parseJson<number[]>(r.tiles, []),
+    fwd: parseJson<Vec3>(r.fwd, [0, 0, 1]),
+    text: r.text,
+    media: parseJson<MediaRef[]>(r.media, []),
+  };
+}
 
 export class Store {
   private db: DatabaseSync;
@@ -31,6 +97,22 @@ export class Store {
         ts INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS boxes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        creator INTEGER NOT NULL,
+        owner INTEGER,
+        size TEXT NOT NULL,
+        text TEXT NOT NULL,
+        media TEXT NOT NULL,
+        announce INTEGER NOT NULL,
+        created INTEGER NOT NULL,
+        opened INTEGER,
+        label TEXT,
+        origin TEXT NOT NULL,
+        loc TEXT,
+        tiles TEXT NOT NULL,
+        fwd TEXT NOT NULL
+      );
     `);
     const seed = this.db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
     seed.run(0, DEFAULT_NAMES[0]);
@@ -157,5 +239,67 @@ export class Store {
       }
       return entry;
     });
+  }
+
+  // --- treasure boxes ---------------------------------------------------------
+
+  addBox(input: NewBox): FullBox {
+    const res = this.db
+      .prepare(
+        `INSERT INTO boxes (creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd)
+         VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.creator,
+        input.size,
+        input.text,
+        JSON.stringify(input.media),
+        input.announce ? 1 : 0,
+        Date.now(),
+        input.loc,
+        input.loc,
+        JSON.stringify(input.tiles),
+        JSON.stringify(input.fwd),
+      );
+    return this.getBox(Number(res.lastInsertRowid))!;
+  }
+
+  getBox(id: number): FullBox | null {
+    const row = this.db.prepare("SELECT * FROM boxes WHERE id = ?").get(id) as BoxRow | undefined;
+    return row ? rowToBox(row) : null;
+  }
+
+  boxes(): FullBox[] {
+    return (this.db.prepare("SELECT * FROM boxes ORDER BY id").all() as BoxRow[]).map(rowToBox);
+  }
+
+  /** Boxes currently standing in world `loc` (held boxes have loc NULL). */
+  boxesIn(loc: string): FullBox[] {
+    return (this.db.prepare("SELECT * FROM boxes WHERE loc = ? ORDER BY id").all(loc) as BoxRow[]).map(
+      rowToBox,
+    );
+  }
+
+  /** Records the first opening; later openings change nothing. */
+  openBox(id: number, ts: number) {
+    this.db.prepare("UPDATE boxes SET opened = ? WHERE id = ? AND opened IS NULL").run(ts, id);
+  }
+
+  /** Out of the world, into `owner`'s collection. */
+  keepBox(id: number, owner: PlayerId, label: string | null) {
+    this.db
+      .prepare("UPDATE boxes SET owner = ?, label = ?, loc = NULL, tiles = '[]' WHERE id = ?")
+      .run(owner, label, id);
+  }
+
+  labelBox(id: number, label: string | null) {
+    this.db.prepare("UPDATE boxes SET label = ? WHERE id = ?").run(label, id);
+  }
+
+  /** A held box goes back into the world. */
+  putBox(id: number, loc: string, tiles: number[], fwd: Vec3) {
+    this.db
+      .prepare("UPDATE boxes SET loc = ?, tiles = ?, fwd = ? WHERE id = ?")
+      .run(loc, JSON.stringify(tiles), JSON.stringify(fwd), id);
   }
 }
