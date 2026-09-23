@@ -2,6 +2,7 @@
 
 Design spec for the treasure-hunting feature of Tiny Planet.
 Status: approved in conversation on 2026-09-23, written up for review.
+Amended the same day by `2026-09-23-two-sided-postcard-design.md`, which gives the postcard a picture side and the box a typed `contents` value; where the two disagree, that spec wins.
 
 ## Purpose
 
@@ -19,8 +20,7 @@ A box has these properties.
 - `creator`: the player who wrote it.
 - `owner`: the player who kept it, or none while it has never been kept.
 - `size`: `s`, `m` or `l`.
-- `text`: the postcard message, at most 2000 characters, may be empty when media is attached.
-- `media`: zero to six photos or videos, each an existing media reference from the upload endpoint.
+- `contents`: what the box holds, one typed unit per style as specified in the two-sided postcard spec: a postcard with its writing side and an optional picture side, a note with words and up to six prints, or a photo box with up to six prints and an optional caption.
 - `announce`: whether the partner may be told that a sealed box is waiting for them.
 - `created`: timestamp.
 - `opened`: timestamp of the first opening, or none while sealed.
@@ -28,8 +28,6 @@ A box has these properties.
 - `origin`: the world id where the box was first left, so the postmark stays right after the box moves.
 - `loc` and `tiles`: the world id and the footprint tiles while the box stands in the world, or none while it is held in a collection.
 - `fwd`: the creator's facing direction at placement, as a unit vector, used to orient the model.
-- `style`: what the box holds: `postcard` (the full card), `note` (a plain sheet of paper with words) or `media` (photos and videos with an optional caption).
-- `card`: for postcards, the dressing the sender typed: the stamp picture (one emoji, or two), the place (up to 40), and the "To" and "from" names (up to 24 each); empty fields fall back to the defaults; null for the other styles.
 
 A box is deleted only when its creator takes it back while it is still sealed; then its media files go too.
 Otherwise boxes and their media files are never removed.
@@ -89,10 +87,11 @@ The text field travels between the three layouts, so switching styles keeps what
 On a postcard the sender can type straight onto the dressing: the stamp picture, the "To" name, the place written on the address line (echoed on the stamp caption and the postmark), and the "from" signature.
 Each field comes prefilled with the default and grows with what is typed.
 The reader sees exactly what the sender chose; an empty field shows the default.
+A postcard also has a picture side, and a postcard box holds only the card; the two-sided postcard spec describes the picture side, the flip and photo mode.
 
 The compose dialog shows the sizes that fit where the player currently stands and disables the others with the hint "no room here".
 When any size is disabled, a line under the size picker reads "Sizes greyed out do not fit where you stand", so phone users see the hint too.
-Sending uploads the attached files one by one through the existing `/media` endpoint, then sends the placement to the server.
+Sending uploads the new files and the new picture one by one through the existing `/media` endpoint, then sends the placement to the server.
 The box appears for both players at once.
 If the server rejects the placement, the dialog stays open and shows why.
 
@@ -122,7 +121,7 @@ The creator sees only a footer with "Still sealed" or "Opened by khurlee on 24 S
 ### Changing and moving a box you left
 
 While a box you left is still sealed, its view offers "Edit" and the "Boxes you left" list offers "Edit" on sealed rows.
-Edit opens the same compose dialog prefilled with the style, the words, the dressing, the announcement toggle and the photos and videos already in the box, shown as prints you can remove or add to; the size picker is hidden because the chest already stands.
+Edit opens the same compose dialog prefilled with the style, the words, the dressing, the picture, the announcement toggle and the prints already in the box, which you can remove or add to; the size picker is hidden because the chest already stands.
 Saving replaces the contents in place; the chest keeps its place and size and stays sealed.
 Photos and videos the new version no longer uses are deleted from the server.
 The moment your partner opens the box, editing ends for good, kept or not.
@@ -147,7 +146,7 @@ It has three parts.
    It counts boxes that stand in the world, were created by the partner, are still sealed, and have `announce` on.
    When the count is zero it reads "Nothing announced… but who knows".
    The chest button carries the same count as a badge while the panel is closed.
-2. Your collection: one row per box you own, held or placed, with its label or "no label yet", a size marker, who it is from, when you found it, where it stands, and a thumbnail of the first photo or video.
+2. Your collection: one row per box you own, held or placed, with its label or "no label yet", a size marker, who it is from, when you found it, where it stands, and a thumbnail: the postcard's picture, or the first photo or video.
    Held boxes offer Open, Label and "Place here"; placed boxes offer Open and Label.
    Open shows the postcard in reading mode.
    Label asks for the note in a prompt, the way renaming does.
@@ -165,7 +164,7 @@ It is used in three places: composing a new box, reading a box you opened in the
 ### Three styles
 
 The reading view follows the style the sender picked.
-A postcard shows the card with its dressing and the prints below.
+A postcard shows the card alone: its writing face with the dressing and, when the sender added one, its picture face behind it; the two-sided postcard spec describes the picture face and the flip.
 A note shows a plain white sheet with faint ruled lines and the words in the same handwriting, then the prints.
 A photo box shows the prints alone, larger, with the caption underneath in handwriting on the dark backdrop.
 
@@ -194,7 +193,7 @@ The right side holds the postal dressing.
 - Address lines: "To: khurlee" followed by three dotted lines, the second of which carries the place in handwriting.
 - The sign-off "from gloria" in handwriting at the bottom right.
 
-Photos and videos are shown below the card as prints: white borders like instant-camera photos, alternating slight tilts of about two degrees, and a click opens the existing lightbox.
+Photos and videos in a note or a photo box are shown below as prints: white borders like instant-camera photos, alternating slight tilts of about two degrees, and a click opens the existing lightbox.
 In compose mode the prints show the staged files with a remove button each, plus an add button.
 
 Below the prints the compose mode shows the size picker with three small chest icons labeled S, M and L and their tile counts, the announce toggle "Let khurlee know a box is waiting" which defaults to on, and the send button "Leave it here" with the chest icon.
@@ -252,7 +251,8 @@ An opened box shows the lid at about 100 degrees, and the transition is a short 
 
 ### Storage
 
-A new `boxes` table is created on start with `CREATE TABLE IF NOT EXISTS`, next to the existing tables.
+The `boxes` table, its `contents` column and the one-time migration from the earlier flat columns are specified in the two-sided postcard spec.
+The table below is the shape before that migration, kept for the record.
 
 | column | type | notes |
 | --- | --- | --- |
@@ -277,37 +277,35 @@ The store offers: add a box, get one, list all, list those standing in a world, 
 
 ### Protocol
 
-Shared constants: `BOX_TEXT_MAX_LEN = 2000`, `BOX_MEDIA_MAX = 6`, `BOX_LABEL_MAX_LEN = 40`, `BOX_SIZES` with the column and row lists per size, and the `Box` and `BoxSize` types.
+Shared constants: `BOX_TEXT_MAX_LEN = 2000`, `BOX_MEDIA_MAX = 6`, `BOX_LABEL_MAX_LEN = 40`, `BOX_SIZES` with the column and row lists per size, the `Box` and `BoxSize` types, and the `BoxContents` types and limits from the two-sided postcard spec.
 
 New client messages.
 
-- `box-place` with `size`, `style`, an optional `card`, `text`, `media`, `announce`, `loc`, `tiles`, `fwd`.
+- `box-place` with `size`, `contents`, `announce`, `loc`, `tiles`, `fwd`.
 - `box-open` with `id`.
 - `box-keep` with `id` and an optional `label`.
 - `box-label` with `id` and `label`.
 - `box-put` with `id`, `loc`, `tiles`, `fwd`.
 - `box-delete` with `id`: take back your own box while it is still sealed.
-- `box-edit` with `id`, `style`, an optional `card`, `text`, `media`, `announce`: change a sealed box you left.
+- `box-edit` with `id`, `contents`, `announce`: change a sealed box you left.
 - `box-lift` with `id`: pick your own box up to move it, until your partner keeps it.
 
 New server messages.
 
-- `welcome` gains `boxes`, the full list filtered for the recipient.
+- `welcome` gains `boxes`, the full list filtered for the recipient, and `build`, the server's build id.
 - `box` with one box, sent to both players after every change, filtered per recipient.
 - `box-deny` with `op` (which request it answers: place, open, keep, label, put, delete, edit or lift), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
   Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`, `notcreator` (taking back, changing or moving someone else's box), `opened` (taking back or changing a box that has been opened), `kept` (changing or moving a box the partner has kept).
 - `box-gone` with `id`, sent to both players when a sealed box was taken back.
 
-Filtering means the server omits `text`, `media` and `card` unless the recipient created the box or the box has been opened.
+Filtering means the server omits `contents` unless the recipient created the box or the box has been opened.
 
 ### Validation
 
 The server does not know the terrain, so terrain rules are the client's job, in line with the existing trust model between the two players.
 The server enforces everything it can.
 
-- Text length, media count, label length (a string or nothing), size value, `fwd` shape.
-- The style value, and the card's four fields trimmed to their limits (a card is stored only for postcards).
-- A note needs words, a photo box needs at least one file, a postcard needs one or the other.
+- The contents, by the rules in the two-sided postcard spec; label length (a string or nothing), size value, `fwd` shape.
 - Taking back is refused for anyone but the creator (`notcreator`) and once the box has been opened (`opened`).
 - Editing is refused for anyone but the creator, once the box has been kept (`kept`) and once it has been opened (`opened`); the new contents pass the same rules as a new box.
 - Lifting is refused for anyone but the creator, once the box has been kept (`kept`) and when the box is not standing anywhere (`missing`).
