@@ -15,16 +15,15 @@ import {
 } from "../shared/protocol.ts";
 import { mediaElement } from "./chat.ts";
 import { el, graphemes } from "./dom.ts";
+import { pictureEditor, pictureView, type PictureDraft } from "./picture.ts";
 export { el, graphemes };
+export type { PictureDraft };
 
 /** The postcard's dressing as it should read: the stamp picture, the names, the place, the date. */
 export type Postmark = { stamp: string; from: string; to: string; place: string; date: Date };
 
 /** The postcard's dressing as the sender typed it; empty fields mean "the default". */
 export type Dressing = { stamp: string; place: string; to: string; from: string };
-
-/** The picture side while composing: the photo (on the server already, or a new file or shot) and its framing. */
-export type PictureDraft = { source: MediaRef | Blob; focus: { x: number; y: number }; zoom: number; caption: string };
 
 export type Draft = {
   style: BoxStyle;
@@ -50,6 +49,8 @@ export type ComposeOptions = {
   initial?: { contents: BoxContents; announce: boolean };
   /** Resolve once the box stands in the world (or the edit is saved); reject with a message to show. */
   onSend: (draft: Draft) => Promise<void>;
+  /** Photo mode: hides the dialog, returns a JPEG of the world, or null when cancelled. Absent when unavailable. */
+  takePicture?: () => Promise<Blob | null>;
 };
 
 export type ReadOptions = {
@@ -165,15 +166,20 @@ export class Postcard {
     const urls: string[] = [];
     let size: BoxSize | null = editing ? null : (ORDER.find((s) => opts.fits[s]) ?? null);
     let style: BoxStyle = c?.style ?? "postcard";
-    // the picture side arrives in Task 6; until then an edit keeps whatever picture the box had
-    let picture: PictureDraft | null =
-      c?.style === "postcard" && c.picture
-        ? { source: c.picture.image, focus: { ...c.picture.focus }, zoom: c.picture.zoom, caption: c.picture.caption }
-        : null;
     let busy = false;
     const total = () => keep.length + files.length;
 
     const error = el("div", "pc-error");
+    const editor = pictureEditor(
+      c?.style === "postcard" && c.picture
+        ? { source: c.picture.image, focus: { ...c.picture.focus }, zoom: c.picture.zoom, caption: c.picture.caption }
+        : null,
+      {
+        takePicture: opts.takePicture,
+        onError: (m) => (error.textContent = m),
+      },
+    );
+    let flipper: ReturnType<Postcard["flipCard"]> | null = null;
     // one text field travels between the three layouts, so switching keeps the words
     const textarea = el("textarea", "pc-text");
     textarea.maxLength = BOX_TEXT_MAX_LEN;
@@ -266,7 +272,9 @@ export class Postcard {
         textarea.placeholder = `Dear ${fields.to.value.trim() || opts.mark.to},`;
         const card = this.card(opts.mark, textarea, fields);
         card.querySelector(".pc-msg")!.append(count);
-        body.append(card);
+        addBtn.hidden = true;
+        flipper = this.flipCard(card, editor.root, "compose", false);
+        body.append(flipper.root);
       } else if (style === "note") {
         textarea.placeholder = "Write something…";
         const sheet = el("div", "pc-note");
@@ -342,7 +350,7 @@ export class Postcard {
             ? total()
               ? null
               : "Add a photo or video first"
-            : text || picture
+            : text || editor.draft()
               ? null
               : "Write something or add a picture first";
       if (missing) {
@@ -363,7 +371,7 @@ export class Postcard {
             to: fields.to.value.trim(),
             from: fields.from.value.trim(),
           },
-          picture: style === "postcard" ? picture : null,
+          picture: style === "postcard" ? editor.draft() : null,
           keep: [...keep],
           files: [...files],
           size,
@@ -402,7 +410,8 @@ export class Postcard {
       fields.stamp.value.trim() !== start.stamp ||
       fields.place.value.trim() !== start.place ||
       fields.to.value.trim() !== start.to ||
-      fields.from.value.trim() !== start.from;
+      fields.from.value.trim() !== start.from ||
+      editor.dirty();
     this.guard = () => {
       if (busy) return false;
       return !changed() || confirm(editing ? "Drop these changes?" : "Throw this away?");
@@ -410,6 +419,7 @@ export class Postcard {
     this.cleanup = () => {
       this.fileInput.removeEventListener("change", onFiles);
       for (const u of urls) URL.revokeObjectURL(u);
+      editor.destroy();
     };
     this.show(sheet);
     textarea.focus();
@@ -448,7 +458,11 @@ export class Postcard {
       sheet.append(wordsEl(c.text));
       body.append(sheet, prints);
     } else {
-      body.append(this.card(mark, wordsEl(c.writing.text)));
+      const card = this.card(mark, wordsEl(c.writing.text));
+      let flipper: ReturnType<Postcard["flipCard"]>;
+      const face = c.picture ? pictureView(c.picture, () => flipper.setPicture(null)) : null;
+      flipper = this.flipCard(card, face, "read", face !== null);
+      body.append(flipper.root);
     }
 
     const controls = el("div", "pc-controls");
@@ -542,6 +556,76 @@ export class Postcard {
     b.title = "Close";
     b.addEventListener("click", () => this.close());
     return b;
+  }
+
+  /**
+   * The two faces of a postcard on one flip card, plus the pill that names the
+   * other face. `picture` null means "no picture side": the pill stays hidden
+   * and the card never turns.
+   */
+  private flipCard(
+    writing: HTMLElement,
+    picture: HTMLElement | null,
+    mode: "compose" | "read",
+    startOnPicture: boolean,
+  ): { root: HTMLElement; flip(to?: "writing" | "picture"): void; setPicture(face: HTMLElement | null): void } {
+    const root = el("div", "pc-flip");
+    const flipper = el("div", "pc-flipper");
+    const front = el("div", "pc-face pc-face-writing");
+    const back = el("div", "pc-face pc-face-picture");
+    front.append(writing);
+    if (picture) back.append(picture);
+    const pill = el("button", "pc-turn");
+    pill.type = "button";
+    pill.id = "pc-turn";
+    flipper.append(front, back);
+    root.append(flipper, pill);
+    let showing: "writing" | "picture" = "writing";
+    const apply = () => {
+      flipper.classList.toggle("pc-flipped", showing === "picture");
+      front.inert = showing === "picture";
+      back.inert = showing === "writing";
+      pill.textContent = showing === "writing" ? "picture side ↻" : "writing side ↻";
+      pill.hidden = back.childElementCount === 0;
+    };
+    const flip = (to?: "writing" | "picture") => {
+      if (back.childElementCount === 0) return;
+      showing = to ?? (showing === "writing" ? "picture" : "writing");
+      apply();
+    };
+    pill.addEventListener("click", (e) => {
+      e.stopPropagation();
+      flip();
+    });
+    if (mode === "read") {
+      // a click or tap anywhere flips; a drag (selecting text) does not
+      let down: { x: number; y: number } | null = null;
+      root.addEventListener("pointerdown", (e) => {
+        down = { x: e.clientX, y: e.clientY };
+      });
+      root.addEventListener("pointerup", (e) => {
+        if (!down || (e.target instanceof Element && e.target.closest(".pc-turn"))) return;
+        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) flip();
+        down = null;
+      });
+    } else {
+      // the paper of the writing face flips, its inputs do not; the picture face only flips by the pill
+      front.addEventListener("click", (e) => {
+        if (e.target instanceof Element && e.target.closest("input, textarea, button")) return;
+        flip("picture");
+      });
+    }
+    showing = startOnPicture && picture ? "picture" : "writing";
+    apply();
+    return {
+      root,
+      flip,
+      setPicture: (face) => {
+        back.replaceChildren(...(face ? [face] : []));
+        if (!face) showing = "writing";
+        apply();
+      },
+    };
   }
 
   /** The four things a sender may change on the card, prefilled with the defaults or with what they typed before. */
