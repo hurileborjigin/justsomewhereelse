@@ -1,8 +1,7 @@
 import {
   SEND_HZ,
-  type BoxCard,
+  type BoxContents,
   type BoxSize,
-  type BoxStyle,
   type ClientMessage,
   type MediaRef,
   type PlayerId,
@@ -81,18 +80,8 @@ export class Net {
     this.send({ t: "rename", name });
   }
 
-  placeBox(draft: {
-    size: BoxSize;
-    style: BoxStyle;
-    card: BoxCard | null;
-    text: string;
-    media: MediaRef[];
-    announce: boolean;
-    loc: string;
-    tiles: number[];
-    fwd: Vec3;
-  }) {
-    this.send({ t: "box-place", ...draft });
+  placeBox(msg: { size: BoxSize; contents: BoxContents; announce: boolean; loc: string; tiles: number[]; fwd: Vec3 }) {
+    this.send({ t: "box-place", ...msg });
   }
 
   openBox(id: number) {
@@ -115,11 +104,8 @@ export class Net {
     this.send({ t: "box-delete", id });
   }
 
-  editBox(
-    id: number,
-    contents: { style: BoxStyle; card: BoxCard | null; text: string; media: MediaRef[]; announce: boolean },
-  ) {
-    this.send({ t: "box-edit", id, ...contents });
+  editBox(id: number, contents: BoxContents, announce: boolean) {
+    this.send({ t: "box-edit", id, contents, announce });
   }
 
   liftBox(id: number) {

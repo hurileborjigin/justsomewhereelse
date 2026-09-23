@@ -3,10 +3,12 @@ import {
   CHARACTER_OF,
   SURFACE,
   type Box,
+  type BoxContents,
   type BoxDenyReason,
   type BoxOp,
   type BoxSize,
   type MediaRef,
+  type Picture,
   type PlayerId,
   type Vec3,
 } from "../shared/protocol.ts";
@@ -165,10 +167,7 @@ export class Treasures {
   apply(incoming: Box) {
     const prev = this.boxes.get(incoming.id);
     // never forget contents we were already allowed to see
-    const box =
-      prev?.text !== undefined && incoming.text === undefined
-        ? { ...incoming, text: prev.text, media: prev.media, card: prev.card }
-        : incoming;
+    const box = prev?.contents !== undefined && incoming.contents === undefined ? { ...incoming, contents: prev.contents } : incoming;
     this.boxes.set(box.id, box);
     // re-mount, but let an already-standing lid keep its angle so update() swings it
     const lidNow = this.mounted.get(box.id)?.lid.rotation.x;
@@ -181,7 +180,7 @@ export class Treasures {
       clearTimeout(p.timer);
       p.resolve();
     }
-    if (this.pendingOpen === box.id && box.text !== undefined) {
+    if (this.pendingOpen === box.id && box.contents !== undefined) {
       this.pendingOpen = null;
       this.showRead(box);
     }
@@ -197,7 +196,7 @@ export class Treasures {
       this.toast(`${this.names[box.creator]} picked that box up.`);
       return;
     }
-    if (box.text !== undefined) this.showRead(box);
+    if (box.contents !== undefined) this.showRead(box);
   }
 
   /** The server refused a box request; matched to the pending place/put by op and id, or toasted otherwise. */
@@ -264,7 +263,7 @@ export class Treasures {
   /** E on a box, or Open in the panel. Asks the server only when contents are unknown. */
   open(box: Box) {
     const current = this.boxes.get(box.id) ?? box;
-    if (current.text !== undefined) {
+    if (current.contents !== undefined) {
       this.showRead(current);
       return;
     }
@@ -300,7 +299,7 @@ export class Treasures {
       onSend: async (draft) => {
         const size = draft.size;
         if (!size) throw new Error("Pick a size first");
-        const media = await this.uploadAll(draft);
+        const contents = await this.contentsOf(draft);
         const tiles = footprintFor(world, tile, forward, size, free);
         if (!tiles) throw new Error("No room for that size here anymore");
         await this.request(
@@ -308,60 +307,46 @@ export class Treasures {
           undefined,
           (b, isNew) => isNew && b.creator === this.me,
           () =>
-            this.hooks.net.placeBox({
-              size,
-              style: draft.style,
-              card: draft.card,
-              text: draft.text,
-              media,
-              announce: draft.announce,
-              loc: world.id,
-              tiles,
-              fwd: vec(forward),
-            }),
+            this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
         );
       },
     });
   }
 
-  /** The photos and videos a draft ends up with: the ones kept plus the new uploads. */
-  private async uploadAll(draft: Draft): Promise<MediaRef[]> {
+  /** What the box will hold: the kept files plus everything new uploaded, shaped for the style. */
+  private async contentsOf(draft: Draft): Promise<BoxContents> {
+    if (draft.style === "postcard") {
+      const p = draft.picture;
+      const picture: Picture | null = p
+        ? { image: p.source instanceof Blob ? await uploadMedia(p.source) : p.source, focus: p.focus, zoom: p.zoom, caption: p.caption }
+        : null;
+      return { style: "postcard", picture, writing: { text: draft.text, ...draft.dressing } };
+    }
     const media: MediaRef[] = [...draft.keep];
     for (const f of draft.files) media.push(await uploadMedia(f));
-    return media;
+    return draft.style === "note" ? { style: "note", text: draft.text, media } : { style: "media", caption: draft.text, media };
   }
 
   /** Change a sealed box you left: the same dialog, prefilled, without the size picker. */
   private edit(box: Box) {
     if (this.postcard.isOpen) this.postcard.close();
     if (this.postcard.isOpen) return; // the reader kept the dialog (a send in flight)
+    const contents = box.contents;
+    if (!contents) return;
     this.setPanelOpen(false);
     this.postcard.compose({
       mark: this.mark(box.creator, box.origin, new Date(box.created)),
       fits: { s: false, m: false, l: false },
-      initial: {
-        style: box.style,
-        card: box.card ?? null,
-        text: box.text ?? "",
-        media: box.media ?? [],
-        announce: box.announce,
-      },
+      initial: { contents, announce: box.announce },
       onSend: async (draft) => {
-        const media = await this.uploadAll(draft);
+        const contents = await this.contentsOf(draft);
         // only a still-sealed, still-unkept update is the answer to a save; an opened
         // box arriving first means the partner beat the edit and the refusal follows
         await this.request(
           "edit",
           box.id,
           (b) => b.id === box.id && b.opened === null && b.owner === null,
-          () =>
-            this.hooks.net.editBox(box.id, {
-              style: draft.style,
-              card: draft.card,
-              text: draft.text,
-              media,
-              announce: draft.announce,
-            }),
+          () => this.hooks.net.editBox(box.id, contents, draft.announce),
         );
       },
     });
@@ -419,11 +404,13 @@ export class Treasures {
   // ---- reading ----------------------------------------------------------------
 
   private showRead(box: Box) {
+    const contents = box.contents;
+    if (!contents) return;
     this.reading = box.id;
     const role = box.creator === this.me ? "creator" : box.loc !== null ? "finder" : "owner";
     const base = this.mark(box.creator, box.origin, new Date(box.created));
     // whatever the sender typed on the card wins; empty fields keep the defaults
-    const card = box.card;
+    const card = contents.style === "postcard" ? contents.writing : null;
     const mark: Postmark = card
       ? {
           stamp: card.stamp || base.stamp,
@@ -437,7 +424,7 @@ export class Treasures {
     const sealed = box.opened === null;
     const unkept = box.owner === null;
     this.postcard.read({
-      box,
+      box: { ...box, contents },
       mark,
       role,
       openedBy: this.names[1 - box.creator],
@@ -525,7 +512,8 @@ export class Treasures {
   private row(box: Box, kind: "mine" | "left"): HTMLElement {
     const row = el("div", "tr-row");
     const thumb = el("div", "tr-thumb");
-    const first = box.media?.[0];
+    const c = box.contents;
+    const first = c === undefined ? undefined : c.style === "postcard" ? c.picture?.image : c.media[0];
     if (first) thumb.append(mediaElement(first, "row"));
     else thumb.append(chestIcon());
 

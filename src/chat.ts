@@ -66,7 +66,7 @@ export function mediaElement(media: MediaRef, mode: "full" | "bubble" | "row" = 
 }
 
 /** Upload a photo/video; big photos are downscaled client-side first. */
-export async function uploadMedia(file: File): Promise<MediaRef> {
+export async function uploadMedia(file: Blob): Promise<MediaRef> {
   let blob: Blob = file;
   let type = file.type;
   if (type.startsWith("image/") && type !== "image/gif" && file.size > 400 * 1024) {
@@ -94,7 +94,7 @@ export async function uploadMedia(file: File): Promise<MediaRef> {
   return (await res.json()) as MediaRef;
 }
 
-async function downscaleImage(file: File): Promise<Blob> {
+async function downscaleImage(file: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");

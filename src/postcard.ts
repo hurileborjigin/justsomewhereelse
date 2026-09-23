@@ -8,27 +8,34 @@ import {
   MEDIA_MAX_BYTES,
   NAME_MAX_LEN,
   type Box,
-  type BoxCard,
+  type BoxContents,
   type BoxSize,
   type BoxStyle,
   type MediaRef,
 } from "../shared/protocol.ts";
 import { mediaElement } from "./chat.ts";
+import { el, graphemes } from "./dom.ts";
+export { el, graphemes };
 
 /** The postcard's dressing as it should read: the stamp picture, the names, the place, the date. */
 export type Postmark = { stamp: string; from: string; to: string; place: string; date: Date };
 
-/** What a box holds, as the compose dialog sees it: the part an edit may change. */
-export type Contents = { style: BoxStyle; card: BoxCard | null; text: string; media: MediaRef[]; announce: boolean };
+/** The postcard's dressing as the sender typed it; empty fields mean "the default". */
+export type Dressing = { stamp: string; place: string; to: string; from: string };
+
+/** The picture side while composing: the photo (on the server already, or a new file or shot) and its framing. */
+export type PictureDraft = { source: MediaRef | Blob; focus: { x: number; y: number }; zoom: number; caption: string };
 
 export type Draft = {
   style: BoxStyle;
-  /** The dressing the sender typed (postcards only); empty fields mean "the default". */
-  card: BoxCard | null;
+  /** The words: the postcard or note text, or the photo box caption. */
   text: string;
-  /** Photos and videos already on the server that stay (editing). */
+  dressing: Dressing;
+  /** Postcards only; null for an empty picture side. */
+  picture: PictureDraft | null;
+  /** Prints already on the server that stay (editing a note or a photo box). */
   keep: MediaRef[];
-  /** New photos and videos to upload. */
+  /** New prints to upload. */
   files: File[];
   /** The chest size; null when editing, since the chest already stands. */
   size: BoxSize | null;
@@ -40,13 +47,13 @@ export type ComposeOptions = {
   /** Which sizes fit where the player stands right now. */
   fits: Record<BoxSize, boolean>;
   /** Editing a box that already exists: prefill from it and hide the size picker. */
-  initial?: Contents;
+  initial?: { contents: BoxContents; announce: boolean };
   /** Resolve once the box stands in the world (or the edit is saved); reject with a message to show. */
   onSend: (draft: Draft) => Promise<void>;
 };
 
 export type ReadOptions = {
-  box: Box; // with text and media present
+  box: Box & { contents: BoxContents };
   mark: Postmark;
   /** finder: may keep it. creator: sees the sealed/opened footer. owner: reading from the panel. */
   role: "finder" | "creator" | "owner";
@@ -76,25 +83,8 @@ const STYLE_LABEL: Record<BoxStyle, string> = { postcard: "Postcard", note: "Not
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const fmtDate = (d: Date) => d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-/** What a person sees as characters: one emoji counts once, however many code units it takes. */
-export function graphemes(v: string): string[] {
-  return [...segmenter.segment(v)].map((g) => g.segment);
-}
 
 export const TAKE_BACK_CONFIRM = "Take this box back? It disappears for both of you.";
-
-export function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 /** The little treasure chest drawn once in index.html (#i-chest), sized by the .chest-icon rule. */
 export function chestIcon(): SVGSVGElement {
@@ -168,11 +158,18 @@ export class Postcard {
     this.teardown();
     const initial = opts.initial;
     const editing = initial !== undefined;
-    const keep: MediaRef[] = [...(initial?.media ?? [])];
+    const c = initial?.contents;
+    const startText = c === undefined ? "" : c.style === "postcard" ? c.writing.text : c.style === "note" ? c.text : c.caption;
+    const keep: MediaRef[] = c !== undefined && c.style !== "postcard" ? [...c.media] : [];
     const files: File[] = [];
     const urls: string[] = [];
     let size: BoxSize | null = editing ? null : (ORDER.find((s) => opts.fits[s]) ?? null);
-    let style: BoxStyle = initial?.style ?? "postcard";
+    let style: BoxStyle = c?.style ?? "postcard";
+    // the picture side arrives in Task 6; until then an edit keeps whatever picture the box had
+    let picture: PictureDraft | null =
+      c?.style === "postcard" && c.picture
+        ? { source: c.picture.image, focus: { ...c.picture.focus }, zoom: c.picture.zoom, caption: c.picture.caption }
+        : null;
     let busy = false;
     const total = () => keep.length + files.length;
 
@@ -180,12 +177,12 @@ export class Postcard {
     // one text field travels between the three layouts, so switching keeps the words
     const textarea = el("textarea", "pc-text");
     textarea.maxLength = BOX_TEXT_MAX_LEN;
-    textarea.value = initial?.text ?? "";
+    textarea.value = startText;
     const count = el("span", "pc-count", `${textarea.value.length} / ${BOX_TEXT_MAX_LEN}`);
     textarea.addEventListener("input", () => {
       count.textContent = `${textarea.value.length} / ${BOX_TEXT_MAX_LEN}`;
     });
-    const fields = this.cardInputs(opts.mark, initial?.card ?? null);
+    const fields = this.cardInputs(opts.mark, c?.style === "postcard" ? c.writing : null);
 
     // photos & videos as instant-camera prints, staged until "Leave it here"
     const prints = el("div", "pc-prints");
@@ -232,7 +229,7 @@ export class Postcard {
         print.append(media, x);
         prints.append(print);
       });
-      addBtn.hidden = total() >= BOX_MEDIA_MAX;
+      addBtn.hidden = style === "postcard" || total() >= BOX_MEDIA_MAX;
       prints.append(addBtn);
     };
     const onFiles = () => {
@@ -264,11 +261,12 @@ export class Postcard {
       body.replaceChildren();
       prints.classList.toggle("pc-big", style === "media");
       textarea.classList.toggle("pc-caption", style === "media");
+      addBtn.hidden = style === "postcard" || total() >= BOX_MEDIA_MAX;
       if (style === "postcard") {
         textarea.placeholder = `Dear ${fields.to.value.trim() || opts.mark.to},`;
         const card = this.card(opts.mark, textarea, fields);
         card.querySelector(".pc-msg")!.append(count);
-        body.append(card, prints);
+        body.append(card);
       } else if (style === "note") {
         textarea.placeholder = "Write something…";
         const sheet = el("div", "pc-note");
@@ -344,9 +342,9 @@ export class Postcard {
             ? total()
               ? null
               : "Add a photo or video first"
-            : text || total()
+            : text || picture
               ? null
-              : "Write something or add a photo first";
+              : "Write something or add a picture first";
       if (missing) {
         error.textContent = missing;
         return;
@@ -355,17 +353,22 @@ export class Postcard {
       send.disabled = true;
       send.textContent = "⏳ packing…";
       error.textContent = "";
-      const card: BoxCard | null =
-        style === "postcard"
-          ? {
-              stamp: fields.stamp.value.trim(),
-              place: fields.place.value.trim(),
-              to: fields.to.value.trim(),
-              from: fields.from.value.trim(),
-            }
-          : null;
       try {
-        await opts.onSend({ style, card, text, keep: [...keep], files: [...files], size, announce: check.checked });
+        await opts.onSend({
+          style,
+          text,
+          dressing: {
+            stamp: fields.stamp.value.trim(),
+            place: fields.place.value.trim(),
+            to: fields.to.value.trim(),
+            from: fields.from.value.trim(),
+          },
+          picture: style === "postcard" ? picture : null,
+          keep: [...keep],
+          files: [...files],
+          size,
+          announce: check.checked,
+        });
         this.guard = null;
         this.close();
       } catch (err) {
@@ -381,14 +384,14 @@ export class Postcard {
     sheet.append(this.closeButton(), styles, body, controls);
     // what the card started as: the defaults for a new box, the box itself when editing
     const start = {
-      style: initial?.style ?? "postcard",
-      text: initial?.text ?? "",
-      media: initial?.media.length ?? 0,
+      style: c?.style ?? "postcard",
+      text: startText,
+      media: keep.length,
       announce: initial?.announce ?? true,
-      stamp: initial?.card?.stamp || opts.mark.stamp,
-      place: initial?.card?.place || opts.mark.place,
-      to: initial?.card?.to || opts.mark.to,
-      from: initial?.card?.from || opts.mark.from,
+      stamp: (c?.style === "postcard" && c.writing.stamp) || opts.mark.stamp,
+      place: (c?.style === "postcard" && c.writing.place) || opts.mark.place,
+      to: (c?.style === "postcard" && c.writing.to) || opts.mark.to,
+      from: (c?.style === "postcard" && c.writing.from) || opts.mark.from,
     };
     const changed = () =>
       style !== start.style ||
@@ -417,31 +420,35 @@ export class Postcard {
     this.teardown();
     const { box, mark, role } = opts;
 
+    const c = box.contents;
     const prints = el("div", "pc-prints");
-    for (const m of box.media ?? []) {
-      const print = el("div", "pc-print");
-      print.append(mediaElement(m, "row"));
-      prints.append(print);
+    if (c.style !== "postcard") {
+      for (const m of c.media) {
+        const print = el("div", "pc-print");
+        print.append(mediaElement(m, "row"));
+        prints.append(print);
+      }
     }
     const body = el("div", "pc-body");
-    if (box.style === "media") {
-      prints.classList.add("pc-big");
-      body.append(prints);
-      if (box.text) body.append(el("div", "pc-caption-read", box.text));
-    } else {
+    const wordsEl = (words: string) => {
       const text = el("div", "pc-text");
-      if (box.text) text.textContent = box.text;
+      if (words) text.textContent = words;
       else {
         text.textContent = "(no words, just the pictures)";
         text.classList.add("pc-empty");
       }
-      if (box.style === "note") {
-        const sheet = el("div", "pc-note");
-        sheet.append(text);
-        body.append(sheet, prints);
-      } else {
-        body.append(this.card(mark, text), prints);
-      }
+      return text;
+    };
+    if (c.style === "media") {
+      prints.classList.add("pc-big");
+      body.append(prints);
+      if (c.caption) body.append(el("div", "pc-caption-read", c.caption));
+    } else if (c.style === "note") {
+      const sheet = el("div", "pc-note");
+      sheet.append(wordsEl(c.text));
+      body.append(sheet, prints);
+    } else {
+      body.append(this.card(mark, wordsEl(c.writing.text)));
     }
 
     const controls = el("div", "pc-controls");
@@ -538,7 +545,7 @@ export class Postcard {
   }
 
   /** The four things a sender may change on the card, prefilled with the defaults or with what they typed before. */
-  private cardInputs(mark: Postmark, card: BoxCard | null): CardInputs {
+  private cardInputs(mark: Postmark, card: Dressing | null): CardInputs {
     // the names grow and shrink with what is typed, so the dashed underline
     // hugs the word instead of trailing across the card
     const fit = (i: HTMLInputElement) => {
