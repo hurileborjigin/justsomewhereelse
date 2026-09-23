@@ -57,20 +57,40 @@ export type ChatEntry = { id: number; from: PlayerId; text: string; ts: number; 
 export type BoxSize = "s" | "m" | "l";
 export type Vec3 = [number, number, number];
 
-export const BOX_TEXT_MAX_LEN = 2000;
-export const BOX_MEDIA_MAX = 6;
+export const BOX_TEXT_MAX_LEN = 2000; // words on a postcard or a note, and the caption of a photo box
+export const BOX_MEDIA_MAX = 6; // prints in a note or a photo box
 export const BOX_LABEL_MAX_LEN = 40;
 export const BOX_STAMP_MAX = 2; // graphemes on the stamp: one emoji, or two
 export const BOX_PLACE_MAX_LEN = 40; // the place written on the postmark and the address line
+export const PICTURE_CAPTION_MAX = 60; // graphemes written over the picture side
+export const PICTURE_ZOOM_MIN = 1; // the photo just covers the card
+export const PICTURE_ZOOM_MAX = 3;
 
 // What a box holds: a full postcard, a plain sheet of paper with words, or
 // just photos and videos (with an optional caption).
 export type BoxStyle = "postcard" | "note" | "media";
 
-// The postcard's dressing as the sender wrote it. Empty fields fall back to
-// the defaults (the sender's character on the stamp, the world's name, the
-// players' names). Null for notes and photo-only boxes.
-export type BoxCard = { stamp: string; place: string; to: string; from: string };
+/** The picture side of a postcard: an uploaded photo and how the sender framed it. */
+export type Picture = {
+  image: MediaRef; // kind "image"
+  focus: { x: number; y: number }; // 0..1: the point of the photo the card centres on
+  zoom: number; // PICTURE_ZOOM_MIN..PICTURE_ZOOM_MAX
+  caption: string; // handwriting over the picture; may be empty
+};
+
+/** The writing side of a postcard: the message and the dressing as the sender typed it (empty = default). */
+export type Writing = { text: string; stamp: string; place: string; to: string; from: string };
+
+// One typed unit per style. A postcard box holds only the card.
+export type BoxContents =
+  | { style: "postcard"; picture: Picture | null; writing: Writing }
+  | { style: "note"; text: string; media: MediaRef[] }
+  | { style: "media"; caption: string; media: MediaRef[] };
+
+/** Every file a box's contents refer to. */
+export function mediaOf(c: BoxContents): MediaRef[] {
+  return c.style === "postcard" ? (c.picture ? [c.picture.image] : []) : c.media;
+}
 
 // Footprint layout as seen by the player who places the box: columns run
 // across the facing direction (positive = right), rows run away from the
@@ -97,11 +117,7 @@ export type Box = {
   loc: string | null; // world id while standing in the world; null while held
   tiles: number[]; // footprint tiles in that world; [] while held
   fwd: Vec3; // placer's facing at placement (orients the chest)
-  style: BoxStyle;
-  // contents - only present when the recipient may see them
-  text?: string;
-  media?: MediaRef[];
-  card?: BoxCard | null;
+  contents?: BoxContents; // only present when the recipient may see them
 };
 
 export type BoxDenyReason =
@@ -130,10 +146,7 @@ export type ClientMessage =
   | {
       t: "box-place";
       size: BoxSize;
-      style: BoxStyle;
-      card?: BoxCard | null;
-      text: string;
-      media: MediaRef[];
+      contents: BoxContents;
       announce: boolean;
       loc: string;
       tiles: number[];
@@ -144,15 +157,7 @@ export type ClientMessage =
   | { t: "box-label"; id: number; label: string }
   | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 }
   | { t: "box-delete"; id: number } // take back your own box while it is still sealed
-  | {
-      t: "box-edit"; // change what a sealed box you left holds
-      id: number;
-      style: BoxStyle;
-      card?: BoxCard | null;
-      text: string;
-      media: MediaRef[];
-      announce: boolean;
-    }
+  | { t: "box-edit"; id: number; contents: BoxContents; announce: boolean } // change what a sealed box you left holds
   | { t: "box-lift"; id: number }; // pick your own box up to move it, until your partner keeps it
 
 export type ServerMessage =
@@ -167,6 +172,7 @@ export type ServerMessage =
       peer: { online: boolean; state: StateData | null };
       history: ChatEntry[];
       boxes: Box[]; // every box, contents stripped unless you may see them
+      build: string; // the server's build id; a tab running another bundle reloads once (see main.ts)
     }
   | ({ t: "state"; id: PlayerId } & StateData)
   | { t: "names"; names: [string, string] }
