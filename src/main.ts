@@ -26,6 +26,19 @@ const $ = (id: string) => {
 
 const AUTH_KEY = "tp-auth";
 
+/** True when this tab runs an older bundle than the server serves and has not reloaded for it yet. */
+function staleBundle(serverBuild: string): boolean {
+  if (serverBuild === "dev" || serverBuild === __BUILD_ID__) return false;
+  const key = "tp-reloaded-for";
+  try {
+    if (sessionStorage.getItem(key) === serverBuild) return false; // reloaded already; carry on rather than loop
+    sessionStorage.setItem(key, serverBuild);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 async function boot() {
   const canvas = $("game") as HTMLCanvasElement;
   const { renderer, scene, sky, sun, hemi } = createScene(canvas);
@@ -303,6 +316,10 @@ async function boot() {
           break;
         }
         case "welcome": {
+          if (staleBundle(msg.build)) {
+            location.reload();
+            break;
+          }
           if (pendingAuth) localStorage.setItem(AUTH_KEY, JSON.stringify(pendingAuth));
           loginEl.hidden = true;
           setupMode = false;
