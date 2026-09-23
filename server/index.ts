@@ -19,6 +19,7 @@ import {
   BOX_TEXT_MAX_LEN,
   CHAT_MAX_LEN,
   MEDIA_MAX_BYTES,
+  N,
   NAME_MAX_LEN,
   PASS_MIN_LEN,
   RECALL_WINDOW_MS,
@@ -182,19 +183,27 @@ function broadcastBox(box: FullBox) {
 const isVec3 = (v: unknown): v is Vec3 =>
   Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
+/** A reference to a file the upload endpoint actually stored (the pattern guarantees one safe segment). */
 const isMediaRef = (m: unknown): m is MediaRef =>
   typeof m === "object" &&
   m !== null &&
   typeof (m as MediaRef).url === "string" &&
   /^\/media\/[\w.-]+$/.test((m as MediaRef).url) &&
-  ((m as MediaRef).kind === "image" || (m as MediaRef).kind === "video");
+  ((m as MediaRef).kind === "image" || (m as MediaRef).kind === "video") &&
+  existsSync(join(MEDIA_DIR, (m as MediaRef).url.split("/").pop()!));
 
 const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
 
-/** Footprint SHAPE only; terrain is the clients' job (both share the seeded world). */
-function validFootprint(size: BoxSize, tiles: unknown): tiles is number[] {
+const GLOBE_TILES = 6 * N * N;
+
+/** Building ids ("globe", "b0".."b7", "opera", "ger", ...): short, lowercase, safe to store. */
+const validLoc = (loc: unknown): loc is string => typeof loc === "string" && /^[a-z0-9_-]{1,32}$/.test(loc);
+
+/** Footprint SHAPE (plus the globe's tile range); terrain is the clients' job (both share the seeded world). */
+function validFootprint(size: BoxSize, loc: string, tiles: unknown): tiles is number[] {
   if (!Array.isArray(tiles) || tiles.length !== boxTileCount(size)) return false;
-  if (!tiles.every((t) => Number.isInteger(t) && t >= 0)) return false;
+  const max = loc === "globe" ? GLOBE_TILES : Infinity;
+  if (!tiles.every((t) => Number.isInteger(t) && t >= 0 && t < max)) return false;
   return new Set(tiles).size === tiles.length;
 }
 
@@ -211,7 +220,8 @@ function placementDenial(me: PlayerId, loc: string, tiles: number[]): BoxDenyRea
   return tiles.some((t) => taken.has(t)) ? "overlap" : null;
 }
 
-const cleanLabel = (raw: unknown) => String(raw ?? "").slice(0, BOX_LABEL_MAX_LEN).trim() || null;
+const cleanLabel = (raw: unknown) =>
+  typeof raw === "string" ? raw.slice(0, BOX_LABEL_MAX_LEN).trim() || null : null;
 
 const online = (): [boolean, boolean] => [conns.has(0), conns.has(1)];
 const setupMode = () => !OPEN && ENV_PASS === null && !store.hasPass();
@@ -358,12 +368,12 @@ wss.on("connection", (ws) => {
     } else if (msg.t === "box-place") {
       const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
       const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
-      const loc = String(msg.loc ?? "");
+      const loc = msg.loc;
       if (
         !isSize(msg.size) ||
-        !validFootprint(msg.size, msg.tiles) ||
+        !validLoc(loc) ||
+        !validFootprint(msg.size, loc, msg.tiles) ||
         !isVec3(msg.fwd) ||
-        !loc ||
         (!text && media.length === 0)
       ) {
         deny(ws, "place", "invalid");
@@ -442,8 +452,8 @@ wss.on("connection", (ws) => {
         deny(ws, "put", "owner", boxId);
         return;
       }
-      const loc = String(msg.loc ?? "");
-      if (box.loc !== null || !loc || !validFootprint(box.size, msg.tiles) || !isVec3(msg.fwd)) {
+      const loc = msg.loc;
+      if (box.loc !== null || !validLoc(loc) || !validFootprint(box.size, loc, msg.tiles) || !isVec3(msg.fwd)) {
         deny(ws, "put", "invalid", boxId);
         return;
       }

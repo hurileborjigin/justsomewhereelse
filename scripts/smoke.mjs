@@ -229,6 +229,21 @@ try {
   expect((await b.next()).reason === "overlap", "footprints can't overlap");
   b.send({ t: "box-place", size: "l", text: "x", media: [], announce: false, loc: "globe", tiles: [100, 101], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "tile count must match the size");
+  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "globe", tiles: [6 * 16 * 16], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "invalid", "globe tiles must exist (one past the last is refused)");
+  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "Globe!", tiles: [300], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "invalid", "loc must look like a building id");
+  b.send({
+    t: "box-place",
+    size: "s",
+    text: "",
+    media: [{ url: "/media/1-deadbeef.png", kind: "image" }],
+    announce: false,
+    loc: "globe",
+    tiles: [300],
+    fwd: [0, 0, 1],
+  });
+  expect((await b.next()).reason === "invalid", "media must be a file the upload endpoint stored");
   a.send({ t: "box-keep", id: boxId });
   const denyCreator = await a.next();
   expect(
@@ -265,6 +280,18 @@ try {
     "kept: held by khurlee with a label",
   );
 
+  // a held box can't be put down on top of another one
+  a.send({ t: "box-place", size: "s", text: "a second one", media: [], announce: false, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
+  const second = await a.next();
+  await b.next();
+  expect(second.t === "box" && second.box.tiles[0] === 300, "gloria leaves a second box");
+  b.send({ t: "box-put", id: boxId, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
+  const denyPut = await b.next();
+  expect(
+    denyPut.t === "box-deny" && denyPut.op === "put" && denyPut.id === boxId && denyPut.reason === "overlap",
+    "putting a held box onto another box is refused",
+  );
+
   // only the owner labels or places it
   a.send({ t: "box-label", id: boxId, label: "mine" });
   expect((await a.next()).reason === "owner", "only the owner labels a box");
@@ -296,10 +323,14 @@ try {
       w2.history.length === 1 &&
       w2.history[0].text === "meet me at the lake" &&
       w2.names[1] === "K 💙" &&
-      w2.boxes.length === 1 &&
-      w2.boxes[0].loc === "ger" &&
-      w2.boxes[0].label === "the lake postcard" &&
-      w2.boxes[0].text === "meet me where the lake is bluest",
+      w2.boxes.length === 2 &&
+      w2.boxes.some(
+        (x) =>
+          x.id === boxId &&
+          x.loc === "ger" &&
+          x.label === "the lake postcard" &&
+          x.text === "meet me where the lake is bluest",
+      ),
     "reconnect: history keeps the text message, not the recalled one; the box is where khurlee put it",
   );
 
