@@ -7,7 +7,7 @@
 // Env: PORT (default 3001), PLANET_PASS (the shared passphrase - set a real
 // secret in production, e.g. `fly secrets set PLANET_PASS=...`), DB_PATH.
 import { randomBytes } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,10 +15,6 @@ import sirv from "sirv";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   BOX_LABEL_MAX_LEN,
-  BOX_MEDIA_MAX,
-  BOX_PLACE_MAX_LEN,
-  BOX_STAMP_MAX,
-  BOX_TEXT_MAX_LEN,
   CHAT_MAX_LEN,
   MEDIA_MAX_BYTES,
   N,
@@ -27,14 +23,13 @@ import {
   RECALL_WINDOW_MS,
   SETUP_CREATOR,
   boxTileCount,
+  mediaOf,
 } from "../shared/protocol.ts";
 import type {
   Box,
-  BoxCard,
   BoxDenyReason,
   BoxOp,
   BoxSize,
-  BoxStyle,
   ClientMessage,
   MediaRef,
   PlayerId,
@@ -42,7 +37,8 @@ import type {
   StateData,
   Vec3,
 } from "../shared/protocol.ts";
-import { Store, type BoxContents, type FullBox } from "./store.ts";
+import { parseContents } from "./contents.ts";
+import { Store, type FullBox } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 // PLANET_OPEN=1 disables the passphrase entirely: pick a name, walk in.
@@ -57,6 +53,10 @@ const store = new Store(DB_PATH);
 
 const distDir = fileURLToPath(new URL("../dist", import.meta.url));
 const serveStatic = existsSync(distDir) ? sirv(distDir, { single: true }) : null;
+
+// the build writes its id next to the bundle (vite.config.ts); a tab running
+// another bundle reloads when it sees a different id in the welcome
+const BUILD_ID = existsSync(join(distDir, "build-id")) ? readFileSync(join(distDir, "build-id"), "utf8").trim() || "dev" : "dev";
 
 // chat photos & videos live next to the database (the Fly volume in prod)
 const MEDIA_DIR =
@@ -176,8 +176,9 @@ function deny(ws: WebSocket, op: BoxOp, reason: BoxDenyReason, id?: number) {
 
 /** What `viewer` may see of a box: contents only for the creator, or once opened. */
 function viewOf(box: FullBox, viewer: PlayerId): Box {
-  const { text, media, card, ...rest } = box;
-  return box.creator === viewer || box.opened !== null ? { ...rest, text, media, card } : rest;
+  if (box.creator === viewer || box.opened !== null) return box;
+  const { contents: _hidden, ...sealed } = box;
+  return sealed;
 }
 
 /** Delete an uploaded file by its /media/<name> url; anything odd or already gone is ignored. */
@@ -198,66 +199,13 @@ function broadcastBox(box: FullBox) {
 const isVec3 = (v: unknown): v is Vec3 =>
   Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
-/** A reference to a file the upload endpoint actually stored (the pattern guarantees one safe segment). */
-const isMediaRef = (m: unknown): m is MediaRef =>
-  typeof m === "object" &&
-  m !== null &&
-  typeof (m as MediaRef).url === "string" &&
-  /^\/media\/[\w.-]+$/.test((m as MediaRef).url) &&
-  ((m as MediaRef).kind === "image" || (m as MediaRef).kind === "video") &&
-  existsSync(join(MEDIA_DIR, (m as MediaRef).url.split("/").pop()!));
-
 const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
-const isStyle = (s: unknown): s is BoxStyle => s === "postcard" || s === "note" || s === "media";
 
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-/**
- * The sender's postcard dressing: four short trimmed strings; null unless the
- * box is a postcard. Limits count what a person sees as one character (an
- * emoji is one), so a surrogate pair is never cut in half.
- */
-function cleanCard(raw: unknown, style: BoxStyle): BoxCard | null {
-  if (style !== "postcard" || typeof raw !== "object" || raw === null) return null;
-  const r = raw as Record<string, unknown>;
-  const field = (key: string, max: number) => {
-    const v = r[key];
-    if (typeof v !== "string") return "";
-    return [...graphemes.segment(v)]
-      .map((g) => g.segment)
-      .slice(0, max)
-      .join("")
-      .trim();
-  };
-  return {
-    stamp: field("stamp", BOX_STAMP_MAX),
-    place: field("place", BOX_PLACE_MAX_LEN),
-    to: field("to", NAME_MAX_LEN),
-    from: field("from", NAME_MAX_LEN),
-  };
-}
+const fileExists = (name: string) => statSync(join(MEDIA_DIR, name), { throwIfNoEntry: false })?.isFile() === true;
+/** Style, words, picture or prints of a box request, cleaned; null when they make no valid box. */
+const contentsOf = (raw: unknown) => parseContents(raw, fileExists);
 
 const GLOBE_TILES = 6 * N * N;
-
-/** Style, dressing, words, files and announcement of a box request, cleaned; null when they make no valid box. */
-function parseContents(msg: {
-  style?: unknown;
-  card?: unknown;
-  text?: unknown;
-  media?: unknown;
-  announce?: unknown;
-}): BoxContents | null {
-  const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
-  const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
-  // a tab from before styles sends none: it is leaving a postcard
-  const style = msg.style ?? "postcard";
-  if (!isStyle(style)) return null;
-  // a note needs words, a photo box needs photos, a postcard needs one or the other
-  const filled =
-    style === "note" ? text.length > 0 : style === "media" ? media.length > 0 : text.length > 0 || media.length > 0;
-  if (!filled) return null;
-  return { style, card: cleanCard(msg.card, style), text, media, announce: !!msg.announce };
-}
 
 /** Building ids ("globe", "b0".."b7", "opera", "ger", ...): short, lowercase, safe to store. */
 const validLoc = (loc: unknown): loc is string => typeof loc === "string" && /^[a-z0-9_-]{1,32}$/.test(loc);
@@ -367,6 +315,7 @@ wss.on("connection", (ws) => {
         },
         history: store.history(200),
         boxes: store.boxes().map((b) => viewOf(b, wanted)),
+        build: BUILD_ID,
       });
       sendTo(peerId, { t: "peer-joined", id });
       refreshLobbies();
@@ -420,7 +369,7 @@ wss.on("connection", (ws) => {
       refreshLobbies();
       console.log(`[planet] player ${id} renamed to ${name}`);
     } else if (msg.t === "box-place") {
-      const contents = parseContents(msg);
+      const contents = contentsOf(msg.contents);
       const loc = msg.loc;
       if (
         !contents ||
@@ -437,7 +386,7 @@ wss.on("connection", (ws) => {
         deny(ws, "place", denial);
         return;
       }
-      const box = store.addBox({ creator: id, size: msg.size, ...contents, loc, tiles: msg.tiles, fwd: msg.fwd });
+      const box = store.addBox({ creator: id, size: msg.size, contents, announce: !!msg.announce, loc, tiles: msg.tiles, fwd: msg.fwd });
       broadcastBox(box);
       console.log(`[planet] ${store.names()[id]} left a ${box.size.toUpperCase()} treasure box #${box.id} in ${loc}`);
     } else if (msg.t === "box-open") {
@@ -532,7 +481,7 @@ wss.on("connection", (ws) => {
         return;
       }
       store.deleteBox(box.id);
-      for (const m of box.media) removeMediaFile(m.url);
+      for (const m of mediaOf(box.contents)) removeMediaFile(m.url);
       broadcast({ t: "box-gone", id: box.id });
       console.log(`[planet] ${store.names()[id]} took back treasure box #${box.id}`);
     } else if (msg.t === "box-edit") {
@@ -555,15 +504,15 @@ wss.on("connection", (ws) => {
         deny(ws, "edit", "opened", boxId);
         return;
       }
-      const contents = parseContents(msg);
+      const contents = contentsOf(msg.contents);
       if (!contents) {
         deny(ws, "edit", "invalid", boxId);
         return;
       }
-      store.editBox(box.id, contents);
-      // files the new version no longer uses are gone for good
-      const stillUsed = new Set(contents.media.map((m) => m.url));
-      for (const m of box.media) if (!stillUsed.has(m.url)) removeMediaFile(m.url);
+      store.editBox(box.id, contents, !!msg.announce);
+      // files the new version no longer uses are gone for good (a replaced picture included)
+      const stillUsed = new Set(mediaOf(contents).map((m) => m.url));
+      for (const m of mediaOf(box.contents)) if (!stillUsed.has(m.url)) removeMediaFile(m.url);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} changed treasure box #${box.id}`);
     } else if (msg.t === "box-lift") {
