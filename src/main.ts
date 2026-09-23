@@ -212,6 +212,10 @@ async function boot() {
 
   let doorAction: (() => void) | null = null;
   let boxAction: (() => void) | null = null;
+  // runs every frame: touch the DOM only when the label actually changes
+  const setText = (e: HTMLElement, text: string) => {
+    if (e.textContent !== text) e.textContent = text;
+  };
   const refreshActions = () => {
     doorAction = null;
     boxAction = null;
@@ -219,18 +223,18 @@ async function boot() {
       if (player.world.isGlobe) {
         const b = doorTileMap.get(player.tile);
         if (b) {
-          enterBtn.textContent = `Enter the ${BUILDING_NAMES[b.kind]} 🚪 (E)`;
+          setText(enterBtn, `Enter the ${BUILDING_NAMES[b.kind]} 🚪 (E)`);
           doorAction = () => enterBuilding(b);
         }
       } else if (player.tile === (player.world as RoomWorld).exitTile) {
-        enterBtn.textContent = "Go back outside 🚪 (E)";
+        setText(enterBtn, "Go back outside 🚪 (E)");
         doorAction = leaveBuilding;
       }
       const box = treasures.actionAt(player.world, player.tile, player.forward);
       if (box) {
         // E fires the first visible button, so the box only claims it when alone
         const key = doorAction ? "" : " (E)";
-        boxBtn.textContent = box.label ? `Open “${box.label}” 🎁${key}` : `Open the treasure box 🎁${key}`;
+        setText(boxBtn, box.label ? `Open “${box.label}” 🎁${key}` : `Open the treasure box 🎁${key}`);
         boxAction = () => treasures.open(box);
       }
     }

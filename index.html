@@ -258,6 +258,10 @@
         cursor: pointer;
         box-shadow: 0 2px 12px rgba(30, 60, 30, 0.3);
         white-space: nowrap;
+        /* a long box label shortens with an ellipsis instead of spilling off a phone */
+        max-width: calc(100vw - 32px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       #actions button:hover {
         transform: translateY(-1px);
@@ -935,6 +939,13 @@
         text-align: center;
         color: rgba(255, 255, 253, 0.85);
         font-size: 13px;
+      }
+      .pc-hint {
+        width: 100%;
+        margin-top: -4px;
+        text-align: center;
+        color: rgba(255, 255, 253, 0.7);
+        font-size: 12px;
       }
       @media (max-width: 560px) {
         .pc-card {

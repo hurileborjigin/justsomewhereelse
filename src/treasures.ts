@@ -336,6 +336,7 @@ export class Treasures {
       mark: this.mark(box.creator, box.origin, new Date(box.created)),
       role,
       openedBy: this.names[1 - box.creator],
+      isOwner: box.owner === this.me,
       onKeep: (label) => this.hooks.net.keepBox(box.id, label || undefined),
     });
   }

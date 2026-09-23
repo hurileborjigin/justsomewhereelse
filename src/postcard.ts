@@ -29,6 +29,8 @@ export type ReadOptions = {
   /** finder: may keep it. creator: sees the sealed/opened footer. owner: reading from the panel. */
   role: "finder" | "creator" | "owner";
   openedBy: string; // the partner's name, for the creator's footer
+  /** The reader already owns it (it stands where they put it): "Pick it up" rather than "Keep it". */
+  isOwner: boolean;
   onKeep: (label: string) => void;
 };
 
@@ -163,7 +165,7 @@ export class Postcard {
           continue;
         }
         if (f.type.startsWith("video/") && f.size > MEDIA_MAX_BYTES) {
-          error.textContent = "That video is too big (max 25 MB)";
+          error.textContent = `That video is too big (max ${Math.round(MEDIA_MAX_BYTES / 1024 / 1024)} MB)`;
           continue;
         }
         files.push(f);
@@ -192,6 +194,10 @@ export class Postcard {
       sizes.append(b);
       return b;
     });
+    // the per-button "no room here" tooltip never shows on a phone
+    const hint = ORDER.every((s) => opts.fits[s])
+      ? null
+      : el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
     const announce = el("label", "pc-announce");
     const check = el("input");
     check.type = "checkbox";
@@ -226,7 +232,7 @@ export class Postcard {
         send.textContent = "Leave it here 🎁";
       }
     });
-    controls.append(sizes, announce, send, error);
+    controls.append(sizes, ...(hint ? [hint] : []), announce, send, error);
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), card, prints, controls);
@@ -266,12 +272,16 @@ export class Postcard {
       const label = el("input", "pc-label");
       label.maxLength = BOX_LABEL_MAX_LEN;
       label.placeholder = "Give it a label (optional)…";
-      const keep = el("button", "pc-primary", "Keep it 🎁");
+      label.value = box.label ?? "";
+      const keep = el("button", "pc-primary", opts.isOwner ? "Pick it up 🎁" : "Keep it 🎁");
       keep.id = "pc-keep";
       keep.type = "button";
       keep.addEventListener("click", () => {
         opts.onKeep(label.value.trim());
         this.close();
+      });
+      label.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.isComposing) keep.click();
       });
       const leave = el("button", "pc-secondary", "Leave it here");
       leave.id = "pc-leave";
