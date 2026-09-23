@@ -120,8 +120,10 @@ was left.
 **Leave it here** and it stays, open.
 You can't keep a box you left yourself, but you can reread it and see whether
 it has been opened.
-While nobody has opened it you can **Take it back**, which deletes the box and
-its files for both of you.
+While nobody has opened it you can **Edit** it (same card, prefilled) or **Take
+it back**, which deletes the box and its files for both of you.
+Until she keeps it you can also **Pick it up** and **Place here** somewhere
+else.
 From the panel you can relabel a kept box, reread it, or **Place here** to put
 it down again - in your own house, say, which makes it a treasure house you
 can wander through together.

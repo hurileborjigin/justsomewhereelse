@@ -70,6 +70,8 @@ Near cube corners a large footprint may fail to close, and then that size does n
 - A placed box keeps its owner, so the owner may pick it up again and the creator still may not.
 - Contents are visible to a player only if they created the box or the box has been opened.
 - Only the creator may take a box back, and only while it is still sealed.
+- Only the creator may change what a box holds, and only while it is still sealed.
+- Only the creator may pick their own box up to move it, and only until the partner keeps it; the owner may pick up a kept box.
 
 ## Player flows
 
@@ -115,6 +117,18 @@ When the reader already owns the box, because they kept it earlier and placed it
 Keeping removes the box from the world for both players and adds it to the keeper's collection with the label, if any.
 Leaving it closes the dialog and the box stays where it is with its lid open.
 The creator sees only a footer with "Still sealed" or "Opened by khurlee on 24 Sep".
+
+### Changing and moving a box you left
+
+While a box you left is still sealed, its view offers "Edit" and the "Boxes you left" list offers "Edit" on sealed rows.
+Edit opens the same compose dialog prefilled with the style, the words, the dressing, the announcement toggle and the photos and videos already in the box, shown as prints you can remove or add to; the size picker is hidden because the chest already stands.
+Saving replaces the contents in place; the chest keeps its place and size and stays sealed.
+Photos and videos the new version no longer uses are deleted from the server.
+The moment your partner opens the box, editing ends for good, kept or not.
+
+Until your partner keeps it, you can pick your own box up: "Pick it up" in its view or "Pick up" on the row.
+The chest leaves the world, the row reads "in your pocket", and "Place here" puts it down wherever you stand, with the usual footprint rules.
+A box in your pocket is not counted as waiting and your partner cannot see it.
 
 ### Taking a box back
 
@@ -257,7 +271,7 @@ A new `boxes` table is created on start with `CREATE TABLE IF NOT EXISTS`, next 
 | style | TEXT NOT NULL DEFAULT 'postcard' | `postcard`, `note` or `media`; older databases gain the column on start |
 | card | TEXT | JSON of the sender's dressing, or NULL |
 
-The store offers: add a box, get one, list all, list those standing in a world, mark opened, keep, label, put back, and delete.
+The store offers: add a box, get one, list all, list those standing in a world, mark opened, keep, label, put back, delete, edit (contents only) and lift.
 
 ### Protocol
 
@@ -271,13 +285,15 @@ New client messages.
 - `box-label` with `id` and `label`.
 - `box-put` with `id`, `loc`, `tiles`, `fwd`.
 - `box-delete` with `id`: take back your own box while it is still sealed.
+- `box-edit` with `id`, `style`, an optional `card`, `text`, `media`, `announce`: change a sealed box you left.
+- `box-lift` with `id`: pick your own box up to move it, until your partner keeps it.
 
 New server messages.
 
 - `welcome` gains `boxes`, the full list filtered for the recipient.
 - `box` with one box, sent to both players after every change, filtered per recipient.
-- `box-deny` with `op` (which request it answers: place, open, keep, label, put or delete), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
-  Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`, `notcreator` (taking back someone else's box), `opened` (taking back a box that has been opened).
+- `box-deny` with `op` (which request it answers: place, open, keep, label, put, delete, edit or lift), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
+  Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`, `notcreator` (taking back, changing or moving someone else's box), `opened` (taking back or changing a box that has been opened), `kept` (changing or moving a box the partner has kept).
 - `box-gone` with `id`, sent to both players when a sealed box was taken back.
 
 Filtering means the server omits `text`, `media` and `card` unless the recipient created the box or the box has been opened.
@@ -291,6 +307,9 @@ The server enforces everything it can.
 - The style value, and the card's four fields trimmed to their limits (a card is stored only for postcards).
 - A note needs words, a photo box needs at least one file, a postcard needs one or the other.
 - Taking back is refused for anyone but the creator (`notcreator`) and once the box has been opened (`opened`).
+- Editing is refused for anyone but the creator, once the box has been kept (`kept`) and once it has been opened (`opened`); the new contents pass the same rules as a new box.
+- Lifting is refused for anyone but the creator, once the box has been kept (`kept`) and when the box is not standing anywhere (`missing`).
+- Put back is allowed for the owner of a kept box and for the creator of an unkept one.
 - Each media reference has the upload endpoint's shape and names a file that endpoint actually stored.
 - `loc` looks like a building id: 1 to 32 characters of lowercase letters, digits, `_` or `-`.
 - The tile count matches the size and all tiles are distinct non-negative integers, below `6 * N * N` on the globe.
