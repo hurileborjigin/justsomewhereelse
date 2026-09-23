@@ -85,16 +85,22 @@ export class Postcard {
   close() {
     if (this.root.hidden) return;
     if (this.guard && !this.guard()) return;
-    this.guard = null;
-    this.cleanup?.();
-    this.cleanup = null;
+    this.teardown();
     this.root.hidden = true;
     this.root.replaceChildren();
     this.onToggle(false);
   }
 
+  /** Releases a previous card's listeners and object URLs before a new one installs its own. */
+  private teardown() {
+    this.cleanup?.();
+    this.cleanup = null;
+    this.guard = null;
+  }
+
   /** A new card to write and leave here. */
   compose(opts: ComposeOptions) {
+    this.teardown();
     const files: File[] = [];
     const urls: string[] = [];
     let size: BoxSize | null = ORDER.find((s) => opts.fits[s]) ?? null;
@@ -224,7 +230,10 @@ export class Postcard {
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), card, prints, controls);
-    this.guard = () => (!textarea.value.trim() && files.length === 0) || confirm("Throw this postcard away?");
+    this.guard = () => {
+      if (busy) return false;
+      return (!textarea.value.trim() && files.length === 0) || confirm("Throw this postcard away?");
+    };
     this.cleanup = () => {
       this.fileInput.removeEventListener("change", onFiles);
       for (const u of urls) URL.revokeObjectURL(u);
@@ -235,6 +244,7 @@ export class Postcard {
 
   /** A card someone left, opened. */
   read(opts: ReadOptions) {
+    this.teardown();
     const { box, mark, role } = opts;
     const text = el("div", "pc-text");
     if (box.text) text.textContent = box.text;
