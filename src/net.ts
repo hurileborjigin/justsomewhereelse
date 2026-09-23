@@ -1,9 +1,11 @@
 import {
   SEND_HZ,
+  type BoxSize,
   type ClientMessage,
   type MediaRef,
   type PlayerId,
   type ServerMessage,
+  type Vec3,
 } from "../shared/protocol.ts";
 import type { Player } from "./player.ts";
 
@@ -75,6 +77,34 @@ export class Net {
 
   rename(name: string) {
     this.send({ t: "rename", name });
+  }
+
+  placeBox(draft: {
+    size: BoxSize;
+    text: string;
+    media: MediaRef[];
+    announce: boolean;
+    loc: string;
+    tiles: number[];
+    fwd: Vec3;
+  }) {
+    this.send({ t: "box-place", ...draft });
+  }
+
+  openBox(id: number) {
+    this.send({ t: "box-open", id });
+  }
+
+  keepBox(id: number, label?: string) {
+    this.send(label ? { t: "box-keep", id, label } : { t: "box-keep", id });
+  }
+
+  labelBox(id: number, label: string) {
+    this.send({ t: "box-label", id, label });
+  }
+
+  putBox(id: number, loc: string, tiles: number[], fwd: Vec3) {
+    this.send({ t: "box-put", id, loc, tiles, fwd });
   }
 
   /** Called every frame; sends the local state at SEND_HZ once joined. */

@@ -9,6 +9,8 @@ export class Input {
   private touchX = 0;
   private touchY = 0;
   private touchFast = false;
+  /** While a dialog is open nothing walks, even with keys or the d-pad held. */
+  private muted = false;
 
   constructor() {
     addEventListener("keydown", (e) => {
@@ -43,7 +45,19 @@ export class Input {
     this.recompute();
   }
 
+  setMuted(on: boolean) {
+    this.muted = on;
+    if (on) this.keys.clear();
+    this.recompute();
+  }
+
   private recompute() {
+    if (this.muted) {
+      this.x = 0;
+      this.y = 0;
+      this.fast = false;
+      return;
+    }
     const k = this.keys;
     const up = k.has("KeyW") || k.has("ArrowUp") ? 1 : 0;
     const down = k.has("KeyS") || k.has("ArrowDown") ? 1 : 0;

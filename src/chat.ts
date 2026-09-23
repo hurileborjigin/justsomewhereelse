@@ -13,13 +13,13 @@ import {
  * collapsible history panel with an unread badge while minimized.
  */
 
-const EMOJI: Record<CharacterId, string> = { bee: "🐝", donkey: "🫏" };
+export const EMOJI: Record<CharacterId, string> = { bee: "🐝", donkey: "🫏" };
 const HEAD_HEIGHT: Record<CharacterId, number> = { bee: 0.55, donkey: 1.85 };
 
 const now = () => performance.now() / 1000;
 
 /** Full-screen viewer for photos and videos; click anywhere to close. */
-function openLightbox(media: MediaRef) {
+export function openLightbox(media: MediaRef) {
   const box = document.getElementById("lightbox");
   if (!box) return;
   box.replaceChildren(mediaElement(media, "full"));
@@ -30,7 +30,7 @@ function openLightbox(media: MediaRef) {
   };
 }
 
-function mediaElement(media: MediaRef, mode: "full" | "bubble" | "row" = "row"): HTMLElement {
+export function mediaElement(media: MediaRef, mode: "full" | "bubble" | "row" = "row"): HTMLElement {
   if (media.kind === "video") {
     const v = document.createElement("video");
     v.src = media.url;
@@ -65,7 +65,7 @@ function mediaElement(media: MediaRef, mode: "full" | "bubble" | "row" = "row"):
 }
 
 /** Upload a photo/video; big photos are downscaled client-side first. */
-async function uploadMedia(file: File): Promise<MediaRef> {
+export async function uploadMedia(file: File): Promise<MediaRef> {
   let blob: Blob = file;
   let type = file.type;
   if (type.startsWith("image/") && type !== "image/gif" && file.size > 400 * 1024) {
@@ -282,7 +282,8 @@ export class Chat {
       } else if (
         e.code === "Enter" &&
         document.activeElement !== this.input &&
-        !(document.activeElement instanceof HTMLInputElement)
+        !isTypingElement(document.activeElement) &&
+        document.getElementById("postcard")?.hidden !== false
       ) {
         e.preventDefault();
         this.input.focus();
@@ -319,7 +320,7 @@ export class Chat {
     this.input.placeholder = "Say something… (Enter)";
   }
 
-  private setOpen(open: boolean) {
+  setOpen(open: boolean) {
     this.panel.hidden = !open;
     this.openBtn.hidden = open;
     if (open) {
@@ -398,6 +399,11 @@ export class Chat {
     this.tagMe.update(me);
     this.tagPeer.update(peer);
   }
+}
+
+/** Inputs and text areas anywhere (chat box, postcard) must keep their Enter key. */
+function isTypingElement(el: Element | null): boolean {
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 }
 
 function project(

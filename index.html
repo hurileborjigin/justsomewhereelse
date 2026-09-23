@@ -236,11 +236,17 @@
         cursor: pointer;
         padding: 0;
       }
-      #enter {
+      #actions {
         position: fixed;
         bottom: 68px;
         left: 50%;
         transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      #actions button {
         border: none;
         border-radius: 14px;
         padding: 10px 18px;
@@ -251,9 +257,17 @@
         color: white;
         cursor: pointer;
         box-shadow: 0 2px 12px rgba(30, 60, 30, 0.3);
+        white-space: nowrap;
       }
-      #enter:hover {
-        transform: translateX(-50%) translateY(-1px);
+      #actions button:hover {
+        transform: translateY(-1px);
+      }
+      #actions button[hidden] {
+        display: none;
+      }
+      #box-btn {
+        background: #d9962f;
+        box-shadow: 0 2px 12px rgba(90, 60, 10, 0.3);
       }
       #chat-input {
         width: min(46vw, 380px);
@@ -357,7 +371,7 @@
         gap: 6px;
       }
       #chat-log:empty::before {
-        content: "No messages yet — say hi!";
+        content: "No messages yet. Say hi!";
         opacity: 0.55;
       }
       .msg {
@@ -412,6 +426,544 @@
         font-size: 11px;
         border-radius: 9px;
         padding: 2px 6px;
+      }
+      /* --- treasures ---------------------------------------------------- */
+      #treasure-open {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        border: none;
+        border-radius: 14px;
+        padding: 8px 11px;
+        font-size: 15px;
+        background: rgba(255, 255, 253, 0.45);
+        cursor: pointer;
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
+        opacity: 0.85;
+      }
+      #treasure-open[hidden],
+      #treasure-panel[hidden] {
+        display: none;
+      }
+      #treasure-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #d9962f;
+        color: white;
+        font-size: 11px;
+        border-radius: 9px;
+        padding: 2px 6px;
+      }
+      #treasure-panel {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        width: min(270px, calc(100vw - 28px));
+        background: rgba(255, 255, 253, 0.42);
+        backdrop-filter: blur(7px);
+        -webkit-backdrop-filter: blur(7px);
+        border-radius: 14px;
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
+        overflow: hidden;
+        font-size: 12.5px;
+        color: rgba(43, 58, 42, 0.85);
+      }
+      #treasure-panel header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 8px 8px 12px;
+        font-weight: 600;
+      }
+      #treasure-min {
+        border: none;
+        background: none;
+        font: inherit;
+        cursor: pointer;
+        padding: 0 6px;
+        color: var(--ink);
+      }
+      #treasure-body {
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0 10px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #treasure-body h3 {
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        opacity: 0.6;
+        margin-top: 6px;
+      }
+      #treasure-waiting {
+        font-size: 12.5px;
+      }
+      #treasure-leave {
+        border: none;
+        border-radius: 12px;
+        padding: 9px 14px;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        background: #58b368;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(30, 60, 30, 0.25);
+      }
+      .tr-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .tr-list:empty::before {
+        content: attr(data-empty);
+        opacity: 0.55;
+        font-size: 12px;
+      }
+      .tr-row {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 4px 8px;
+        align-items: center;
+        background: rgba(255, 255, 253, 0.5);
+        border-radius: 10px;
+        padding: 6px 8px;
+      }
+      .tr-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: rgba(43, 58, 42, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        overflow: hidden;
+      }
+      .tr-thumb img,
+      .tr-thumb video {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        display: block;
+        cursor: pointer;
+      }
+      .tr-title {
+        font-weight: 600;
+        font-size: 12.5px;
+        overflow-wrap: anywhere;
+      }
+      .tr-title.faint {
+        font-weight: 400;
+        font-style: italic;
+        opacity: 0.55;
+      }
+      .tr-meta {
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .tr-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .tr-actions button {
+        border: none;
+        border-radius: 9px;
+        padding: 4px 9px;
+        font: inherit;
+        font-size: 11.5px;
+        background: rgba(43, 58, 42, 0.09);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .tr-actions button:hover {
+        background: rgba(43, 58, 42, 0.16);
+      }
+      #toast[hidden] {
+        display: none;
+      }
+      #toast {
+        position: fixed;
+        bottom: 118px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(43, 58, 42, 0.9);
+        color: white;
+        padding: 8px 14px;
+        border-radius: 12px;
+        font-size: 13px;
+        z-index: 11;
+        max-width: min(90vw, 360px);
+        text-align: center;
+      }
+      /* --- postcard ----------------------------------------------------- */
+      #postcard[hidden] {
+        display: none;
+      }
+      #postcard {
+        position: fixed;
+        inset: 0;
+        z-index: 9;
+        background: rgba(30, 40, 60, 0.55);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+        padding: 28px 16px 40px;
+      }
+      .pc-sheet {
+        width: min(640px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin: auto 0;
+        position: relative;
+      }
+      .pc-close {
+        position: absolute;
+        top: -12px;
+        right: -12px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 253, 0.92);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+        cursor: pointer;
+        font-size: 12px;
+        z-index: 1;
+      }
+      .pc-card {
+        aspect-ratio: 3 / 2;
+        display: grid;
+        grid-template-columns: 58fr 42fr;
+        background-color: #fbf6e9;
+        background-image: radial-gradient(rgba(120, 90, 40, 0.05) 1px, transparent 1px);
+        background-size: 5px 5px;
+        border-radius: 6px;
+        border: 1px solid #d9cfba;
+        box-shadow:
+          0 12px 32px rgba(20, 30, 40, 0.4),
+          inset 0 0 0 4px #fbf6e9,
+          inset 0 0 0 5px #d9cfba;
+        position: relative;
+        overflow: hidden;
+      }
+      .pc-card > * {
+        min-height: 0;
+      }
+      .pc-msg {
+        padding: 28px 22px 26px 28px;
+        position: relative;
+        display: flex;
+        overflow: hidden;
+      }
+      .pc-msg::after {
+        content: "";
+        position: absolute;
+        top: 24px;
+        bottom: 24px;
+        right: 0;
+        border-right: 1.5px dashed #c9bda3;
+      }
+      .pc-text {
+        font-family: Caveat, "Segoe Print", "Bradley Hand", cursive;
+        font-weight: 500;
+        font-size: 22px;
+        line-height: 1.35;
+        color: #2f3a5a;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        background: transparent;
+        border: none;
+        resize: none;
+        outline: none;
+        padding: 0;
+        margin: 0;
+      }
+      .pc-text::placeholder {
+        color: rgba(47, 58, 90, 0.35);
+      }
+      .pc-empty {
+        color: rgba(47, 58, 90, 0.45);
+        font-style: italic;
+      }
+      .pc-count {
+        position: absolute;
+        left: 28px;
+        bottom: 8px;
+        font-size: 10px;
+        color: rgba(47, 58, 90, 0.4);
+      }
+      .pc-side {
+        padding: 18px 20px 18px 22px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        color: #2f3a5a;
+      }
+      .pc-stamp {
+        align-self: flex-end;
+        width: 58px;
+        height: 70px;
+        background: #e9eef6;
+        border: 3px dotted #fbf6e9;
+        outline: 1px solid #c9bda3;
+        border-radius: 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 26px;
+        line-height: 1;
+      }
+      .pc-stamp small {
+        font-size: 6.5px;
+        letter-spacing: 1px;
+        font-weight: 600;
+        opacity: 0.7;
+      }
+      .pc-postmark {
+        position: absolute;
+        top: 46px;
+        right: 64px;
+        width: 76px;
+        height: 76px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(47, 58, 90, 0.5);
+        outline: 1.5px solid rgba(47, 58, 90, 0.5);
+        outline-offset: -7px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 8.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        text-align: center;
+        color: rgba(47, 58, 90, 0.7);
+        transform: rotate(-12deg);
+        pointer-events: none;
+        padding: 0 10px;
+      }
+      .pc-to {
+        margin-top: 30px;
+        font-size: 13px;
+      }
+      .pc-to b {
+        font-family: Caveat, cursive;
+        font-size: 21px;
+        font-weight: 500;
+      }
+      .pc-line {
+        border-bottom: 1px dotted rgba(47, 58, 90, 0.45);
+        height: 26px;
+        font-family: Caveat, cursive;
+        font-size: 18px;
+        padding-left: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pc-from {
+        margin-top: auto;
+        align-self: flex-end;
+        font-family: Caveat, cursive;
+        font-size: 20px;
+        transform: rotate(-3deg);
+      }
+      .pc-prints {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: center;
+      }
+      .pc-print {
+        background: #fff;
+        padding: 8px 8px 24px;
+        box-shadow: 0 5px 16px rgba(0, 0, 0, 0.35);
+        transform: rotate(-2deg);
+        position: relative;
+      }
+      .pc-print:nth-child(even) {
+        transform: rotate(2deg);
+      }
+      .pc-print img,
+      .pc-print video {
+        display: block;
+        width: 150px;
+        height: 150px;
+        object-fit: cover;
+        cursor: pointer;
+        margin: 0;
+        border-radius: 0;
+        max-width: none;
+        max-height: none;
+      }
+      .pc-x {
+        position: absolute;
+        top: -9px;
+        right: -9px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(43, 58, 42, 0.85);
+        color: white;
+        font-size: 10px;
+        cursor: pointer;
+      }
+      .pc-add {
+        width: 166px;
+        height: 190px;
+        border: 2px dashed rgba(255, 255, 253, 0.6);
+        border-radius: 8px;
+        background: rgba(255, 255, 253, 0.15);
+        color: white;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .pc-add[hidden] {
+        display: none;
+      }
+      .pc-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: white;
+        font-size: 14px;
+      }
+      .pc-sizes {
+        display: flex;
+        gap: 6px;
+      }
+      .pc-sizes button {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 6px 10px;
+        background: rgba(255, 255, 253, 0.85);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .pc-sizes button.picked {
+        border-color: #58b368;
+        background: #e3f3d9;
+      }
+      .pc-sizes button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .pc-announce {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .pc-primary {
+        border: none;
+        border-radius: 14px;
+        padding: 10px 18px;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        background: #58b368;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(30, 60, 30, 0.3);
+      }
+      .pc-primary:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .pc-secondary {
+        border: none;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 14px;
+        background: rgba(255, 255, 253, 0.85);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .pc-label {
+        border: none;
+        border-radius: 12px;
+        padding: 9px 12px;
+        font: inherit;
+        font-size: 14px;
+        background: rgba(255, 255, 253, 0.92);
+        color: var(--ink);
+        width: min(100%, 260px);
+        outline-color: #58b368;
+      }
+      .pc-error {
+        width: 100%;
+        text-align: center;
+        color: #ffb4b4;
+        font-size: 13px;
+        min-height: 1em;
+      }
+      .pc-footer {
+        width: 100%;
+        text-align: center;
+        color: rgba(255, 255, 253, 0.85);
+        font-size: 13px;
+      }
+      @media (max-width: 560px) {
+        .pc-card {
+          aspect-ratio: auto;
+          grid-template-columns: 1fr;
+        }
+        .pc-msg {
+          min-height: 220px;
+          padding: 24px 20px 26px 22px;
+        }
+        .pc-msg::after {
+          border-right: none;
+          border-bottom: 1.5px dashed #c9bda3;
+          top: auto;
+          bottom: 0;
+          left: 22px;
+          right: 22px;
+        }
+        .pc-text {
+          font-size: 20px;
+          height: auto;
+          min-height: 170px;
+        }
+        .pc-count {
+          left: 22px;
+        }
+        .pc-side {
+          padding-top: 22px;
+        }
+        .pc-postmark {
+          top: 36px;
+          right: 62px;
+        }
+        .pc-print img,
+        .pc-print video {
+          width: 120px;
+          height: 120px;
+        }
       }
       #loading,
       #full-overlay {
@@ -524,12 +1076,30 @@
       <div id="zoom-track"></div>
       <div id="zoom-handle">🔍</div>
     </div>
-    <button id="enter" hidden>Enter</button>
+    <div id="actions">
+      <button id="enter" hidden>Enter</button>
+      <button id="box-btn" hidden>Open the treasure box 🎁 (E)</button>
+    </div>
     <div id="bubbles"></div>
+    <button id="treasure-open" title="Treasures">🎁<span id="treasure-badge" hidden></span></button>
+    <div id="treasure-panel" hidden>
+      <header>
+        <span>Treasures 🎁</span>
+        <button id="treasure-min" title="Minimize">–</button>
+      </header>
+      <div id="treasure-body">
+        <p id="treasure-waiting"></p>
+        <button id="treasure-leave">Leave a treasure here 🎁</button>
+        <h3>Your collection</h3>
+        <div id="treasure-mine" class="tr-list" data-empty="Nothing kept yet. Go looking!"></div>
+        <h3>Boxes you left</h3>
+        <div id="treasure-left" class="tr-list" data-empty="You haven't left any treasure yet."></div>
+      </div>
+    </div>
     <div id="chat-panel">
       <header>
         <span>Chat 💬</span>
-        <button id="chat-min" title="Minimize">—</button>
+        <button id="chat-min" title="Minimize">–</button>
       </header>
       <div id="chat-log"></div>
     </div>
@@ -545,6 +1115,9 @@
       <input id="chat-file" type="file" accept="image/*,video/*" hidden />
     </form>
     <div id="lightbox" hidden></div>
+    <div id="postcard" hidden></div>
+    <input id="pc-file" type="file" accept="image/*,video/*" multiple hidden />
+    <div id="toast" hidden></div>
     <div id="login" hidden>
       <form id="login-form">
         <h1>Who are you? 🌍</h1>
