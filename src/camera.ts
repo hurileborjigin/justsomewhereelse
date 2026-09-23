@@ -28,8 +28,8 @@ export class FollowCamera {
     addEventListener(
       "wheel",
       (e) => {
-        // let the chat history keep its native scrolling
-        if (e.target instanceof Element && e.target.closest("#chat-panel")) return;
+        // panels and the open postcard keep their native scrolling; only the world zooms
+        if (e.target instanceof Element && e.target.closest("#chat-panel, #treasure-panel, #postcard")) return;
         e.preventDefault();
         this.targetZoom = Math.max(ZOOM_MIN, this.targetZoom * Math.exp(e.deltaY * 0.0012));
       },
