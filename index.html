@@ -1063,23 +1063,36 @@
         overflow: hidden;
         background: #fbf6e9;
         box-shadow: 0 12px 32px rgba(20, 30, 40, 0.4);
-        touch-action: none;
+        /* the writing card's 1px edge, drawn inside so both faces keep one size */
+        outline: 1px solid #d9cfba;
+        outline-offset: -1px;
         user-select: none;
         -webkit-user-select: none;
+      }
+      /* only the editor drags and pinches; the read view lets a finger scroll the dialog */
+      .pc-picture.pc-edit {
+        touch-action: none;
       }
       .pc-photo {
         position: absolute;
         display: block;
         max-width: none;
         max-height: none;
+      }
+      .pc-edit .pc-photo {
         cursor: grab;
       }
-      .pc-photo:active {
+      .pc-edit .pc-photo:active {
         cursor: grabbing;
+      }
+      /* in the read view a click turns the card */
+      .pc-read .pc-photo {
+        cursor: pointer;
       }
       .pc-picture-frame {
         position: absolute;
-        inset: 14px;
+        /* room below for the pill */
+        inset: 14px 14px 40px;
         border: 2px dashed #c9bda3;
         border-radius: 4px;
         display: flex;
@@ -1106,22 +1119,29 @@
         font-family: Caveat, "Segoe Print", "Bradley Hand", cursive;
         font-weight: 500;
         font-size: 26px;
-        line-height: 1.2;
+        /* whole pixels: the field's height comes from scrollHeight, which rounds */
+        line-height: 31px;
         color: #fff;
         text-shadow:
           0 1px 4px rgba(0, 0, 0, 0.65),
           0 0 12px rgba(0, 0, 0, 0.35);
         white-space: pre-wrap;
         overflow-wrap: break-word;
+        /* the same box on both: the field's dashed underline is transparent on the read caption */
+        display: block;
+        box-sizing: content-box;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-bottom: 1px dashed transparent;
       }
+      /* the caption field: grows a line at a time (height set from scrollHeight) and wraps like .pc-cap */
       .pc-cap-in {
         width: calc(100% - 36px);
         background: transparent;
-        border: none;
-        border-bottom: 1px dashed transparent;
         outline: none;
-        padding: 0;
-        white-space: nowrap;
+        resize: none;
+        overflow: hidden;
       }
       .pc-cap-in::placeholder {
         color: rgba(255, 255, 255, 0.7);

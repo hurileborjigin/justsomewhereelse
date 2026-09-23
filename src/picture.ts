@@ -59,7 +59,7 @@ function mountPhoto(root: HTMLElement, img: HTMLImageElement, state: { focus: Fo
 }
 
 export function pictureView(picture: Picture, onBroken: () => void): HTMLElement {
-  const root = el("div", "pc-picture");
+  const root = el("div", "pc-picture pc-read");
   const img = el("img", "pc-photo");
   img.draggable = false;
   img.alt = "";
@@ -72,7 +72,7 @@ export function pictureView(picture: Picture, onBroken: () => void): HTMLElement
 }
 
 export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks): PictureEditor {
-  const root = el("div", "pc-picture");
+  const root = el("div", "pc-picture pc-edit");
   const file = el("input", "pc-picture-file");
   file.type = "file";
   file.accept = "image/*";
@@ -137,9 +137,57 @@ export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks)
     const img = el("img", "pc-photo");
     img.draggable = false;
     img.alt = "";
+    // the stored picture file is gone: say so and empty the face rather than send a dead link back
+    img.addEventListener(
+      "error",
+      () => {
+        // a replaced photo's revoked URL can fail after the swap; only the current one counts
+        if (draft !== d) return;
+        hooks.onError("The picture file is gone. Add a new one.");
+        set(null);
+      },
+      { once: true },
+    );
+
+    // a textarea that grows with its words and wraps exactly like the finder's
+    // .pc-cap, so the caption takes the same pixels on both screens
+    const caption = el("textarea", "pc-cap-in");
+    caption.rows = 1;
+    caption.value = d.caption;
+    caption.placeholder = "A caption (optional)…";
+    caption.spellcheck = false;
+    caption.autocomplete = "off";
+    // whole lines only: scrollHeight also counts the handwriting's tails below
+    // the last line box, which the finder's .pc-cap does not take room for
+    const grow = () => {
+      const line = parseFloat(getComputedStyle(caption).lineHeight);
+      caption.style.height = "auto";
+      caption.style.height = `${Math.max(1, Math.floor(caption.scrollHeight / line)) * line}px`;
+    };
+    caption.addEventListener("input", () => {
+      // one line of words: a pasted newline becomes a space
+      const g = graphemes(caption.value.replace(/\n/g, " "));
+      caption.value = g.slice(0, PICTURE_CAPTION_MAX).join("");
+      d.caption = caption.value;
+      dirty = true;
+      grow();
+    });
+    caption.addEventListener("keydown", (e) => {
+      // Enter must not reach the chat's "Enter focuses the chat box" listener
+      if (e.key === "Enter") {
+        e.preventDefault();
+        caption.blur();
+      }
+      e.stopPropagation();
+    });
+
     const state = { focus: d.focus, zoom: d.zoom };
     let placed: Placement | null = null;
-    const mounted = mountPhoto(root, img, state, (p) => (placed = p));
+    // every layout (the photo loaded, the frame resized) re-measures the caption too
+    const mounted = mountPhoto(root, img, state, (p) => {
+      placed = p;
+      grow();
+    });
     stop = mounted.stop;
     const frame = () => ({ w: root.clientWidth, h: root.clientHeight });
     // after any move or zoom the stored focus is re-derived from the clamped
@@ -209,26 +257,6 @@ export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks)
       },
       { passive: false },
     );
-
-    const caption = el("input", "pc-cap-in");
-    caption.value = d.caption;
-    caption.placeholder = "A caption (optional)…";
-    caption.spellcheck = false;
-    caption.autocomplete = "off";
-    caption.addEventListener("input", () => {
-      const g = graphemes(caption.value);
-      if (g.length > PICTURE_CAPTION_MAX) caption.value = g.slice(0, PICTURE_CAPTION_MAX).join("");
-      d.caption = caption.value;
-      dirty = true;
-    });
-    caption.addEventListener("keydown", (e) => {
-      // Enter must not reach the chat's "Enter focuses the chat box" listener
-      if (e.key === "Enter") {
-        e.preventDefault();
-        caption.blur();
-      }
-      e.stopPropagation();
-    });
 
     const tools = el("div", "pc-tools");
     const tool = (svg: string, title: string, id: string, onClick: () => void) => {

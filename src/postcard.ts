@@ -272,8 +272,7 @@ export class Postcard {
         textarea.placeholder = `Dear ${fields.to.value.trim() || opts.mark.to},`;
         const card = this.card(opts.mark, textarea, fields);
         card.querySelector(".pc-msg")!.append(count);
-        addBtn.hidden = true;
-        flipper = this.flipCard(card, editor.root, "compose", false);
+        flipper =this.flipCard(card, editor.root, "compose", false);
         body.append(flipper.root);
       } else if (style === "note") {
         textarea.placeholder = "Write something…";
@@ -597,24 +596,23 @@ export class Postcard {
       e.stopPropagation();
       flip();
     });
-    if (mode === "read") {
-      // a click or tap anywhere flips; a drag (selecting text) does not
+    // a click or tap flips; a drag (selecting text) does not, and neither does
+    // a press that starts or ends on one of the `skip` elements
+    const onTap = (target: HTMLElement, skip: string, onFlip: () => void) => {
+      const skipped = (e: PointerEvent) => e.target instanceof Element && e.target.closest(skip) !== null;
       let down: { x: number; y: number } | null = null;
-      root.addEventListener("pointerdown", (e) => {
-        down = { x: e.clientX, y: e.clientY };
+      target.addEventListener("pointerdown", (e) => {
+        down = skipped(e) ? null : { x: e.clientX, y: e.clientY };
       });
-      root.addEventListener("pointerup", (e) => {
-        if (!down || (e.target instanceof Element && e.target.closest(".pc-turn"))) return;
-        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) flip();
+      target.addEventListener("pointerup", (e) => {
+        const start = down;
         down = null;
+        if (start && !skipped(e) && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) onFlip();
       });
-    } else {
-      // the paper of the writing face flips, its inputs do not; the picture face only flips by the pill
-      front.addEventListener("click", (e) => {
-        if (e.target instanceof Element && e.target.closest("input, textarea, button")) return;
-        flip("picture");
-      });
-    }
+    };
+    if (mode === "read") onTap(root, ".pc-turn", () => flip());
+    // the paper of the writing face flips, its inputs do not; the picture face only flips by the pill
+    else onTap(front, "input, textarea, button", () => flip("picture"));
     showing = startOnPicture && picture ? "picture" : "writing";
     apply();
     return {
