@@ -4,24 +4,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import type { BoxCard, Vec3 } from "../shared/protocol.ts";
+import type { BoxContents, Vec3 } from "../shared/protocol.ts";
 import { Store } from "./store.ts";
 
 const fresh = () => new Store(":memory:");
+const img = { url: "/media/a.jpg", kind: "image" as const };
+const postcard: BoxContents = {
+  style: "postcard",
+  picture: { image: img, focus: { x: 0.4, y: 0.6 }, zoom: 1.2, caption: "dusk" },
+  writing: { text: "for you", stamp: "🐝", place: "Sydney", to: "my love", from: "your bee" },
+};
 const draft = {
   creator: 0 as const,
   size: "m" as const,
-  text: "for you",
-  media: [{ url: "/media/a.jpg", kind: "image" as const }],
+  contents: postcard,
   announce: true,
   loc: "globe",
   tiles: [10, 11, 26, 27],
   fwd: [0, 0, 1] as Vec3,
-  style: "postcard" as const,
-  card: null,
 };
 
-test("a new box is sealed, unowned and stands where it was left", () => {
+test("a new box is sealed, unowned, stands where it was left and keeps its contents", () => {
   const s = fresh();
   const box = s.addBox(draft);
   assert.equal(box.id, 1);
@@ -33,8 +36,7 @@ test("a new box is sealed, unowned and stands where it was left", () => {
   assert.equal(box.loc, "globe");
   assert.deepEqual(box.tiles, [10, 11, 26, 27]);
   assert.deepEqual(box.fwd, [0, 0, 1]);
-  assert.equal(box.text, "for you");
-  assert.deepEqual(box.media, draft.media);
+  assert.deepEqual(box.contents, postcard);
   assert.equal(box.announce, true);
   assert.ok(box.created > 0);
   assert.deepEqual(
@@ -105,52 +107,97 @@ test("boxes survive reopening the database file", () => {
     new Store(path).addBox(draft);
     const again = new Store(path);
     assert.equal(again.boxes().length, 1);
-    assert.equal(again.getBox(1)?.text, "for you");
+    assert.deepEqual(again.getBox(1)?.contents, postcard);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("a box remembers its style and the postcard dressing the sender chose", () => {
+test("notes and photo boxes keep their own shape", () => {
   const s = fresh();
-  const card: BoxCard = { stamp: "🐝", place: "Sydney", to: "my love", from: "your bee" };
-  const dressed = s.addBox({ ...draft, card });
-  assert.equal(dressed.style, "postcard");
-  assert.deepEqual(dressed.card, card);
-  const note = s.addBox({ ...draft, style: "note", card: null, tiles: [40] , size: "s" });
-  assert.equal(note.style, "note");
-  assert.equal(note.card, null);
-  const photos = s.addBox({ ...draft, style: "media", text: "", tiles: [41], size: "s" });
-  assert.equal(photos.style, "media");
-  assert.equal(photos.text, "");
+  const note = s.addBox({ ...draft, contents: { style: "note", text: "a note", media: [img] }, tiles: [40], size: "s" });
+  assert.deepEqual(note.contents, { style: "note", text: "a note", media: [img] });
+  const photos = s.addBox({ ...draft, contents: { style: "media", caption: "", media: [img] }, tiles: [41], size: "s" });
+  assert.deepEqual(photos.contents, { style: "media", caption: "", media: [img] });
 });
 
-test("a database from before styles gains the columns and reads its old boxes as postcards", () => {
+const OLD_COLUMNS = `
+  id INTEGER PRIMARY KEY AUTOINCREMENT, creator INTEGER NOT NULL, owner INTEGER, size TEXT NOT NULL,
+  text TEXT NOT NULL, media TEXT NOT NULL, announce INTEGER NOT NULL, created INTEGER NOT NULL,
+  opened INTEGER, label TEXT, origin TEXT NOT NULL, loc TEXT, tiles TEXT NOT NULL, fwd TEXT NOT NULL`;
+
+test("a database from before styles folds its boxes into postcards with an empty dressing", () => {
   const dir = mkdtempSync(join(tmpdir(), "tp-store-old-"));
   const path = join(dir, "planet.db");
   try {
     const old = new DatabaseSync(path);
     old.exec(`
-      CREATE TABLE boxes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, creator INTEGER NOT NULL, owner INTEGER, size TEXT NOT NULL,
-        text TEXT NOT NULL, media TEXT NOT NULL, announce INTEGER NOT NULL, created INTEGER NOT NULL,
-        opened INTEGER, label TEXT, origin TEXT NOT NULL, loc TEXT, tiles TEXT NOT NULL, fwd TEXT NOT NULL
-      );
+      CREATE TABLE boxes (${OLD_COLUMNS});
       INSERT INTO boxes (creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd)
       VALUES (0, NULL, 's', 'old words', '[]', 1, 1000, NULL, NULL, 'globe', 'globe', '[5]', '[0,0,1]');
     `);
     old.close();
     const s = new Store(path);
     const box = s.getBox(1)!;
-    assert.equal(box.style, "postcard");
-    assert.equal(box.card, null);
-    assert.equal(box.text, "old words");
-    const fresh2 = s.addBox({ ...draft, tiles: [6], size: "s", card: { stamp: "🫏", place: "Munich", to: "g", from: "k" } });
-    assert.equal(fresh2.id, 2);
-    assert.equal(fresh2.card?.place, "Munich");
+    assert.deepEqual(box.contents, {
+      style: "postcard",
+      picture: null,
+      writing: { text: "old words", stamp: "", place: "", to: "", from: "" },
+    });
+    assert.equal(box.created, 1000);
+    assert.deepEqual(box.tiles, [5]);
+    const next = s.addBox({ ...draft, tiles: [6], size: "s" });
+    assert.equal(next.id, 2, "ids carry on after the rebuild");
+    const cols = (new DatabaseSync(path).prepare("PRAGMA table_info(boxes)").all() as { name: string }[]).map((c) => c.name);
+    assert.ok(cols.includes("contents") && !cols.includes("text") && !cols.includes("style"), "the old columns are gone");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a database with the flat style and card columns folds every style", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tp-store-flat-"));
+  const path = join(dir, "planet.db");
+  try {
+    const old = new DatabaseSync(path);
+    old.exec(`
+      CREATE TABLE boxes (${OLD_COLUMNS}, style TEXT NOT NULL DEFAULT 'postcard', card TEXT);
+      INSERT INTO boxes (id, creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd, style, card) VALUES
+        (3, 0, 1, 's', 'dear you', '[]', 1, 1000, 2000, 'lake', 'globe', NULL, '[]', '[0,0,1]', 'postcard', '{"stamp":"🌙","place":"Sydney","to":"my love","from":"your bee"}'),
+        (5, 1, NULL, 'm', 'kettle is on', '[{"url":"/media/k.jpg","kind":"image"}]', 0, 1100, NULL, NULL, 'ger', 'ger', '[12,13,17,18]', '[1,0,0]', 'note', NULL),
+        (8, 1, NULL, 's', 'the view', '[{"url":"/media/v.mp4","kind":"video"}]', 1, 1200, NULL, NULL, 'globe', 'globe', '[300]', '[0,0,1]', 'media', NULL);
+    `);
+    old.close();
+    const s = new Store(path);
+    assert.deepEqual(s.getBox(3)!.contents, {
+      style: "postcard",
+      picture: null,
+      writing: { text: "dear you", stamp: "🌙", place: "Sydney", to: "my love", from: "your bee" },
+    });
+    assert.equal(s.getBox(3)!.owner, 1);
+    assert.equal(s.getBox(3)!.opened, 2000);
+    assert.equal(s.getBox(3)!.label, "lake");
+    assert.deepEqual(s.getBox(5)!.contents, { style: "note", text: "kettle is on", media: [{ url: "/media/k.jpg", kind: "image" }] });
+    assert.deepEqual(s.getBox(8)!.contents, { style: "media", caption: "the view", media: [{ url: "/media/v.mp4", kind: "video" }] });
+    assert.deepEqual(
+      s.boxes().map((b) => b.id),
+      [3, 5, 8],
+    );
+    assert.equal(s.addBox({ ...draft, tiles: [6], size: "s" }).id, 9);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("corrupt contents read as an empty postcard instead of throwing", () => {
+  const s = fresh();
+  const { id } = s.addBox(draft);
+  s.debugSetContents(id, "{not json");
+  assert.deepEqual(s.getBox(id)!.contents, {
+    style: "postcard",
+    picture: null,
+    writing: { text: "", stamp: "", place: "", to: "", from: "" },
+  });
 });
 
 test("deleting a box removes it for good", () => {
@@ -168,19 +215,10 @@ test("deleting a box removes it for good", () => {
 
 test("editing replaces the contents and the announce flag, nothing else", () => {
   const s = fresh();
-  const before = s.addBox({ ...draft, card: { stamp: "🐝", place: "Sydney", to: "you", from: "me" } });
-  s.editBox(before.id, {
-    style: "note",
-    card: null,
-    text: "changed my mind",
-    media: [{ url: "/media/b.jpg", kind: "image" }],
-    announce: false,
-  });
+  const before = s.addBox(draft);
+  s.editBox(before.id, { style: "note", text: "changed my mind", media: [{ url: "/media/b.jpg", kind: "image" }] }, false);
   const after = s.getBox(before.id)!;
-  assert.equal(after.style, "note");
-  assert.equal(after.card, null);
-  assert.equal(after.text, "changed my mind");
-  assert.deepEqual(after.media, [{ url: "/media/b.jpg", kind: "image" }]);
+  assert.deepEqual(after.contents, { style: "note", text: "changed my mind", media: [{ url: "/media/b.jpg", kind: "image" }] });
   assert.equal(after.announce, false);
   assert.equal(after.size, before.size);
   assert.equal(after.loc, before.loc);

@@ -8,45 +8,38 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
   Box,
-  BoxCard,
+  BoxContents,
   BoxSize,
-  BoxStyle,
   ChatEntry,
   MediaRef,
   PlayerId,
   StateData,
   Vec3,
+  Writing,
 } from "../shared/protocol.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
 
 /** A box as stored: contents always present (the server strips them per viewer). */
-export type FullBox = Box & { text: string; media: MediaRef[]; card: BoxCard | null };
+export type FullBox = Box & { contents: BoxContents };
 
 export type NewBox = {
   creator: PlayerId;
   size: BoxSize;
-  style: BoxStyle;
-  card: BoxCard | null;
-  text: string;
-  media: MediaRef[];
+  contents: BoxContents;
   announce: boolean;
   loc: string;
   tiles: number[];
   fwd: Vec3;
 };
 
-/** What a box holds, as opposed to where it stands: the part an edit may change. */
-export type BoxContents = Pick<NewBox, "style" | "card" | "text" | "media" | "announce">;
-
 type BoxRow = {
   id: number;
   creator: number;
   owner: number | null;
   size: string;
-  text: string;
-  media: string;
+  contents: string;
   announce: number;
   created: number;
   opened: number | null;
@@ -55,9 +48,10 @@ type BoxRow = {
   loc: string | null;
   tiles: string;
   fwd: string;
-  style: string;
-  card: string | null;
 };
+
+/** A row from before `contents`: the flat columns, with `style` and `card` missing on the oldest databases. */
+type FlatBoxRow = Omit<BoxRow, "contents"> & { text: string; media: string; style?: string; card?: string | null };
 
 function parseJson<T>(s: string, fallback: T): T {
   try {
@@ -66,6 +60,12 @@ function parseJson<T>(s: string, fallback: T): T {
     return fallback;
   }
 }
+
+const EMPTY_POSTCARD: BoxContents = {
+  style: "postcard",
+  picture: null,
+  writing: { text: "", stamp: "", place: "", to: "", from: "" },
+};
 
 function rowToBox(r: BoxRow): FullBox {
   return {
@@ -81,12 +81,38 @@ function rowToBox(r: BoxRow): FullBox {
     loc: r.loc,
     tiles: parseJson<number[]>(r.tiles, []),
     fwd: parseJson<Vec3>(r.fwd, [0, 0, 1]),
-    style: r.style as BoxStyle,
-    text: r.text,
-    media: parseJson<MediaRef[]>(r.media, []),
-    card: r.card ? parseJson<BoxCard | null>(r.card, null) : null,
+    contents: parseJson<BoxContents>(r.contents, EMPTY_POSTCARD),
   };
 }
+
+/** An old flat row folded into `contents`. Prints on an old postcard are dropped: no such box exists in the live database. */
+function foldContents(r: FlatBoxRow): BoxContents {
+  const media = parseJson<MediaRef[]>(r.media, []);
+  const style = r.style ?? "postcard";
+  if (style === "note") return { style: "note", text: r.text, media };
+  if (style === "media") return { style: "media", caption: r.text, media };
+  const card = r.card ? parseJson<Partial<Writing> | null>(r.card, null) : null;
+  return {
+    style: "postcard",
+    picture: null,
+    writing: { text: r.text, stamp: card?.stamp ?? "", place: card?.place ?? "", to: card?.to ?? "", from: card?.from ?? "" },
+  };
+}
+
+const BOX_COLUMNS = `
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  creator INTEGER NOT NULL,
+  owner INTEGER,
+  size TEXT NOT NULL,
+  contents TEXT NOT NULL,
+  announce INTEGER NOT NULL,
+  created INTEGER NOT NULL,
+  opened INTEGER,
+  label TEXT,
+  origin TEXT NOT NULL,
+  loc TEXT,
+  tiles TEXT NOT NULL,
+  fwd TEXT NOT NULL`;
 
 export class Store {
   private db: DatabaseSync;
@@ -108,24 +134,7 @@ export class Store {
         ts INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS boxes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        creator INTEGER NOT NULL,
-        owner INTEGER,
-        size TEXT NOT NULL,
-        text TEXT NOT NULL,
-        media TEXT NOT NULL,
-        announce INTEGER NOT NULL,
-        created INTEGER NOT NULL,
-        opened INTEGER,
-        label TEXT,
-        origin TEXT NOT NULL,
-        loc TEXT,
-        tiles TEXT NOT NULL,
-        fwd TEXT NOT NULL,
-        style TEXT NOT NULL DEFAULT 'postcard',
-        card TEXT
-      );
+      CREATE TABLE IF NOT EXISTS boxes (${BOX_COLUMNS});
     `);
     const seed = this.db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
     seed.run(0, DEFAULT_NAMES[0]);
@@ -135,14 +144,32 @@ export class Store {
     if (!cols.some((c) => c.name === "media")) {
       this.db.exec("ALTER TABLE messages ADD COLUMN media TEXT");
     }
-    // older databases predate box styles: every existing box is a postcard
-    const boxCols = this.db.prepare("PRAGMA table_info(boxes)").all() as { name: string }[];
-    if (!boxCols.some((c) => c.name === "style")) {
-      this.db.exec("ALTER TABLE boxes ADD COLUMN style TEXT NOT NULL DEFAULT 'postcard'");
+    this.migrateBoxes();
+  }
+
+  /** One-time rebuild from the flat `text`/`media`/`style`/`card` columns into `contents`. */
+  private migrateBoxes() {
+    const cols = (this.db.prepare("PRAGMA table_info(boxes)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("text")) return; // already the contents shape
+    const rows = this.db.prepare("SELECT * FROM boxes ORDER BY id").all() as FlatBoxRow[];
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec(`CREATE TABLE boxes_v2 (${BOX_COLUMNS})`);
+      const insert = this.db.prepare(
+        `INSERT INTO boxes_v2 (id, creator, owner, size, contents, announce, created, opened, label, origin, loc, tiles, fwd)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const r of rows) {
+        insert.run(r.id, r.creator, r.owner, r.size, JSON.stringify(foldContents(r)), r.announce, r.created, r.opened, r.label, r.origin, r.loc, r.tiles, r.fwd);
+      }
+      this.db.exec("DROP TABLE boxes");
+      this.db.exec("ALTER TABLE boxes_v2 RENAME TO boxes");
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
-    if (!boxCols.some((c) => c.name === "card")) {
-      this.db.exec("ALTER TABLE boxes ADD COLUMN card TEXT");
-    }
+    console.log(`[planet] migrated ${rows.length} treasure box(es) to typed contents`);
   }
 
   names(): [string, string] {
@@ -267,22 +294,19 @@ export class Store {
   addBox(input: NewBox): FullBox {
     const res = this.db
       .prepare(
-        `INSERT INTO boxes (creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd, style, card)
-         VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO boxes (creator, owner, size, contents, announce, created, opened, label, origin, loc, tiles, fwd)
+         VALUES (?, NULL, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
       )
       .run(
         input.creator,
         input.size,
-        input.text,
-        JSON.stringify(input.media),
+        JSON.stringify(input.contents),
         input.announce ? 1 : 0,
         Date.now(),
         input.loc,
         input.loc,
         JSON.stringify(input.tiles),
         JSON.stringify(input.fwd),
-        input.style,
-        input.card ? JSON.stringify(input.card) : null,
       );
     return this.getBox(Number(res.lastInsertRowid))!;
   }
@@ -332,10 +356,13 @@ export class Store {
   }
 
   /** The creator changed a sealed box; where it stands, its size and its history stay. */
-  editBox(id: number, c: BoxContents) {
-    this.db
-      .prepare("UPDATE boxes SET style = ?, card = ?, text = ?, media = ?, announce = ? WHERE id = ?")
-      .run(c.style, c.card ? JSON.stringify(c.card) : null, c.text, JSON.stringify(c.media), c.announce ? 1 : 0, id);
+  editBox(id: number, contents: BoxContents, announce: boolean) {
+    this.db.prepare("UPDATE boxes SET contents = ?, announce = ? WHERE id = ?").run(JSON.stringify(contents), announce ? 1 : 0, id);
+  }
+
+  /** Tests only: write a raw contents string to check the corrupt-row fallback. */
+  debugSetContents(id: number, raw: string) {
+    this.db.prepare("UPDATE boxes SET contents = ? WHERE id = ?").run(raw, id);
   }
 
   /** The creator picked their own box up to move it: out of the world, still nobody's. */
