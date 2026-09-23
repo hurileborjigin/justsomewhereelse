@@ -28,6 +28,9 @@ const MANIFEST = {
   room_opera: "/models/room_opera.glb",
   room_ger: "/models/room_ger.glb",
   room_frauenkirche: "/models/room_frauenkirche.glb",
+  chest_s: "/models/chest_s.glb",
+  chest_m: "/models/chest_m.glb",
+  chest_l: "/models/chest_l.glb",
 } as const;
 
 export type AssetName = keyof typeof MANIFEST;

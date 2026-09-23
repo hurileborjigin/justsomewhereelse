@@ -55,6 +55,10 @@ PALETTE = {
     "cat_orange": "d98d3f",
     "cat_stripe": "a5642a",
     "cat_eye": "6fce62",
+    "chest": "b5763f",
+    "chest_dark": "7d4f2a",
+    "gold": "e2b34a",
+    "iron": "6d6a66",
 }
 
 
