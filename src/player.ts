@@ -36,7 +36,10 @@ export class Player {
   /** The partner's tile in the same world (-1 = none): never step onto it. */
   peerTile = -1;
 
-  constructor(private globe: GlobeWorld) {
+  private globe: GlobeWorld;
+
+  constructor(globe: GlobeWorld) {
+    this.globe = globe;
     this.world = globe;
     this.tile = globe.spawn(0).tile;
     this.spawnAt(0);

@@ -23,7 +23,11 @@ export class Net {
   private ws: WebSocket | null = null;
   private acc = 0;
 
-  constructor(private handlers: NetHandlers) {}
+  private handlers: NetHandlers;
+
+  constructor(handlers: NetHandlers) {
+    this.handlers = handlers;
+  }
 
   connect() {
     const proto = location.protocol === "https:" ? "wss" : "ws";

@@ -160,6 +160,15 @@ export function neighborInDirection(k: number, dir: Vector3): number {
 const blocked = new Set<number>();
 const occupiedDecor = new Set<number>(); // non-blocking props (grass)
 const water = new Set<number>();
+const dynamicBlocked = new Set<number>(); // treasure boxes: come and go at runtime
+
+/** Runtime blockers on globe tiles (treasure boxes). */
+export function setDynamicBlocked(keys: number[], on: boolean): void {
+  for (const k of keys) {
+    if (on) dynamicBlocked.add(k);
+    else dynamicBlocked.delete(k);
+  }
+}
 
 for (const [f, i, j] of LAKE) water.add(key(f, i, j));
 
@@ -174,12 +183,12 @@ export function isWater(k: number): boolean {
 
 /** Can this tile be stepped onto? Water only stops characters that can't fly. */
 export function isBlockedFor(k: number, canFly: boolean): boolean {
-  return blocked.has(k) || (!canFly && water.has(k));
+  return blocked.has(k) || dynamicBlocked.has(k) || (!canFly && water.has(k));
 }
 
 /** Free for placing scatter/buildings: no props, no water. */
 export function isFree(k: number): boolean {
-  return !blocked.has(k) && !occupiedDecor.has(k) && !water.has(k);
+  return !blocked.has(k) && !dynamicBlocked.has(k) && !occupiedDecor.has(k) && !water.has(k);
 }
 
 // ---- spawns -------------------------------------------------------------

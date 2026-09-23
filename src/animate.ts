@@ -41,11 +41,10 @@ export class CharacterView {
     this.celebrateUntil = performance.now() / 1000 + 1.5;
   }
 
-  constructor(
-    private assets: Assets,
-    character: CharacterId,
-    scene: Scene,
-  ) {
+  private assets: Assets;
+
+  constructor(assets: Assets, character: CharacterId, scene: Scene) {
+    this.assets = assets;
     this.shadow = makeBlobShadow();
     scene.add(this.container, this.shadow);
     this.setCharacter(character);

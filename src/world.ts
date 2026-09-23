@@ -14,6 +14,7 @@ import {
   isWater as globeWater,
   neighborInDirection as globeNeighbor,
   neighborsOf,
+  setDynamicBlocked,
   spawnForward,
   tileAt,
   tileCenter,
@@ -38,6 +39,10 @@ export interface World {
   isBlockedFor(k: number, character: CharacterId): boolean;
   /** True when the two tiles share an edge (the reunion-hop trigger). */
   areNeighbors(a: number, b: number): boolean;
+  /** Edge neighbors of a tile (never -1). */
+  neighbors(k: number): number[];
+  /** Runtime blockers (treasure boxes) that come and go. */
+  setBlocked(tiles: number[], blocked: boolean): void;
   /** Ground point directly under `pos` for the blob shadow. */
   shadowPos(pos: Vector3, out: Vector3): Vector3;
 }
@@ -50,8 +55,11 @@ const _b = new Vector3();
 export class GlobeWorld implements World {
   id = "globe";
   isGlobe = true;
+  scene: Scene;
 
-  constructor(public scene: Scene) {}
+  constructor(scene: Scene) {
+    this.scene = scene;
+  }
 
   up(pos: Vector3, out: Vector3) {
     return out.copy(pos).normalize();
@@ -87,6 +95,14 @@ export class GlobeWorld implements World {
 
   areNeighbors(a: number, b: number) {
     return neighborsOf(a).includes(b);
+  }
+
+  neighbors(k: number) {
+    return neighborsOf(k).filter((n) => n >= 0);
+  }
+
+  setBlocked(tiles: number[], blocked: boolean) {
+    setDynamicBlocked(tiles, blocked);
   }
 
   shadowPos(pos: Vector3, out: Vector3) {
@@ -178,20 +194,23 @@ const AXES = [
 ];
 
 export class RoomWorld implements World {
+  id: string;
+  kind: BuildingKind;
   isGlobe = false;
   scene = new Scene();
   exitTile: number;
-  private blocked = new Set<number>();
+  private w: number;
+  private h: number;
+  private furniture = new Set<number>(); // from ROOM_SPECS, permanent
+  private boxes = new Set<number>(); // treasure boxes, runtime
 
-  constructor(
-    public id: string,
-    public kind: BuildingKind,
-    assets: Assets,
-  ) {
+  constructor(id: string, kind: BuildingKind, assets: Assets) {
+    this.id = id;
+    this.kind = kind;
     const spec = ROOM_SPECS[kind];
     this.w = spec.w;
     this.h = spec.h;
-    for (const [i, j] of spec.blocked) this.blocked.add(this.key(i, j));
+    for (const [i, j] of spec.blocked) this.furniture.add(this.key(i, j));
     // the door is in the middle of the +Z wall; standing there offers "Leave"
     this.exitTile = this.key(Math.floor(spec.w / 2), spec.h - 1);
 
@@ -202,9 +221,6 @@ export class RoomWorld implements World {
     this.scene.add(lamp);
     this.scene.add(assets[`room_${kind}`].clone(true));
   }
-
-  private w: number;
-  private h: number;
 
   key(i: number, j: number) {
     return j * this.w + i;
@@ -257,13 +273,31 @@ export class RoomWorld implements World {
   }
 
   isBlockedFor(k: number, _character: CharacterId) {
-    return this.blocked.has(k);
+    return this.furniture.has(k) || this.boxes.has(k);
   }
 
   areNeighbors(a: number, b: number) {
     const [ai, aj] = this.unkey(a);
     const [bi, bj] = this.unkey(b);
     return Math.abs(ai - bi) + Math.abs(aj - bj) === 1;
+  }
+
+  neighbors(k: number) {
+    const [i, j] = this.unkey(k);
+    const out: number[] = [];
+    for (const axis of AXES) {
+      const ni = i + axis.di;
+      const nj = j + axis.dj;
+      if (ni >= 0 && ni < this.w && nj >= 0 && nj < this.h) out.push(this.key(ni, nj));
+    }
+    return out;
+  }
+
+  setBlocked(tiles: number[], blocked: boolean) {
+    for (const t of tiles) {
+      if (blocked) this.boxes.add(t);
+      else this.boxes.delete(t);
+    }
   }
 
   shadowPos(pos: Vector3, out: Vector3) {
