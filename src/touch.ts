@@ -90,4 +90,16 @@ export function setupTouchControls(input: Input, cam: FollowCamera) {
   };
   track.addEventListener("pointerup", releaseZoom);
   track.addEventListener("pointercancel", releaseZoom);
+
+  // keep the handle in step when the zoom changes elsewhere (a pinch in photo mode, the wheel)
+  let shown = cam.zoomFraction();
+  const follow = () => {
+    const f = cam.zoomFraction();
+    if (zoomPointer === null && Math.abs(f - shown) > 0.001) {
+      placeHandle(f);
+      shown = f;
+    }
+    requestAnimationFrame(follow);
+  };
+  requestAnimationFrame(follow);
 }

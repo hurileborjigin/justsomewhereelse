@@ -8,7 +8,7 @@ import { Chat } from "./chat.ts";
 import { SPAWN_TILES, greatCircleDir, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
-import { PhotoMode } from "./photo.ts";
+import { PHOTO_AIM, PhotoMode } from "./photo.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
@@ -507,7 +507,7 @@ async function boot() {
       animals: () => animals.debug(),
       joined: () => net.joined,
       treasures: { list: () => treasures.list() },
-      photo: () => photo.take(),
+      photo: () => photo.take(PHOTO_AIM[player.character]),
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,

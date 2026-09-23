@@ -42,6 +42,12 @@ export class FollowCamera {
   // how high above the character's feet the camera aims; photo mode lowers it to the body
   private aim = AIM_DEFAULT;
   private targetAim = AIM_DEFAULT;
+  // photo mode: where the projection centre sits, in CSS px from the screen centre
+  private shiftX = 0;
+  private shiftY = 0;
+  private targetShiftX = 0;
+  private targetShiftY = 0;
+  private shifted = false;
 
   constructor() {
     addEventListener(
@@ -72,8 +78,11 @@ export class FollowCamera {
     this.yaw = this.targetYaw;
     this.tilt = this.targetTilt;
     this.aim = this.targetAim;
+    this.shiftX = this.targetShiftX;
+    this.shiftY = this.targetShiftY;
     this.camera.position.copy(this.desired(player));
     this.finish(player);
+    this.applyShift();
   }
 
   update(dt: number, player: Player) {
@@ -83,8 +92,11 @@ export class FollowCamera {
     this.yaw = wrapAngle(this.yaw + wrapAngle(this.targetYaw - this.yaw) * dampFactor(10, dt));
     this.tilt += (this.targetTilt - this.tilt) * dampFactor(10, dt);
     this.aim += (this.targetAim - this.aim) * dampFactor(10, dt);
+    this.shiftX += (this.targetShiftX - this.shiftX) * dampFactor(10, dt);
+    this.shiftY += (this.targetShiftY - this.shiftY) * dampFactor(10, dt);
     this.camera.position.lerp(this.desired(player), dampFactor(4, dt));
     this.finish(player);
+    this.applyShift();
   }
 
   private clampZoom(player: Player) {
@@ -116,6 +128,27 @@ export class FollowCamera {
     this.targetTilt = Math.min(TILT_MAX, Math.max(TILT_MIN, tilt));
   }
 
+  /** Moves the projection off-centre by the eased shift; drops the offset once it has eased back to nothing. */
+  private applyShift() {
+    const near = (v: number) => Math.abs(v) <= 0.5;
+    if (near(this.shiftX) && near(this.shiftY) && near(this.targetShiftX) && near(this.targetShiftY)) {
+      if (this.shifted) {
+        this.camera.clearViewOffset();
+        this.shifted = false;
+      }
+      return;
+    }
+    // a view window moved right renders the picture further left, hence the minus signs
+    this.camera.setViewOffset(innerWidth, innerHeight, -this.shiftX, -this.shiftY, innerWidth, innerHeight);
+    this.shifted = true;
+  }
+
+  /** Photo mode: put the projection centre (the point the camera looks at) `x`, `y` CSS px from the screen centre. */
+  setViewShift(x: number, y: number) {
+    this.targetShiftX = x;
+    this.targetShiftY = y;
+  }
+
   /** Photo mode: aim the camera `height` units above the character's feet. */
   setAim(height: number) {
     this.targetAim = height;
@@ -126,6 +159,8 @@ export class FollowCamera {
     this.targetYaw = 0;
     this.targetTilt = 0;
     this.targetAim = AIM_DEFAULT;
+    this.targetShiftX = 0;
+    this.targetShiftY = 0;
   }
 
   /** Multiplies the zoom distance by `factor` (below 1 zooms in). */

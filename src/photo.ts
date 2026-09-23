@@ -3,11 +3,13 @@
 // usual, then the shutter renders one high-resolution frame, cuts out exactly
 // the window and hands back a JPEG.
 import type { WebGLRenderer } from "three";
+import type { CharacterId } from "../shared/protocol.ts";
 import type { FollowCamera } from "./camera.ts";
 
 const YAW_PER_PX = 0.004;
 const TILT_PER_PX = 0.002;
-const AIM = 0.5; // aim at the character's body rather than above the head
+/** How high above its feet photo mode aims at each character: the middle of its body. */
+export const PHOTO_AIM: Record<CharacterId, number> = { bee: 0.3, donkey: 0.5 };
 const SHOT_MIN_WIDTH = 1500; // device pixels across the window, where the device allows
 const MAX_RATIO = 3;
 
@@ -39,14 +41,17 @@ export class PhotoMode {
     return this.active;
   }
 
-  /** Shows the viewfinder; resolves with the JPEG when the shutter fires, or null on "Back" / Escape. */
-  take(): Promise<Blob | null> {
+  /**
+   * Shows the viewfinder, aiming `aim` units above the character's feet (see PHOTO_AIM);
+   * resolves with the JPEG when the shutter fires, or null on "Back" / Escape.
+   */
+  take(aim: number): Promise<Blob | null> {
     if (this.active) return Promise.reject(new Error("Already taking a picture"));
     this.active = true;
     this.taking = false;
     document.body.classList.add("photo");
     this.root.hidden = false;
-    this.cam.setAim(AIM);
+    this.cam.setAim(aim);
     this.frameWindow();
     const start = this.cam.look;
     let yaw = start.yaw;
@@ -139,7 +144,6 @@ export class PhotoMode {
         shutter.removeEventListener("click", onShutter);
         removeEventListener("resize", this.frameWindow);
         this.root.classList.remove("ph-dragging");
-        this.cam.camera.clearViewOffset();
         this.cam.clearLook();
         this.root.hidden = true;
         document.body.classList.remove("photo");
@@ -160,12 +164,10 @@ export class PhotoMode {
     });
   }
 
-  /** Shifts the projection so the point the camera looks at lands on the window's centre. */
+  /** Eases the projection so the point the camera looks at lands on the window's centre. */
   private frameWindow = () => {
     const win = this.window.getBoundingClientRect();
-    const x = Math.round(innerWidth / 2 - (win.left + win.width / 2));
-    const y = Math.round(innerHeight / 2 - (win.top + win.height / 2));
-    this.cam.camera.setViewOffset(innerWidth, innerHeight, x, y, innerWidth, innerHeight);
+    this.cam.setViewShift(win.left + win.width / 2 - innerWidth / 2, win.top + win.height / 2 - innerHeight / 2);
   };
 
   /** One frame at up to MAX_RATIO device pixels per CSS pixel, cropped to the window, as a JPEG. */
