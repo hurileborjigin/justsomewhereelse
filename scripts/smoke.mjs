@@ -167,6 +167,98 @@ try {
   await b.next();
   expect(na.t === "names" && na.names[1] === "K 💙", "rename broadcast");
 
+  // ---- treasure boxes ------------------------------------------------------
+  // gloria leaves a box (with a photo); khurlee sees WHERE it is, not what's inside
+  const up2 = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": PASS },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 9, 9, 9]),
+  });
+  const media2 = await up2.json();
+  a.send({
+    t: "box-place",
+    size: "s",
+    text: "meet me where the lake is bluest",
+    media: [media2],
+    announce: true,
+    loc: "globe",
+    tiles: [43],
+    fwd: [0, 0, 1],
+  });
+  const pa = await a.next();
+  const pb = await b.next();
+  expect(
+    pa.t === "box" && pa.box.text === "meet me where the lake is bluest" && pa.box.media.length === 1,
+    "creator sees the contents of the box she left",
+  );
+  expect(
+    pb.t === "box" &&
+      pb.box.id === pa.box.id &&
+      pb.box.text === undefined &&
+      pb.box.media === undefined &&
+      pb.box.loc === "globe" &&
+      pb.box.origin === "globe" &&
+      pb.box.opened === null &&
+      pb.box.announce === true,
+    "partner sees the sealed box but not its contents",
+  );
+  const boxId = pa.box.id;
+
+  // refusals: on the partner, overlapping, malformed, creator keeping her own
+  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "globe", tiles: [42], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "partner", "can't drop a box on your partner (live tile)");
+  b.send({ t: "box-place", size: "m", text: "x", media: [], announce: false, loc: "globe", tiles: [43, 44, 59, 60], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "overlap", "footprints can't overlap");
+  b.send({ t: "box-place", size: "l", text: "x", media: [], announce: false, loc: "globe", tiles: [100, 101], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "invalid", "tile count must match the size");
+  a.send({ t: "box-keep", id: boxId });
+  expect((await a.next()).reason === "creator", "you can't keep a box you left");
+
+  // the creator peeking at her own sealed box does not open it
+  a.send({ t: "box-open", id: boxId });
+  const peek = await a.next();
+  expect(peek.t === "box" && peek.box.opened === null && peek.box.text !== undefined, "creator rereads without unsealing");
+
+  // opening reveals the postcard to both and records the moment
+  b.send({ t: "box-open", id: boxId });
+  const oa = await a.next();
+  const ob = await b.next();
+  expect(
+    ob.t === "box" && ob.box.text === "meet me where the lake is bluest" && typeof ob.box.opened === "number",
+    "opening reveals the postcard",
+  );
+  expect(oa.t === "box" && oa.box.opened === ob.box.opened, "the creator learns it was opened");
+
+  // keeping with a label takes it out of the world
+  b.send({ t: "box-keep", id: boxId, label: "the lake one" });
+  await a.next();
+  const kb = await b.next();
+  expect(
+    kb.t === "box" &&
+      kb.box.owner === 1 &&
+      kb.box.loc === null &&
+      kb.box.tiles.length === 0 &&
+      kb.box.label === "the lake one" &&
+      kb.box.origin === "globe",
+    "kept: held by khurlee with a label",
+  );
+
+  // only the owner labels or places it
+  a.send({ t: "box-label", id: boxId, label: "mine" });
+  expect((await a.next()).reason === "owner", "only the owner labels a box");
+  a.send({ t: "box-put", id: boxId, loc: "globe", tiles: [200], fwd: [0, 0, 1] });
+  expect((await a.next()).reason === "owner", "only the owner places a box");
+  b.send({ t: "box-label", id: boxId, label: "the lake postcard" });
+  await a.next();
+  expect((await b.next()).box.label === "the lake postcard", "owner relabels");
+
+  // back into the world, inside the ger this time
+  b.send({ t: "box-put", id: boxId, loc: "ger", tiles: [12], fwd: [1, 0, 0] });
+  const ta = await a.next();
+  const tb = await b.next();
+  expect(tb.t === "box" && tb.box.loc === "ger" && tb.box.tiles[0] === 12 && tb.box.owner === 1, "placed back inside the ger");
+  expect(ta.t === "box" && ta.box.text !== undefined, "creator still sees her postcard wherever it stands");
+
   a.ws.close();
   expect((await b.next()).t === "peer-left", "khurlee told gloria left");
 
@@ -181,8 +273,12 @@ try {
       w2.state?.tile === 42 &&
       w2.history.length === 1 &&
       w2.history[0].text === "meet me at the lake" &&
-      w2.names[1] === "K 💙",
-    "reconnect: history keeps the text message, not the recalled one",
+      w2.names[1] === "K 💙" &&
+      w2.boxes.length === 1 &&
+      w2.boxes[0].loc === "ger" &&
+      w2.boxes[0].label === "the lake postcard" &&
+      w2.boxes[0].text === "meet me where the lake is bluest",
+    "reconnect: history keeps the text message, not the recalled one; the box is where khurlee put it",
   );
 
   console.log("SMOKE PASSED");

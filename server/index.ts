@@ -14,21 +14,29 @@ import { fileURLToPath } from "node:url";
 import sirv from "sirv";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
+  BOX_LABEL_MAX_LEN,
+  BOX_MEDIA_MAX,
+  BOX_TEXT_MAX_LEN,
   CHAT_MAX_LEN,
   MEDIA_MAX_BYTES,
   NAME_MAX_LEN,
   PASS_MIN_LEN,
   RECALL_WINDOW_MS,
   SETUP_CREATOR,
+  boxTileCount,
 } from "../shared/protocol.ts";
 import type {
+  Box,
+  BoxDenyReason,
+  BoxSize,
   ClientMessage,
   MediaRef,
   PlayerId,
   ServerMessage,
   StateData,
+  Vec3,
 } from "../shared/protocol.ts";
-import { Store } from "./store.ts";
+import { Store, type FullBox } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 // PLANET_OPEN=1 disables the passphrase entirely: pick a name, walk in.
@@ -142,6 +150,52 @@ function broadcast(msg: ServerMessage) {
   for (const c of conns.values()) send(c.ws, msg);
 }
 
+// ---- treasure boxes ---------------------------------------------------------
+
+/** What `viewer` may see of a box: contents only for the creator, or once opened. */
+function viewOf(box: FullBox, viewer: PlayerId): Box {
+  const { text, media, ...rest } = box;
+  return box.creator === viewer || box.opened !== null ? { ...rest, text, media } : rest;
+}
+
+function broadcastBox(box: FullBox) {
+  for (const [pid, c] of conns) send(c.ws, { t: "box", box: viewOf(box, pid) });
+}
+
+const isVec3 = (v: unknown): v is Vec3 =>
+  Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
+
+const isMediaRef = (m: unknown): m is MediaRef =>
+  typeof m === "object" &&
+  m !== null &&
+  typeof (m as MediaRef).url === "string" &&
+  /^\/media\/[\w.-]+$/.test((m as MediaRef).url) &&
+  ((m as MediaRef).kind === "image" || (m as MediaRef).kind === "video");
+
+const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
+
+/** Footprint SHAPE only; terrain is the clients' job (both share the seeded world). */
+function validFootprint(size: BoxSize, tiles: unknown): tiles is number[] {
+  if (!Array.isArray(tiles) || tiles.length !== boxTileCount(size)) return false;
+  if (!tiles.every((t) => Number.isInteger(t) && t >= 0)) return false;
+  return new Set(tiles).size === tiles.length;
+}
+
+/** The partner's tile in `loc`: live when online, else the persisted one; -1 when elsewhere. */
+function partnerTileIn(partner: PlayerId, loc: string): number {
+  const state = conns.get(partner)?.live ?? store.state(partner);
+  return state && state.loc === loc ? state.tile : -1;
+}
+
+/** Why a footprint can't stand here, or null when it can. */
+function placementDenial(me: PlayerId, loc: string, tiles: number[]): BoxDenyReason | null {
+  if (tiles.includes(partnerTileIn((1 - me) as PlayerId, loc))) return "partner";
+  const taken = new Set(store.boxesIn(loc).flatMap((b) => b.tiles));
+  return tiles.some((t) => taken.has(t)) ? "overlap" : null;
+}
+
+const cleanLabel = (raw: unknown) => String(raw ?? "").slice(0, BOX_LABEL_MAX_LEN).trim() || null;
+
 const online = (): [boolean, boolean] => [conns.has(0), conns.has(1)];
 const setupMode = () => !OPEN && ENV_PASS === null && !store.hasPass();
 const validPass = (pass: string) =>
@@ -222,7 +276,7 @@ wss.on("connection", (ws) => {
           state: peerConn ? (peerConn.live ?? store.state(peerId)) : null,
         },
         history: store.history(200),
-        boxes: [],
+        boxes: store.boxes().map((b) => viewOf(b, wanted)),
       });
       sendTo(peerId, { t: "peer-joined", id });
       refreshLobbies();
@@ -284,6 +338,102 @@ wss.on("connection", (ws) => {
       broadcast({ t: "names", names: store.names() });
       refreshLobbies();
       console.log(`[planet] player ${id} renamed to ${name}`);
+    } else if (msg.t === "box-place") {
+      const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
+      const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
+      const loc = String(msg.loc ?? "");
+      if (
+        !isSize(msg.size) ||
+        !validFootprint(msg.size, msg.tiles) ||
+        !isVec3(msg.fwd) ||
+        !loc ||
+        (!text && media.length === 0)
+      ) {
+        send(ws, { t: "box-deny", reason: "invalid" });
+        return;
+      }
+      const denial = placementDenial(id, loc, msg.tiles);
+      if (denial) {
+        send(ws, { t: "box-deny", reason: denial });
+        return;
+      }
+      const box = store.addBox({
+        creator: id,
+        size: msg.size,
+        text,
+        media,
+        announce: !!msg.announce,
+        loc,
+        tiles: msg.tiles,
+        fwd: msg.fwd,
+      });
+      broadcastBox(box);
+      console.log(`[planet] ${store.names()[id]} left a ${box.size.toUpperCase()} treasure box #${box.id} in ${loc}`);
+    } else if (msg.t === "box-open") {
+      const box = store.getBox(Number(msg.id));
+      if (!box) {
+        send(ws, { t: "box-deny", reason: "missing" });
+        return;
+      }
+      if (box.opened === null && box.creator !== id) {
+        store.openBox(box.id, Date.now());
+        broadcastBox(store.getBox(box.id)!);
+        console.log(`[planet] ${store.names()[id]} opened treasure box #${box.id}`);
+      } else {
+        send(ws, { t: "box", box: viewOf(box, id) });
+      }
+    } else if (msg.t === "box-keep") {
+      const box = store.getBox(Number(msg.id));
+      if (!box) {
+        send(ws, { t: "box-deny", reason: "missing" });
+        return;
+      }
+      if (box.creator === id) {
+        send(ws, { t: "box-deny", reason: "creator" });
+        return;
+      }
+      if (box.loc === null) {
+        send(ws, { t: "box-deny", reason: "missing" }); // not standing anywhere
+        return;
+      }
+      store.keepBox(box.id, id, cleanLabel(msg.label) ?? box.label);
+      broadcastBox(store.getBox(box.id)!);
+      console.log(`[planet] ${store.names()[id]} kept treasure box #${box.id}`);
+    } else if (msg.t === "box-label") {
+      const box = store.getBox(Number(msg.id));
+      if (!box) {
+        send(ws, { t: "box-deny", reason: "missing" });
+        return;
+      }
+      if (box.owner !== id) {
+        send(ws, { t: "box-deny", reason: "owner" });
+        return;
+      }
+      store.labelBox(box.id, cleanLabel(msg.label));
+      broadcastBox(store.getBox(box.id)!);
+    } else if (msg.t === "box-put") {
+      const box = store.getBox(Number(msg.id));
+      if (!box) {
+        send(ws, { t: "box-deny", reason: "missing" });
+        return;
+      }
+      if (box.owner !== id) {
+        send(ws, { t: "box-deny", reason: "owner" });
+        return;
+      }
+      const loc = String(msg.loc ?? "");
+      if (box.loc !== null || !loc || !validFootprint(box.size, msg.tiles) || !isVec3(msg.fwd)) {
+        send(ws, { t: "box-deny", reason: "invalid" });
+        return;
+      }
+      const denial = placementDenial(id, loc, msg.tiles);
+      if (denial) {
+        send(ws, { t: "box-deny", reason: denial });
+        return;
+      }
+      store.putBox(box.id, loc, msg.tiles, msg.fwd);
+      broadcastBox(store.getBox(box.id)!);
+      console.log(`[planet] ${store.names()[id]} placed treasure box #${box.id} in ${loc}`);
     }
   });
 
