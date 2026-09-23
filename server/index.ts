@@ -28,6 +28,7 @@ import {
 import type {
   Box,
   BoxDenyReason,
+  BoxOp,
   BoxSize,
   ClientMessage,
   MediaRef,
@@ -148,6 +149,11 @@ function sendTo(id: PlayerId, msg: ServerMessage) {
 
 function broadcast(msg: ServerMessage) {
   for (const c of conns.values()) send(c.ws, msg);
+}
+
+/** Denies one box request, naming which op it answers so the client can match it up. */
+function deny(ws: WebSocket, op: BoxOp, reason: BoxDenyReason, id?: number) {
+  send(ws, id === undefined ? { t: "box-deny", op, reason } : { t: "box-deny", op, id, reason });
 }
 
 // ---- treasure boxes ---------------------------------------------------------
@@ -349,12 +355,12 @@ wss.on("connection", (ws) => {
         !loc ||
         (!text && media.length === 0)
       ) {
-        send(ws, { t: "box-deny", reason: "invalid" });
+        deny(ws, "place", "invalid");
         return;
       }
       const denial = placementDenial(id, loc, msg.tiles);
       if (denial) {
-        send(ws, { t: "box-deny", reason: denial });
+        deny(ws, "place", denial);
         return;
       }
       const box = store.addBox({
@@ -370,9 +376,10 @@ wss.on("connection", (ws) => {
       broadcastBox(box);
       console.log(`[planet] ${store.names()[id]} left a ${box.size.toUpperCase()} treasure box #${box.id} in ${loc}`);
     } else if (msg.t === "box-open") {
-      const box = store.getBox(Number(msg.id));
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
       if (!box) {
-        send(ws, { t: "box-deny", reason: "missing" });
+        deny(ws, "open", "missing", boxId);
         return;
       }
       if (box.opened === null && box.creator !== id) {
@@ -383,52 +390,55 @@ wss.on("connection", (ws) => {
         send(ws, { t: "box", box: viewOf(box, id) });
       }
     } else if (msg.t === "box-keep") {
-      const box = store.getBox(Number(msg.id));
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
       if (!box) {
-        send(ws, { t: "box-deny", reason: "missing" });
+        deny(ws, "keep", "missing", boxId);
         return;
       }
       if (box.creator === id) {
-        send(ws, { t: "box-deny", reason: "creator" });
+        deny(ws, "keep", "creator", boxId);
         return;
       }
       if (box.loc === null) {
-        send(ws, { t: "box-deny", reason: "missing" }); // not standing anywhere
+        deny(ws, "keep", "missing", boxId); // not standing anywhere
         return;
       }
       store.keepBox(box.id, id, cleanLabel(msg.label) ?? box.label);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} kept treasure box #${box.id}`);
     } else if (msg.t === "box-label") {
-      const box = store.getBox(Number(msg.id));
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
       if (!box) {
-        send(ws, { t: "box-deny", reason: "missing" });
+        deny(ws, "label", "missing", boxId);
         return;
       }
       if (box.owner !== id) {
-        send(ws, { t: "box-deny", reason: "owner" });
+        deny(ws, "label", "owner", boxId);
         return;
       }
       store.labelBox(box.id, cleanLabel(msg.label));
       broadcastBox(store.getBox(box.id)!);
     } else if (msg.t === "box-put") {
-      const box = store.getBox(Number(msg.id));
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
       if (!box) {
-        send(ws, { t: "box-deny", reason: "missing" });
+        deny(ws, "put", "missing", boxId);
         return;
       }
       if (box.owner !== id) {
-        send(ws, { t: "box-deny", reason: "owner" });
+        deny(ws, "put", "owner", boxId);
         return;
       }
       const loc = String(msg.loc ?? "");
       if (box.loc !== null || !loc || !validFootprint(box.size, msg.tiles) || !isVec3(msg.fwd)) {
-        send(ws, { t: "box-deny", reason: "invalid" });
+        deny(ws, "put", "invalid", boxId);
         return;
       }
       const denial = placementDenial(id, loc, msg.tiles);
       if (denial) {
-        send(ws, { t: "box-deny", reason: denial });
+        deny(ws, "put", denial, boxId);
         return;
       }
       store.putBox(box.id, loc, msg.tiles, msg.fwd);

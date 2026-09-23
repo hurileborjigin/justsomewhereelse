@@ -4,6 +4,7 @@ import {
   SURFACE,
   type Box,
   type BoxDenyReason,
+  type BoxOp,
   type BoxSize,
   type MediaRef,
   type PlayerId,
@@ -52,6 +53,8 @@ export type TreasureHooks = {
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };
 type Pending = {
+  op: BoxOp;
+  id?: number;
   matches(box: Box, isNew: boolean): boolean;
   resolve(): void;
   reject(err: Error): void;
@@ -166,17 +169,17 @@ export class Treasures {
     }
   }
 
-  deny(reason: BoxDenyReason) {
-    const message = DENY_TEXT[reason];
-    if (this.pending) {
+  /** The server refused a box request; matched to the pending place/put by op and id, or toasted otherwise. */
+  deny(msg: { op: BoxOp; id?: number; reason: BoxDenyReason }) {
+    if (this.pending && this.pending.op === msg.op && (this.pending.id === undefined || this.pending.id === msg.id)) {
       const p = this.pending;
       this.pending = null;
       clearTimeout(p.timer);
-      p.reject(new Error(message));
+      p.reject(new Error(DENY_TEXT[msg.reason]));
       return;
     }
-    this.pendingOpen = null;
-    this.toast(message);
+    if (msg.op === "open" && this.pendingOpen === msg.id) this.pendingOpen = null;
+    this.toast(DENY_TEXT[msg.reason]);
   }
 
   /** A room was just created on this client: its boxes can stand in it now. */
@@ -257,6 +260,8 @@ export class Treasures {
         const tiles = footprintFor(world, tile, forward, draft.size, free);
         if (!tiles) throw new Error("No room for that size here anymore");
         await this.request(
+          "place",
+          undefined,
           (b, isNew) => isNew && b.creator === this.me,
           () =>
             this.hooks.net.placeBox({
@@ -287,6 +292,8 @@ export class Treasures {
       return;
     }
     this.request(
+      "put",
+      box.id,
       (b) => b.id === box.id && b.loc === world.id,
       () => this.hooks.net.putBox(box.id, world.id, tiles, vec(forward)),
     ).then(
@@ -301,8 +308,8 @@ export class Treasures {
     this.hooks.net.labelBox(box.id, label.trim());
   }
 
-  /** Send one request; settle on the matching `box` message or on `box-deny`. */
-  private request(matches: Pending["matches"], send: () => void): Promise<void> {
+  /** Send one request; settle on the matching `box` message or on the `box-deny` naming this `op`/`id`. */
+  private request(op: BoxOp, id: number | undefined, matches: Pending["matches"], send: () => void): Promise<void> {
     if (this.pending) return Promise.reject(new Error("Still waiting for the planet…"));
     return new Promise<void>((resolve, reject) => {
       const timer = window.setTimeout(() => {
@@ -310,7 +317,7 @@ export class Treasures {
         this.pending = null;
         reject(new Error("No answer from the planet. Try again."));
       }, REQUEST_TIMEOUT_MS);
-      this.pending = { matches, resolve, reject, timer };
+      this.pending = { op, id, matches, resolve, reject, timer };
       send();
     });
   }

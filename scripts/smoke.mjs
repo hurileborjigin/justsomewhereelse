@@ -206,13 +206,24 @@ try {
 
   // refusals: on the partner, overlapping, malformed, creator keeping her own
   b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "globe", tiles: [42], fwd: [0, 0, 1] });
-  expect((await b.next()).reason === "partner", "can't drop a box on your partner (live tile)");
+  const denyPartner = await b.next();
+  expect(
+    denyPartner.reason === "partner" &&
+      denyPartner.t === "box-deny" &&
+      denyPartner.op === "place" &&
+      denyPartner.id === undefined,
+    "can't drop a box on your partner (live tile)",
+  );
   b.send({ t: "box-place", size: "m", text: "x", media: [], announce: false, loc: "globe", tiles: [43, 44, 59, 60], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "overlap", "footprints can't overlap");
   b.send({ t: "box-place", size: "l", text: "x", media: [], announce: false, loc: "globe", tiles: [100, 101], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "tile count must match the size");
   a.send({ t: "box-keep", id: boxId });
-  expect((await a.next()).reason === "creator", "you can't keep a box you left");
+  const denyCreator = await a.next();
+  expect(
+    denyCreator.reason === "creator" && denyCreator.op === "keep" && denyCreator.id === boxId,
+    "you can't keep a box you left",
+  );
 
   // the creator peeking at her own sealed box does not open it
   a.send({ t: "box-open", id: boxId });

@@ -92,6 +92,7 @@ export type Box = {
 };
 
 export type BoxDenyReason = "invalid" | "overlap" | "partner" | "creator" | "owner" | "missing";
+export type BoxOp = "place" | "open" | "keep" | "label" | "put";
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
@@ -139,4 +140,4 @@ export type ServerMessage =
   | { t: "peer-joined"; id: PlayerId }
   | { t: "peer-left"; id: PlayerId }
   | { t: "box"; box: Box } // one box changed (or answers your box-open)
-  | { t: "box-deny"; reason: BoxDenyReason };
+  | { t: "box-deny"; op: BoxOp; id?: number; reason: BoxDenyReason }; // id present whenever the request named a box (place has none)
