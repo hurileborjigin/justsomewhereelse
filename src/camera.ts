@@ -15,6 +15,13 @@ const ZOOM_MAX_ROOM = 2.2; // interiors stay dollhouse-scale
 const FAR_LOOK_BLEND = 0.85; // how much the far view centers on the planet
 const TILT_MIN = -0.26; // a little below the usual view
 const TILT_MAX = 1.31; // nearly straight up
+const AIM_DEFAULT = 1.2; // the usual view looks a little above the character's head
+
+/** Wraps an angle into (-PI, PI]. */
+function wrapAngle(a: number) {
+  const w = a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI));
+  return w === -Math.PI ? Math.PI : w;
+}
 
 /**
  * Third-person follow camera. The up vector comes from the player's current
@@ -32,6 +39,9 @@ export class FollowCamera {
   private tilt = 0;
   private targetYaw = 0;
   private targetTilt = 0;
+  // how high above the character's feet the camera aims; photo mode lowers it to the body
+  private aim = AIM_DEFAULT;
+  private targetAim = AIM_DEFAULT;
 
   constructor() {
     addEventListener(
@@ -40,7 +50,7 @@ export class FollowCamera {
         // panels and the open postcard keep their native scrolling; only the world zooms
         if (e.target instanceof Element && e.target.closest("#chat-panel, #treasure-panel, #postcard")) return;
         e.preventDefault();
-        this.targetZoom = Math.max(ZOOM_MIN, this.targetZoom * Math.exp(e.deltaY * 0.0012));
+        this.zoomBy(Math.exp(e.deltaY * 0.0012));
       },
       { passive: false },
     );
@@ -61,6 +71,7 @@ export class FollowCamera {
     this.zoom = this.targetZoom;
     this.yaw = this.targetYaw;
     this.tilt = this.targetTilt;
+    this.aim = this.targetAim;
     this.camera.position.copy(this.desired(player));
     this.finish(player);
   }
@@ -68,8 +79,10 @@ export class FollowCamera {
   update(dt: number, player: Player) {
     this.clampZoom(player);
     this.zoom += (this.targetZoom - this.zoom) * dampFactor(8, dt);
-    this.yaw += (this.targetYaw - this.yaw) * dampFactor(10, dt);
+    // the shortest way round, so a long drag never unwinds through every turn
+    this.yaw = wrapAngle(this.yaw + wrapAngle(this.targetYaw - this.yaw) * dampFactor(10, dt));
     this.tilt += (this.targetTilt - this.tilt) * dampFactor(10, dt);
+    this.aim += (this.targetAim - this.aim) * dampFactor(10, dt);
     this.camera.position.lerp(this.desired(player), dampFactor(4, dt));
     this.finish(player);
   }
@@ -81,7 +94,7 @@ export class FollowCamera {
 
   private finish(player: Player) {
     this.camera.up.copy(_up);
-    _look.copy(player.pos).addScaledVector(_up, 1.2);
+    _look.copy(player.pos).addScaledVector(_up, this.aim);
     if (player.world.isGlobe) {
       // far out, look toward the planet's center so the globe sits centered
       const far = Math.min(1, Math.max(0, (this.zoom - 3) / 5)) * FAR_LOOK_BLEND;
@@ -99,14 +112,25 @@ export class FollowCamera {
 
   /** Photo mode: turn the camera around the character by `yaw` radians and tilt the view by `tilt` radians (up is positive). */
   setLook(yaw: number, tilt: number) {
-    this.targetYaw = yaw;
+    this.targetYaw = wrapAngle(yaw);
     this.targetTilt = Math.min(TILT_MAX, Math.max(TILT_MIN, tilt));
+  }
+
+  /** Photo mode: aim the camera `height` units above the character's feet. */
+  setAim(height: number) {
+    this.targetAim = height;
   }
 
   /** Ease back to the usual view behind the character. */
   clearLook() {
     this.targetYaw = 0;
     this.targetTilt = 0;
+    this.targetAim = AIM_DEFAULT;
+  }
+
+  /** Multiplies the zoom distance by `factor` (below 1 zooms in). */
+  zoomBy(factor: number) {
+    this.targetZoom = Math.max(ZOOM_MIN, this.targetZoom * factor);
   }
 
   get look() {

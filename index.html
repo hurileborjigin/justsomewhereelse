@@ -1414,6 +1414,24 @@
       #postcard.pc-away {
         display: none;
       }
+      /* narrow screens: the hint wraps; on touch the window and the hint also step left,
+         clear of the zoom slider's column (12px gutter + 40px slider) */
+      @media (max-width: 560px) {
+        #ph-hint {
+          width: max-content;
+          max-width: 80vw;
+          white-space: normal;
+          text-wrap: balance;
+        }
+        body.touch #ph-window {
+          left: calc(50% - 26px);
+          width: min(80vw, 105vh);
+        }
+        body.touch #ph-hint {
+          left: calc(50% - 26px);
+          top: calc(45% + min(80vw, 105vh) / 3 + 14px);
+        }
+      }
       @media (max-width: 560px) {
         .pc-card {
           aspect-ratio: auto;
