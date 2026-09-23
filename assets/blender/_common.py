@@ -56,9 +56,15 @@ PALETTE = {
     "cat_stripe": "a5642a",
     "cat_eye": "6fce62",
     "chest": "b5763f",
+    "chest_light": "c98a52",
     "chest_dark": "7d4f2a",
     "gold": "e2b34a",
     "iron": "6d6a66",
+    "highland": "b8632a",
+    "highland_dark": "8a4520",
+    "highland_fringe": "d9924f",
+    "muzzle": "3a2a22",
+    "horn_tip": "4a3a2a",
 }
 
 
