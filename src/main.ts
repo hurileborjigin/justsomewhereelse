@@ -8,6 +8,7 @@ import { Chat } from "./chat.ts";
 import { SPAWN_TILES, greatCircleDir, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
+import { PhotoMode } from "./photo.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
@@ -63,6 +64,7 @@ async function boot() {
   const remote = new RemotePlayer();
   const cam = new FollowCamera();
   setupTouchControls(input, cam);
+  const photo = new PhotoMode(renderer, cam, () => renderer.render(player.world.scene, cam.camera));
 
   const localView = new CharacterView(assets, "bee", scene);
   const remoteView = new CharacterView(assets, "donkey", scene);
@@ -505,6 +507,7 @@ async function boot() {
       animals: () => animals.debug(),
       joined: () => net.joined,
       treasures: { list: () => treasures.list() },
+      photo: () => photo.take(),
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,
