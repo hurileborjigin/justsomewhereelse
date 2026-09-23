@@ -6,6 +6,7 @@ import {
   type ChatEntry,
   type MediaRef,
 } from "../shared/protocol.ts";
+import type { World } from "./world.ts";
 
 /**
  * Chat UI: a text input (Enter to focus, Enter to send, Esc to leave),
@@ -386,14 +387,15 @@ export class Chat {
   /** Called every frame to keep bubbles and name tags glued above heads. */
   update(
     camera: PerspectiveCamera,
+    world: World,
     mePos: Vector3,
     meChar: CharacterId,
     peerPos: Vector3,
     peerChar: CharacterId,
     peerPresent: boolean,
   ) {
-    const me = project(camera, mePos, HEAD_HEIGHT[meChar]);
-    const peer = peerPresent ? project(camera, peerPos, HEAD_HEIGHT[peerChar]) : null;
+    const me = project(camera, world, mePos, HEAD_HEIGHT[meChar]);
+    const peer = peerPresent ? project(camera, world, peerPos, HEAD_HEIGHT[peerChar]) : null;
     this.bubbleMe.update(me);
     this.bubblePeer.update(peer);
     this.tagMe.update(me);
@@ -406,12 +408,14 @@ function isTypingElement(el: Element | null): boolean {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 }
 
+/** Screen point `headHeight` above `pos` along the world's up (radial on the globe, +Y in a room). */
 function project(
   camera: PerspectiveCamera,
+  world: World,
   pos: Vector3,
   headHeight: number,
 ): { x: number; y: number } | null {
-  _anchor.copy(pos).addScaledVector(_toAnchor.copy(pos).normalize(), headHeight);
+  _anchor.copy(pos).addScaledVector(world.up(pos, _toAnchor), headHeight);
   _toAnchor.copy(_anchor).sub(camera.position);
   if (_toAnchor.dot(camera.getWorldDirection(_camDir)) <= 0) return null; // behind the camera
   _anchor.project(camera);

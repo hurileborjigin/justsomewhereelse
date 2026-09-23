@@ -460,7 +460,7 @@ async function boot() {
     }
     remoteView.setVisible(together);
 
-    chat.update(cam.camera, player.pos, player.character, remote.pos, remote.character, together);
+    chat.update(cam.camera, world, player.pos, player.character, remote.pos, remote.character, together);
 
     if (world.isGlobe) {
       animals.update(dt, t);
