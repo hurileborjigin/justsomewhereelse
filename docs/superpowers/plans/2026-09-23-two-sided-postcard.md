@@ -2867,6 +2867,54 @@ git commit -m "Drive and README: the picture side, the flip and photo mode"
 
 ---
 
+### Task 11: Name the planet Haven
+
+The planet is officially called Haven from now on. The name "Tiny Planet" (in any casing, and the `tinyplanet` prefix) disappears from copy, code, tests, scripts and docs. Infrastructure identifiers stay: the Fly app id in `fly.toml` and its URL cannot be renamed in place, the `tp-auth` and `tp-reloaded-for` storage keys stay so nobody is logged out, the `__tp` dev hook and the `[planet]` log prefix are not the name.
+
+**Files:**
+- Modify: `index.html` (the `<title>` and the loading line), `src/main.ts` (`placeName`), `src/treasures.ts` (a doc comment), `server/index.ts` (the header comment and the HTTP root message), `package.json` and `package-lock.json` (the `name` fields), `Dockerfile` (comment), `README.md` (title and the script table), `scripts/smoke.mjs`, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs`, `scripts/fit_room.py`, `assets/blender/_common.py`, `docs/superpowers/specs/2026-09-23-treasure-boxes-design.md`, `docs/superpowers/specs/2026-09-23-two-sided-postcard-design.md`, `docs/superpowers/plans/2026-09-23-treasure-boxes.md`, `docs/superpowers/plans/2026-09-23-two-sided-postcard.md`.
+
+**Interfaces:**
+- Produces: `placeName("globe")` returns `"Haven"`, which is the default place on the postmark, the stamp caption and the address line.
+
+- [ ] **Step 1: Inventory**
+
+Run: `grep -rniE "tiny ?planet" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.superpowers --exclude-dir=.claude .`
+Paste the hit list into the report. Every hit is handled in the next step.
+
+- [ ] **Step 2: Rename**
+
+- `index.html`: `<title>Haven</title>`; `<div id="loading">Loading Haven…</div>`.
+- `src/main.ts` `placeName`: `if (loc === "globe") return "Haven";`.
+- `src/treasures.ts`: the hook comment becomes `/** "Haven" or "the crooked house": for postmarks and panel rows. */`.
+- `server/index.ts`: the header comment starts `// Haven game server: ...`; the root response reads `Haven game server is running. In dev, open the Vite URL instead.`.
+- `package.json` `"name": "haven"`; in `package-lock.json` change both top-level `"name": "tiny-planet"` fields (the root and `packages[""]`) to `"haven"` by hand; do not regenerate the lock file.
+- `Dockerfile` comment: `# Haven - single Node process serving the built client + WebSocket.`
+- `README.md`: title `# Haven 🌍🐝🫏`; every `/tmp/tinyplanet-` becomes `/tmp/haven-`; read the whole file and reword any sentence that says "tiny planet" in prose.
+- Scripts: every `tinyplanet-` file prefix becomes `haven-` (`scripts/smoke.mjs` temp database, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs` screenshot paths and console lines); `scripts/fit_room.py` and `assets/blender/_common.py` docstrings say Haven.
+- Docs: in both specs and both plans replace "Tiny Planet" with "Haven" and `tinyplanet-` with `haven-` (the older plan quotes code that said `"Tiny Planet"`; it becomes `"Haven"` too, so the docs read as the current product). One sentence per line stays as it is.
+
+- [ ] **Step 3: Verify**
+
+Run: `grep -rniE "tiny ?planet" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.superpowers --exclude-dir=.claude .`
+Expected: only `fly.toml` (the app id `tiny-planet-gk`).
+
+Run: `npm run typecheck && npm test && npm run smoke && npm run build`
+Expected: all green.
+
+With `PLANET_PASS=planet npm run dev` running against a fresh database, compose a postcard on the globe with Playwright and check `document.querySelector("#postcard .pc-stamp small").textContent === "Haven"` and the postmark's second span reads `Haven`; then stop the dev server.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add -A
+git commit -m "Haven: the planet has its name; Tiny Planet is gone from copy, code, scripts and docs"
+```
+
+`git add -A` is acceptable here because the change is a rename across many files; check `git status` first so nothing untracked (screenshots, databases) is inside the worktree.
+
+---
+
 ## Self-review notes
 
 - Spec coverage: model and limits (Task 1), storage and migration (Task 2), protocol, filtering, media lifecycle, build id on the server (Task 3), crop (Task 4), client contents and panel thumbnail (Task 5), flip, pill, faces, caption, tools, broken image (Task 6), photo mode, look offsets, HUD, shutter, high-resolution frame, Enter and E handling (Task 7), dialog steps aside, placement spot, size refresh, editing does not move (Task 8), stale tabs (Task 9), Playwright, README (Task 10). The spec's "Phones" section is exercised by the mobile drive in Task 10 and the same CSS as the writing face (Task 6).
