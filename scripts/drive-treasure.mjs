@@ -1,6 +1,7 @@
 // Visual check for treasure boxes: A writes a postcard with a photo and leaves
 // an S box; B walks up, opens it, keeps it with a label, carries it into the
-// ger and places it there. Screenshots land in /tmp/tinyplanet-treasure-*.png.
+// ger and places it there, relabels it with a long label and picks it up again.
+// Screenshots land in /tmp/tinyplanet-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
 //   node scripts/drive-treasure.mjs
@@ -58,6 +59,11 @@ check(
 check((await a.inputValue("#postcard textarea.pc-text")).endsWith("miss me.\n🐝"), "the newline landed in the text");
 const photo = await b.screenshot(); // any real PNG will do as the "photo"
 await a.setInputFiles("#pc-file", { name: "view.png", mimeType: "image/png", buffer: photo });
+const fitsAll = await a.evaluate(() => [...document.querySelectorAll("#postcard .pc-sizes button")].every((x) => !x.disabled));
+check(
+  (await a.locator("#postcard .pc-hint").count()) === (fitsAll ? 0 : 1),
+  `the size hint shows exactly when a size is greyed out (all fit: ${fitsAll})`,
+);
 await a.click('#postcard [data-size="s"]');
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "A1-compose");
@@ -114,6 +120,38 @@ await a.waitForTimeout(600);
 await shot(a, "A6-visits-the-ger");
 const finalA = await a.evaluate(() => window.__tp.treasures.list()[0]);
 check(finalA.loc === "ger" && finalA.text !== undefined, "A sees the placed box and still reads her own words");
+
+// ---- B relabels it with a long label, then picks it up again ----------------
+const LONG = "the softest grass on the whole planet!!!"; // BOX_LABEL_MAX_LEN characters
+check(LONG.length === 40, "the long label is 40 characters");
+await b.click("#treasure-min");
+b.once("dialog", (d) => d.accept(LONG));
+await b.click("#treasure-open");
+await b.click("#treasure-mine .tr-label");
+await b.waitForFunction((l) => window.__tp.treasures.list()[0].label === l, LONG, { timeout: 5000 });
+await b.click("#treasure-min");
+await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
+await b.waitForTimeout(300);
+const btn = await b.evaluate(() => {
+  const e = document.getElementById("box-btn");
+  const r = e.getBoundingClientRect();
+  return { left: r.left, right: r.right, width: r.width, clipped: e.scrollWidth > e.clientWidth, vw: innerWidth };
+});
+console.log(`  box button with a 40-character label: ${JSON.stringify(btn)}`);
+check(btn.left >= 16 - 0.5 && btn.right <= btn.vw - 16 + 0.5, "the box button stays inside the screen with a 16px gutter");
+await shot(b, "B7-long-label");
+await b.click("#box-btn"); // B stands on the ger's door tile: E would mean "go back outside"
+await b.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
+check((await b.textContent("#pc-keep")) === "Pick it up 🎁", "the owner is offered to pick it up, not to keep it");
+check((await b.inputValue("#postcard input.pc-label")) === LONG, "the label field shows the box's label");
+await b.evaluate(() => document.fonts.ready);
+await shot(b, "B8-pick-up");
+await b.focus("#postcard input.pc-label");
+await b.keyboard.press("Enter");
+await b.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
+await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
+const picked = await b.evaluate(() => window.__tp.treasures.list()[0]);
+check(picked.owner === 1 && picked.label === LONG, "Enter in the label field picks it up, label kept");
 
 await browser.close();
 console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/tinyplanet-treasure-*.png");
