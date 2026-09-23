@@ -44,6 +44,17 @@ PALETTE = {
     "copper": "5fb8a0",
     "brick": "c08a66",
     "velvet": "8a3b47",
+    "pink": "f0a8b8",
+    "horn": "e8dcc4",
+    "wool": "f7f0e3",
+    "sheep_face": "3e3833",
+    "horse_brown": "9a6a42",
+    "horse_dark": "4c3728",
+    "dog_brown": "c4884f",
+    "dog_dark": "8a5a36",
+    "cat_orange": "d98d3f",
+    "cat_stripe": "a5642a",
+    "cat_eye": "6fce62",
 }
 
 

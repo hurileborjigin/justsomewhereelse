@@ -1,5 +1,6 @@
 import { Clock, Quaternion, Vector3, type Scene } from "three";
 import { CHARACTER_OF, type PlayerId, type StateData } from "../shared/protocol.ts";
+import { Animals } from "./animals.ts";
 import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
@@ -39,6 +40,7 @@ async function boot() {
   scene.add(assets.globe);
   const globeWorld = new GlobeWorld(scene);
   const buildings = scatterWorld(scene, assets);
+  const animals = new Animals(scene, assets, buildings);
   const doorTileMap = new Map<number, Building>();
   for (const b of buildings) for (const d of b.doorTiles) doorTileMap.set(d, b);
 
@@ -399,6 +401,7 @@ async function boot() {
     chat.update(cam.camera, player.pos, player.character, remote.pos, remote.character, together);
 
     if (world.isGlobe) {
+      animals.update(dt, t);
       // the sky follows YOUR local clock (hers follows Sydney, his Munich)
       const now = new Date();
       const hour = hourOverride ?? now.getHours() + now.getMinutes() / 60;
@@ -424,6 +427,7 @@ async function boot() {
       leaveBuilding,
       teleport: (tile: number) => switchWorld(tile, player.forward.clone(), globeWorld),
       setHour: (h: number | null) => (hourOverride = h),
+      animals: () => animals.debug(),
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,
