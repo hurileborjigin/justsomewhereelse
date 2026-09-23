@@ -37,6 +37,9 @@ export type NewBox = {
   fwd: Vec3;
 };
 
+/** What a box holds, as opposed to where it stands: the part an edit may change. */
+export type BoxContents = Pick<NewBox, "style" | "card" | "text" | "media" | "announce">;
+
 type BoxRow = {
   id: number;
   creator: number;
@@ -326,5 +329,17 @@ export class Store {
   /** The creator took a sealed box back: gone for good (its media files are the server's job). */
   deleteBox(id: number) {
     this.db.prepare("DELETE FROM boxes WHERE id = ?").run(id);
+  }
+
+  /** The creator changed a sealed box; where it stands, its size and its history stay. */
+  editBox(id: number, c: BoxContents) {
+    this.db
+      .prepare("UPDATE boxes SET style = ?, card = ?, text = ?, media = ?, announce = ? WHERE id = ?")
+      .run(c.style, c.card ? JSON.stringify(c.card) : null, c.text, JSON.stringify(c.media), c.announce ? 1 : 0, id);
+  }
+
+  /** The creator picked their own box up to move it: out of the world, still nobody's. */
+  liftBox(id: number) {
+    this.db.prepare("UPDATE boxes SET loc = NULL, tiles = '[]' WHERE id = ?").run(id);
   }
 }

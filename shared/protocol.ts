@@ -111,9 +111,10 @@ export type BoxDenyReason =
   | "creator" // keeping a box you left yourself
   | "owner"
   | "missing"
-  | "notcreator" // taking back a box someone else left
-  | "opened"; // taking back a box that has been opened
-export type BoxOp = "place" | "open" | "keep" | "label" | "put" | "delete";
+  | "notcreator" // taking back, changing or moving a box someone else left
+  | "opened" // taking back or changing a box that has been opened
+  | "kept"; // changing or moving a box your partner has kept
+export type BoxOp = "place" | "open" | "keep" | "label" | "put" | "delete" | "edit" | "lift";
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
@@ -142,7 +143,17 @@ export type ClientMessage =
   | { t: "box-keep"; id: number; label?: string }
   | { t: "box-label"; id: number; label: string }
   | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 }
-  | { t: "box-delete"; id: number }; // take back your own box while it is still sealed
+  | { t: "box-delete"; id: number } // take back your own box while it is still sealed
+  | {
+      t: "box-edit"; // change what a sealed box you left holds
+      id: number;
+      style: BoxStyle;
+      card?: BoxCard | null;
+      text: string;
+      media: MediaRef[];
+      announce: boolean;
+    }
+  | { t: "box-lift"; id: number }; // pick your own box up to move it, until your partner keeps it
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)

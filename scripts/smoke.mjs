@@ -303,18 +303,64 @@ try {
   const peek = await a.next();
   expect(peek.t === "box" && peek.box.opened === null && peek.box.text !== undefined, "creator rereads without unsealing");
 
+  // the creator changes her mind while the box is still sealed
+  const up4 = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": PASS },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 4, 4, 4, 4]),
+  });
+  const media4 = await up4.json();
+  a.send({
+    t: "box-edit",
+    id: boxId,
+    style: "postcard",
+    card: { stamp: "🐝", place: "the lake", to: "sweetheart", from: "your bee" },
+    text: "meet me where the lake is bluest, at dusk",
+    media: [media4],
+    announce: false,
+  });
+  const editedA = await a.next();
+  const editedB = await b.next();
+  expect(
+    editedA.t === "box" &&
+      editedA.box.text === "meet me where the lake is bluest, at dusk" &&
+      editedA.box.card.to === "sweetheart" &&
+      editedA.box.media.length === 1 &&
+      editedA.box.media[0].url === media4.url &&
+      editedA.box.announce === false,
+    "the creator edits words, dressing, photo and announcement",
+  );
+  expect(editedB.t === "box" && editedB.box.text === undefined && editedB.box.announce === false, "the partner still sees a sealed box");
+  expect((await fetch(`http://localhost:${PORT}${media2.url}`)).status === 404, "the photo the edit dropped is deleted from disk");
+  b.send({ t: "box-edit", id: boxId, style: "note", text: "mine now", media: [], announce: true });
+  expect((await b.next()).reason === "notcreator", "only the creator edits a box");
+
+  // she picks it up and puts it down again; her partner cannot
+  b.send({ t: "box-lift", id: boxId });
+  expect((await b.next()).reason === "notcreator", "only the creator picks her own box up");
+  a.send({ t: "box-lift", id: boxId });
+  const la = await a.next();
+  await b.next();
+  expect(la.t === "box" && la.box.loc === null && la.box.tiles.length === 0 && la.box.owner === null, "lifted: in the creator's pocket, still nobody's");
+  a.send({ t: "box-put", id: boxId, loc: "globe", tiles: [43], fwd: [0, 0, 1] });
+  const put2 = await a.next();
+  await b.next();
+  expect(put2.t === "box" && put2.box.loc === "globe" && put2.box.tiles[0] === 43, "the creator puts her unkept box down again");
+
   // opening reveals the postcard to both and records the moment
   b.send({ t: "box-open", id: boxId });
   const oa = await a.next();
   const ob = await b.next();
   expect(
     ob.t === "box" &&
-      ob.box.text === "meet me where the lake is bluest" &&
+      ob.box.text === "meet me where the lake is bluest, at dusk" &&
       ob.box.card.stamp === "🐝" &&
       typeof ob.box.opened === "number",
     "opening reveals the postcard and its dressing",
   );
   expect(oa.t === "box" && oa.box.opened === ob.box.opened, "the creator learns it was opened");
+  a.send({ t: "box-edit", id: boxId, style: "postcard", text: "too late", media: [], announce: true });
+  expect((await a.next()).reason === "opened", "an opened box cannot be edited");
 
   // keeping with a label takes it out of the world
   b.send({ t: "box-keep", id: boxId, label: "the lake one" });
@@ -329,6 +375,10 @@ try {
       kb.box.origin === "globe",
     "kept: held by khurlee with a label",
   );
+  a.send({ t: "box-lift", id: boxId });
+  expect((await a.next()).reason === "kept", "a kept box cannot be picked up by its creator");
+  a.send({ t: "box-edit", id: boxId, style: "postcard", text: "still too late", media: [], announce: true });
+  expect((await a.next()).reason === "kept", "a kept box cannot be edited");
 
   // a held box can't be put down on top of another one
   a.send({ t: "box-place", size: "s", style: "postcard", text: "a second one", media: [], announce: false, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
@@ -407,7 +457,7 @@ try {
           x.id === boxId &&
           x.loc === "ger" &&
           x.label === "the lake postcard" &&
-          x.text === "meet me where the lake is bluest",
+          x.text === "meet me where the lake is bluest, at dusk",
       ),
     "reconnect: history keeps the text message, not the recalled one; the box is where khurlee put it",
   );

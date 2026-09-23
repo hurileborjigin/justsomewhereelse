@@ -115,6 +115,17 @@ export class Net {
     this.send({ t: "box-delete", id });
   }
 
+  editBox(
+    id: number,
+    contents: { style: BoxStyle; card: BoxCard | null; text: string; media: MediaRef[]; announce: boolean },
+  ) {
+    this.send({ t: "box-edit", id, ...contents });
+  }
+
+  liftBox(id: number) {
+    this.send({ t: "box-lift", id });
+  }
+
   /** Called every frame; sends the local state at SEND_HZ once joined. */
   tick(dt: number, player: Player) {
     if (!this.joined) return;

@@ -37,8 +37,9 @@ const DENY_TEXT: Record<BoxDenyReason, string> = {
   creator: "You can't keep a box you left yourself.",
   owner: "Only its owner can do that.",
   missing: "That box isn't there anymore.",
-  notcreator: "Only the one who left it can take it back.",
-  opened: "It has been opened already, so it stays.",
+  notcreator: "Only the one who left it can do that.",
+  opened: "It has been opened already, so it stays as it is.",
+  kept: "Your partner has kept it already, so it stays as it is.",
 };
 
 export type PlayerSpot = { world: World; tile: number; forward: Vector3; moving: boolean };
@@ -56,7 +57,7 @@ export type TreasureHooks = {
   onDialog(open: boolean): void;
   /** The treasures panel was opened (small screens tidy other panels). */
   onPanelOpen(): void;
-  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox">;
+  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
 };
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };

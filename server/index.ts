@@ -42,7 +42,7 @@ import type {
   StateData,
   Vec3,
 } from "../shared/protocol.ts";
-import { Store, type FullBox } from "./store.ts";
+import { Store, type BoxContents, type FullBox } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 // PLANET_OPEN=1 disables the passphrase entirely: pick a name, walk in.
@@ -239,6 +239,26 @@ function cleanCard(raw: unknown, style: BoxStyle): BoxCard | null {
 
 const GLOBE_TILES = 6 * N * N;
 
+/** Style, dressing, words, files and announcement of a box request, cleaned; null when they make no valid box. */
+function parseContents(msg: {
+  style?: unknown;
+  card?: unknown;
+  text?: unknown;
+  media?: unknown;
+  announce?: unknown;
+}): BoxContents | null {
+  const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
+  const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
+  // a tab from before styles sends none: it is leaving a postcard
+  const style = msg.style ?? "postcard";
+  if (!isStyle(style)) return null;
+  // a note needs words, a photo box needs photos, a postcard needs one or the other
+  const filled =
+    style === "note" ? text.length > 0 : style === "media" ? media.length > 0 : text.length > 0 || media.length > 0;
+  if (!filled) return null;
+  return { style, card: cleanCard(msg.card, style), text, media, announce: !!msg.announce };
+}
+
 /** Building ids ("globe", "b0".."b7", "opera", "ger", ...): short, lowercase, safe to store. */
 const validLoc = (loc: unknown): loc is string => typeof loc === "string" && /^[a-z0-9_-]{1,32}$/.test(loc);
 
@@ -400,21 +420,14 @@ wss.on("connection", (ws) => {
       refreshLobbies();
       console.log(`[planet] player ${id} renamed to ${name}`);
     } else if (msg.t === "box-place") {
-      const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
-      const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
+      const contents = parseContents(msg);
       const loc = msg.loc;
-      // a tab from before styles sends none: it is leaving a postcard
-      const style = (msg as { style?: BoxStyle }).style ?? "postcard";
-      // a note needs words, a photo box needs photos, a postcard needs one or the other
-      const filled =
-        style === "note" ? text.length > 0 : style === "media" ? media.length > 0 : text.length > 0 || media.length > 0;
       if (
+        !contents ||
         !isSize(msg.size) ||
-        !isStyle(style) ||
         !validLoc(loc) ||
         !validFootprint(msg.size, loc, msg.tiles) ||
-        !isVec3(msg.fwd) ||
-        !filled
+        !isVec3(msg.fwd)
       ) {
         deny(ws, "place", "invalid");
         return;
@@ -424,18 +437,7 @@ wss.on("connection", (ws) => {
         deny(ws, "place", denial);
         return;
       }
-      const box = store.addBox({
-        creator: id,
-        size: msg.size,
-        style,
-        card: cleanCard(msg.card, style),
-        text,
-        media,
-        announce: !!msg.announce,
-        loc,
-        tiles: msg.tiles,
-        fwd: msg.fwd,
-      });
+      const box = store.addBox({ creator: id, size: msg.size, ...contents, loc, tiles: msg.tiles, fwd: msg.fwd });
       broadcastBox(box);
       console.log(`[planet] ${store.names()[id]} left a ${box.size.toUpperCase()} treasure box #${box.id} in ${loc}`);
     } else if (msg.t === "box-open") {
@@ -490,7 +492,8 @@ wss.on("connection", (ws) => {
         deny(ws, "put", "missing", boxId);
         return;
       }
-      if (box.owner !== id) {
+      // the owner puts a kept box down; the creator puts their own unkept box down after lifting it
+      if (box.owner !== id && !(box.owner === null && box.creator === id)) {
         deny(ws, "put", "owner", boxId);
         return;
       }
@@ -527,6 +530,60 @@ wss.on("connection", (ws) => {
       for (const m of box.media) removeMediaFile(m.url);
       broadcast({ t: "box-gone", id: box.id });
       console.log(`[planet] ${store.names()[id]} took back treasure box #${box.id}`);
+    } else if (msg.t === "box-edit") {
+      // changing what a box you left holds, only while it is still sealed
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
+      if (!box) {
+        deny(ws, "edit", "missing", boxId);
+        return;
+      }
+      if (box.creator !== id) {
+        deny(ws, "edit", "notcreator", boxId);
+        return;
+      }
+      if (box.owner !== null) {
+        deny(ws, "edit", "kept", boxId);
+        return;
+      }
+      if (box.opened !== null) {
+        deny(ws, "edit", "opened", boxId);
+        return;
+      }
+      const contents = parseContents(msg);
+      if (!contents) {
+        deny(ws, "edit", "invalid", boxId);
+        return;
+      }
+      store.editBox(box.id, contents);
+      // files the new version no longer uses are gone for good
+      const stillUsed = new Set(contents.media.map((m) => m.url));
+      for (const m of box.media) if (!stillUsed.has(m.url)) removeMediaFile(m.url);
+      broadcastBox(store.getBox(box.id)!);
+      console.log(`[planet] ${store.names()[id]} changed treasure box #${box.id}`);
+    } else if (msg.t === "box-lift") {
+      // picking your own box up to move it, until your partner keeps it
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
+      if (!box) {
+        deny(ws, "lift", "missing", boxId);
+        return;
+      }
+      if (box.creator !== id) {
+        deny(ws, "lift", "notcreator", boxId);
+        return;
+      }
+      if (box.owner !== null) {
+        deny(ws, "lift", "kept", boxId);
+        return;
+      }
+      if (box.loc === null) {
+        deny(ws, "lift", "missing", boxId); // already in the pocket
+        return;
+      }
+      store.liftBox(box.id);
+      broadcastBox(store.getBox(box.id)!);
+      console.log(`[planet] ${store.names()[id]} picked treasure box #${box.id} up`);
     }
   });
 

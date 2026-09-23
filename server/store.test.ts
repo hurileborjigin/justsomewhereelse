@@ -165,3 +165,40 @@ test("deleting a box removes it for good", () => {
   );
   assert.deepEqual(s.boxesIn("globe").map((b) => b.id), [2]);
 });
+
+test("editing replaces the contents and the announce flag, nothing else", () => {
+  const s = fresh();
+  const before = s.addBox({ ...draft, card: { stamp: "🐝", place: "Sydney", to: "you", from: "me" } });
+  s.editBox(before.id, {
+    style: "note",
+    card: null,
+    text: "changed my mind",
+    media: [{ url: "/media/b.jpg", kind: "image" }],
+    announce: false,
+  });
+  const after = s.getBox(before.id)!;
+  assert.equal(after.style, "note");
+  assert.equal(after.card, null);
+  assert.equal(after.text, "changed my mind");
+  assert.deepEqual(after.media, [{ url: "/media/b.jpg", kind: "image" }]);
+  assert.equal(after.announce, false);
+  assert.equal(after.size, before.size);
+  assert.equal(after.loc, before.loc);
+  assert.deepEqual(after.tiles, before.tiles);
+  assert.equal(after.created, before.created);
+  assert.equal(after.opened, null);
+});
+
+test("lifting takes the box out of the world but gives it no owner", () => {
+  const s = fresh();
+  const { id } = s.addBox(draft);
+  s.liftBox(id);
+  const box = s.getBox(id)!;
+  assert.equal(box.loc, null);
+  assert.deepEqual(box.tiles, []);
+  assert.equal(box.owner, null);
+  assert.equal(box.creator, 0);
+  assert.deepEqual(s.boxesIn("globe"), []);
+  s.putBox(id, "ger", [12], [1, 0, 0]);
+  assert.equal(s.getBox(id)?.loc, "ger");
+});
