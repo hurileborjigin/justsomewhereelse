@@ -9,6 +9,7 @@ import { CHARACTERS, SURFACE, type CharacterId } from "../shared/protocol.ts";
 import type { Assets } from "./assets.ts";
 import {
   SPAWN_TILES,
+  TILE_COUNT,
   greatCircleDir,
   isBlockedFor as globeBlocked,
   isWater as globeWater,
@@ -30,6 +31,8 @@ export interface World {
   id: string;
   isGlobe: boolean;
   scene: Scene;
+  /** True for a tile key that exists in this world (data from the network may not). */
+  hasTile(k: number): boolean;
   up(pos: Vector3, out: Vector3): Vector3;
   tilePos(k: number, hover: number, out: Vector3): Vector3;
   pathPos(fromK: number, toK: number, t: number, hover: number, out: Vector3): Vector3;
@@ -59,6 +62,10 @@ export class GlobeWorld implements World {
 
   constructor(scene: Scene) {
     this.scene = scene;
+  }
+
+  hasTile(k: number) {
+    return Number.isInteger(k) && k >= 0 && k < TILE_COUNT;
   }
 
   up(pos: Vector3, out: Vector3) {
@@ -228,6 +235,10 @@ export class RoomWorld implements World {
 
   private unkey(k: number): [number, number] {
     return [k % this.w, Math.floor(k / this.w)];
+  }
+
+  hasTile(k: number) {
+    return Number.isInteger(k) && k >= 0 && k < this.w * this.h;
   }
 
   up(_pos: Vector3, out: Vector3) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Group, Scene } from "three";
 import type { Assets } from "./assets.ts";
-import { SPAWN_TILES, isFree, neighborsOf } from "./grid.ts";
+import { SPAWN_TILES, TILE_COUNT, isFree, neighborsOf } from "./grid.ts";
 import { GlobeWorld, ROOM_SPECS, RoomWorld, nearestFreeTile } from "./world.ts";
 
 // RoomWorld only clones the room model; an empty Group is enough here.
@@ -34,6 +34,20 @@ test("room: neighbors stay inside the grid and boxes never unblock furniture", (
   assert.equal(room.isBlockedFor(furniture, "donkey"), true, "furniture survives a box being picked up");
   assert.equal(room.isBlockedFor(room.key(2, 2), "donkey"), false);
   assert.equal(w, 6);
+});
+
+test("hasTile: only keys that exist in the world", () => {
+  const globe = new GlobeWorld(new Scene());
+  assert.equal(globe.hasTile(0), true);
+  assert.equal(globe.hasTile(TILE_COUNT - 1), true);
+  assert.equal(globe.hasTile(TILE_COUNT), false);
+  assert.equal(globe.hasTile(-1), false);
+  assert.equal(globe.hasTile(1.5), false);
+  const room = new RoomWorld("b0", "house_a", fakeAssets);
+  const { w, h } = ROOM_SPECS.house_a;
+  assert.equal(room.hasTile(w * h - 1), true);
+  assert.equal(room.hasTile(w * h), false);
+  assert.equal(room.hasTile(-1), false);
 });
 
 test("nearestFreeTile steps out of a box that appeared under a sleeping player", () => {

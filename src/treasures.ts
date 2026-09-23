@@ -356,6 +356,10 @@ export class Treasures {
     if (box.loc === null || box.tiles.length === 0) return;
     const world = this.hooks.resolveWorld(box.loc);
     if (!world) return; // a room not created yet - mountWorld() catches up later
+    if (!box.tiles.every((t) => world.hasTile(t))) {
+      console.warn(`[treasures] box #${box.id} names tiles that don't exist in ${box.loc}; skipped`, box.tiles);
+      return;
+    }
     const group = this.assets[CHEST[box.size]].clone(true);
     const lid = node(group, "Lid");
     // stand at the footprint's center, front toward the player who left it
