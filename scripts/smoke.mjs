@@ -4,6 +4,7 @@
 // reconnect. Usage: npm run smoke
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
+import { get } from "node:http";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,6 +149,16 @@ try {
   expect(/^\/media\/[\w.-]+\.png$/.test(media.url) && media.kind === "image", "upload returns a media ref");
   const got = await fetch(`http://localhost:${PORT}${media.url}`);
   expect(got.ok && (await got.arrayBuffer()).byteLength === 8, "uploaded file is served back");
+  // raw request: fetch() would normalize the ".." away before it left the client
+  const dotdot = await new Promise((r, j) =>
+    get({ port: PORT, path: "/media/.." }, (res) => {
+      res.resume();
+      r(res.statusCode);
+    }).on("error", j),
+  );
+  expect(dotdot === 404, "a directory under /media is a 404, not a crash");
+  const after = await fetch(`http://localhost:${PORT}${media.url}`);
+  expect(after.ok, "the server keeps answering after a bad media path");
   a.send({ t: "chat", text: "look!", media });
   const me = await a.next();
   const mb = await b.next();
