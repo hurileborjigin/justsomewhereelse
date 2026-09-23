@@ -52,6 +52,47 @@ export type MediaRef = { url: string; kind: "image" | "video" };
 
 export type ChatEntry = { id: number; from: PlayerId; text: string; ts: number; media?: MediaRef };
 
+// ---- treasure boxes -------------------------------------------------------
+
+export type BoxSize = "s" | "m" | "l";
+export type Vec3 = [number, number, number];
+
+export const BOX_TEXT_MAX_LEN = 2000;
+export const BOX_MEDIA_MAX = 6;
+export const BOX_LABEL_MAX_LEN = 40;
+
+// Footprint layout as seen by the player who places the box: columns run
+// across the facing direction (positive = right), rows run away from the
+// player (row 1 = the square directly in front).
+export const BOX_SIZES: Record<BoxSize, { cols: number[]; rows: number[] }> = {
+  s: { cols: [0], rows: [1] },
+  m: { cols: [0, 1], rows: [1, 2] },
+  l: { cols: [-1, 0, 1], rows: [1, 2, 3, 4] },
+};
+
+export const boxTileCount = (size: BoxSize) =>
+  BOX_SIZES[size].cols.length * BOX_SIZES[size].rows.length;
+
+export type Box = {
+  id: number;
+  creator: PlayerId;
+  owner: PlayerId | null; // who kept it; null until first kept
+  size: BoxSize;
+  announce: boolean; // may the partner be told a sealed box is waiting?
+  created: number;
+  opened: number | null; // first opening; null while sealed
+  label: string | null; // the owner's note
+  origin: string; // world id where it was first left (for the postmark)
+  loc: string | null; // world id while standing in the world; null while held
+  tiles: number[]; // footprint tiles in that world; [] while held
+  fwd: Vec3; // placer's facing at placement (orients the chest)
+  // contents - only present when the recipient may see them
+  text?: string;
+  media?: MediaRef[];
+};
+
+export type BoxDenyReason = "invalid" | "overlap" | "partner" | "creator" | "owner" | "missing";
+
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
 export const SETUP_CREATOR: PlayerId = 0;
@@ -62,7 +103,21 @@ export type ClientMessage =
   | ({ t: "state" } & StateData)
   | { t: "rename"; name: string }
   | { t: "chat"; text: string; media?: MediaRef }
-  | { t: "recall"; id: number };
+  | { t: "recall"; id: number }
+  | {
+      t: "box-place";
+      size: BoxSize;
+      text: string;
+      media: MediaRef[];
+      announce: boolean;
+      loc: string;
+      tiles: number[];
+      fwd: Vec3;
+    }
+  | { t: "box-open"; id: number }
+  | { t: "box-keep"; id: number; label?: string }
+  | { t: "box-label"; id: number; label: string }
+  | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 };
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
@@ -75,10 +130,13 @@ export type ServerMessage =
       state: StateData | null; // your persisted position (resume where you were)
       peer: { online: boolean; state: StateData | null };
       history: ChatEntry[];
+      boxes: Box[]; // every box, contents stripped unless you may see them
     }
   | ({ t: "state"; id: PlayerId } & StateData)
   | { t: "names"; names: [string, string] }
   | ({ t: "chat" } & ChatEntry)
   | { t: "recalled"; id: number }
   | { t: "peer-joined"; id: PlayerId }
-  | { t: "peer-left"; id: PlayerId };
+  | { t: "peer-left"; id: PlayerId }
+  | { t: "box"; box: Box } // one box changed (or answers your box-open)
+  | { t: "box-deny"; reason: BoxDenyReason };

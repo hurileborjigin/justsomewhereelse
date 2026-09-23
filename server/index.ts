@@ -222,6 +222,7 @@ wss.on("connection", (ws) => {
           state: peerConn ? (peerConn.live ?? store.state(peerId)) : null,
         },
         history: store.history(200),
+        boxes: [],
       });
       sendTo(peerId, { t: "peer-joined", id });
       refreshLobbies();

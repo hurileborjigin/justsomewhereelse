@@ -25,6 +25,7 @@ A box has these properties.
 - `created`: timestamp.
 - `opened`: timestamp of the first opening, or none while sealed.
 - `label`: an optional short note of at most 40 characters, written by the owner after keeping the box.
+- `origin`: the world id where the box was first left, so the postmark stays right after the box moves.
 - `loc` and `tiles`: the world id and the footprint tiles while the box stands in the world, or none while it is held in a collection.
 - `fwd`: the creator's facing direction at placement, as a unit vector, used to orient the model.
 
@@ -109,10 +110,10 @@ It has three parts.
    It counts boxes that stand in the world, were created by the partner, are still sealed, and have `announce` on.
    When the count is zero it reads "Nothing announced… but who knows".
    The 🎁 button carries the same count as a badge while the panel is closed.
-2. Your collection: one row per held box with its label or "no label yet", a size marker, who it is from, when it was kept, and a thumbnail of the first photo or video.
-   Each row offers Open, Label and "Place here".
+2. Your collection: one row per box you own, held or placed, with its label or "no label yet", a size marker, who it is from, when you found it, where it stands, and a thumbnail of the first photo or video.
+   Held boxes offer Open, Label and "Place here"; placed boxes offer Open and Label.
    Open shows the postcard in reading mode.
-   Label edits the note in place.
+   Label asks for the note in a prompt, the way renaming does.
    "Place here" puts the box into the world in front of the player with the same footprint rules as leaving a new box, and tells the player when it does not fit.
 3. Boxes you left: one row per box the player created, with its size, "sealed" or "opened", and where it is: "on the planet", the building name, or "kept by khurlee".
 
@@ -220,6 +221,7 @@ A new `boxes` table is created on start with `CREATE TABLE IF NOT EXISTS`, next 
 | created | INTEGER NOT NULL | ms timestamp |
 | opened | INTEGER | ms timestamp, null while sealed |
 | label | TEXT | null until labeled |
+| origin | TEXT NOT NULL | world id where the box was first left, for the postmark |
 | loc | TEXT | world id, null while held |
 | tiles | TEXT NOT NULL | JSON array, empty while held |
 | fwd | TEXT NOT NULL | JSON array of three numbers |
