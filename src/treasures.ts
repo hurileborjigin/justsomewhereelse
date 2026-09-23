@@ -419,10 +419,20 @@ export class Treasures {
       title.classList.add("faint");
     }
     const meta = el("div", "tr-meta");
-    meta.textContent =
+    const facts =
       kind === "mine"
-        ? `from ${this.names[box.creator]} · ${SIZE_NAME[box.size]} · found ${fmtDate(box.opened ?? box.created)} · ${this.whereText(box)}`
-        : `${SIZE_NAME[box.size]} · ${box.opened === null ? "sealed" : "opened"} · ${this.whereText(box)}`;
+        ? [
+            `from ${this.names[box.creator]}`,
+            SIZE_NAME[box.size],
+            `found ${fmtDate(box.opened ?? box.created)}`,
+            this.whereText(box),
+          ]
+        : [SIZE_NAME[box.size], box.opened === null ? "sealed" : "opened", this.whereText(box)];
+    // each fact stays on one line; the row wraps only between them
+    facts.forEach((f, i) => {
+      if (i > 0) meta.append(" · ");
+      meta.append(el("span", undefined, f));
+    });
     main.append(title, meta);
 
     const actions = el("div", "tr-actions");
