@@ -8,7 +8,9 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
   Box,
+  BoxCard,
   BoxSize,
+  BoxStyle,
   ChatEntry,
   MediaRef,
   PlayerId,
@@ -20,11 +22,13 @@ const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
 
 /** A box as stored: contents always present (the server strips them per viewer). */
-export type FullBox = Box & { text: string; media: MediaRef[] };
+export type FullBox = Box & { text: string; media: MediaRef[]; card: BoxCard | null };
 
 export type NewBox = {
   creator: PlayerId;
   size: BoxSize;
+  style: BoxStyle;
+  card: BoxCard | null;
   text: string;
   media: MediaRef[];
   announce: boolean;
@@ -48,6 +52,8 @@ type BoxRow = {
   loc: string | null;
   tiles: string;
   fwd: string;
+  style: string;
+  card: string | null;
 };
 
 function parseJson<T>(s: string, fallback: T): T {
@@ -72,8 +78,10 @@ function rowToBox(r: BoxRow): FullBox {
     loc: r.loc,
     tiles: parseJson<number[]>(r.tiles, []),
     fwd: parseJson<Vec3>(r.fwd, [0, 0, 1]),
+    style: r.style as BoxStyle,
     text: r.text,
     media: parseJson<MediaRef[]>(r.media, []),
+    card: r.card ? parseJson<BoxCard | null>(r.card, null) : null,
   };
 }
 
@@ -111,7 +119,9 @@ export class Store {
         origin TEXT NOT NULL,
         loc TEXT,
         tiles TEXT NOT NULL,
-        fwd TEXT NOT NULL
+        fwd TEXT NOT NULL,
+        style TEXT NOT NULL DEFAULT 'postcard',
+        card TEXT
       );
     `);
     const seed = this.db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
@@ -121,6 +131,14 @@ export class Store {
     const cols = this.db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "media")) {
       this.db.exec("ALTER TABLE messages ADD COLUMN media TEXT");
+    }
+    // older databases predate box styles: every existing box is a postcard
+    const boxCols = this.db.prepare("PRAGMA table_info(boxes)").all() as { name: string }[];
+    if (!boxCols.some((c) => c.name === "style")) {
+      this.db.exec("ALTER TABLE boxes ADD COLUMN style TEXT NOT NULL DEFAULT 'postcard'");
+    }
+    if (!boxCols.some((c) => c.name === "card")) {
+      this.db.exec("ALTER TABLE boxes ADD COLUMN card TEXT");
     }
   }
 
@@ -246,8 +264,8 @@ export class Store {
   addBox(input: NewBox): FullBox {
     const res = this.db
       .prepare(
-        `INSERT INTO boxes (creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd)
-         VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
+        `INSERT INTO boxes (creator, owner, size, text, media, announce, created, opened, label, origin, loc, tiles, fwd, style, card)
+         VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.creator,
@@ -260,6 +278,8 @@ export class Store {
         input.loc,
         JSON.stringify(input.tiles),
         JSON.stringify(input.fwd),
+        input.style,
+        input.card ? JSON.stringify(input.card) : null,
       );
     return this.getBox(Number(res.lastInsertRowid))!;
   }
@@ -301,5 +321,10 @@ export class Store {
     this.db
       .prepare("UPDATE boxes SET loc = ?, tiles = ?, fwd = ? WHERE id = ?")
       .run(loc, JSON.stringify(tiles), JSON.stringify(fwd), id);
+  }
+
+  /** The creator took a sealed box back: gone for good (its media files are the server's job). */
+  deleteBox(id: number) {
+    this.db.prepare("DELETE FROM boxes WHERE id = ?").run(id);
   }
 }

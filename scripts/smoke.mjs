@@ -189,6 +189,8 @@ try {
   a.send({
     t: "box-place",
     size: "s",
+    style: "postcard",
+    card: { stamp: "🐝", place: "the lake", to: "my love", from: "your bee" },
     text: "meet me where the lake is bluest",
     media: [media2],
     announce: true,
@@ -199,14 +201,20 @@ try {
   const pa = await a.next();
   const pb = await b.next();
   expect(
-    pa.t === "box" && pa.box.text === "meet me where the lake is bluest" && pa.box.media.length === 1,
-    "creator sees the contents of the box she left",
+    pa.t === "box" &&
+      pa.box.text === "meet me where the lake is bluest" &&
+      pa.box.media.length === 1 &&
+      pa.box.style === "postcard" &&
+      pa.box.card.to === "my love",
+    "creator sees the contents of the box she left, dressing included",
   );
   expect(
     pb.t === "box" &&
       pb.box.id === pa.box.id &&
       pb.box.text === undefined &&
       pb.box.media === undefined &&
+      pb.box.card === undefined &&
+      pb.box.style === "postcard" &&
       pb.box.loc === "globe" &&
       pb.box.origin === "globe" &&
       pb.box.opened === null &&
@@ -216,7 +224,7 @@ try {
   const boxId = pa.box.id;
 
   // refusals: on the partner, overlapping, malformed, creator keeping her own
-  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "globe", tiles: [42], fwd: [0, 0, 1] });
+  b.send({ t: "box-place", size: "s", style: "postcard", text: "x", media: [], announce: false, loc: "globe", tiles: [42], fwd: [0, 0, 1] });
   const denyPartner = await b.next();
   expect(
     denyPartner.reason === "partner" &&
@@ -225,17 +233,18 @@ try {
       denyPartner.id === undefined,
     "can't drop a box on your partner (live tile)",
   );
-  b.send({ t: "box-place", size: "m", text: "x", media: [], announce: false, loc: "globe", tiles: [43, 44, 59, 60], fwd: [0, 0, 1] });
+  b.send({ t: "box-place", size: "m", style: "postcard", text: "x", media: [], announce: false, loc: "globe", tiles: [43, 44, 59, 60], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "overlap", "footprints can't overlap");
-  b.send({ t: "box-place", size: "l", text: "x", media: [], announce: false, loc: "globe", tiles: [100, 101], fwd: [0, 0, 1] });
+  b.send({ t: "box-place", size: "l", style: "postcard", text: "x", media: [], announce: false, loc: "globe", tiles: [100, 101], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "tile count must match the size");
-  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "globe", tiles: [6 * 16 * 16], fwd: [0, 0, 1] });
+  b.send({ t: "box-place", size: "s", style: "postcard", text: "x", media: [], announce: false, loc: "globe", tiles: [6 * 16 * 16], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "globe tiles must exist (one past the last is refused)");
-  b.send({ t: "box-place", size: "s", text: "x", media: [], announce: false, loc: "Globe!", tiles: [300], fwd: [0, 0, 1] });
+  b.send({ t: "box-place", size: "s", style: "postcard", text: "x", media: [], announce: false, loc: "Globe!", tiles: [300], fwd: [0, 0, 1] });
   expect((await b.next()).reason === "invalid", "loc must look like a building id");
   b.send({
     t: "box-place",
     size: "s",
+    style: "postcard",
     text: "",
     media: [{ url: "/media/1-deadbeef.png", kind: "image" }],
     announce: false,
@@ -244,6 +253,10 @@ try {
     fwd: [0, 0, 1],
   });
   expect((await b.next()).reason === "invalid", "media must be a file the upload endpoint stored");
+  b.send({ t: "box-place", size: "s", style: "note", text: "", media: [media2], announce: false, loc: "globe", tiles: [301], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "invalid", "a note needs words");
+  b.send({ t: "box-place", size: "s", style: "media", text: "just words", media: [], announce: false, loc: "globe", tiles: [301], fwd: [0, 0, 1] });
+  expect((await b.next()).reason === "invalid", "a photo box needs a photo");
   a.send({ t: "box-keep", id: boxId });
   const denyCreator = await a.next();
   expect(
@@ -261,8 +274,11 @@ try {
   const oa = await a.next();
   const ob = await b.next();
   expect(
-    ob.t === "box" && ob.box.text === "meet me where the lake is bluest" && typeof ob.box.opened === "number",
-    "opening reveals the postcard",
+    ob.t === "box" &&
+      ob.box.text === "meet me where the lake is bluest" &&
+      ob.box.card.stamp === "🐝" &&
+      typeof ob.box.opened === "number",
+    "opening reveals the postcard and its dressing",
   );
   expect(oa.t === "box" && oa.box.opened === ob.box.opened, "the creator learns it was opened");
 
@@ -281,7 +297,7 @@ try {
   );
 
   // a held box can't be put down on top of another one
-  a.send({ t: "box-place", size: "s", text: "a second one", media: [], announce: false, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
+  a.send({ t: "box-place", size: "s", style: "postcard", text: "a second one", media: [], announce: false, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
   const second = await a.next();
   await b.next();
   expect(second.t === "box" && second.box.tiles[0] === 300, "gloria leaves a second box");
@@ -307,6 +323,34 @@ try {
   const tb = await b.next();
   expect(tb.t === "box" && tb.box.loc === "ger" && tb.box.tiles[0] === 12 && tb.box.owner === 1, "placed back inside the ger");
   expect(ta.t === "box" && ta.box.text !== undefined, "creator still sees her postcard wherever it stands");
+
+  // ---- taking back a sealed box ---------------------------------------------
+  const up3 = await fetch(`http://localhost:${PORT}/media`, {
+    method: "POST",
+    headers: { "content-type": "image/png", "x-planet-pass": PASS },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 3, 3, 3, 3]),
+  });
+  const media3 = await up3.json();
+  a.send({ t: "box-place", size: "s", style: "note", text: "on second thought", media: [media3], announce: false, loc: "globe", tiles: [302], fwd: [0, 0, 1] });
+  const third = await a.next();
+  await b.next();
+  expect(third.t === "box" && third.box.style === "note" && third.box.card === null, "a note carries no postcard dressing");
+  b.send({ t: "box-delete", id: third.box.id });
+  const denyTake = await b.next();
+  expect(
+    denyTake.t === "box-deny" && denyTake.op === "delete" && denyTake.id === third.box.id && denyTake.reason === "notcreator",
+    "only the one who left a box can take it back",
+  );
+  a.send({ t: "box-delete", id: boxId });
+  expect((await a.next()).reason === "opened", "an opened box cannot be taken back");
+  a.send({ t: "box-delete", id: third.box.id });
+  const ga = await a.next();
+  const gb = await b.next();
+  expect(
+    ga.t === "box-gone" && ga.id === third.box.id && gb.t === "box-gone" && gb.id === third.box.id,
+    "taking back a sealed box tells both players it is gone",
+  );
+  expect((await fetch(`http://localhost:${PORT}${media3.url}`)).status === 404, "the taken-back box's photo is deleted from disk");
 
   a.ws.close();
   expect((await b.next()).t === "peer-left", "khurlee told gloria left");

@@ -60,6 +60,17 @@ export type Vec3 = [number, number, number];
 export const BOX_TEXT_MAX_LEN = 2000;
 export const BOX_MEDIA_MAX = 6;
 export const BOX_LABEL_MAX_LEN = 40;
+export const BOX_STAMP_MAX_LEN = 4; // an emoji or two on the stamp
+export const BOX_PLACE_MAX_LEN = 40; // the place written on the postmark and the address line
+
+// What a box holds: a full postcard, a plain sheet of paper with words, or
+// just photos and videos (with an optional caption).
+export type BoxStyle = "postcard" | "note" | "media";
+
+// The postcard's dressing as the sender wrote it. Empty fields fall back to
+// the defaults (the sender's character on the stamp, the world's name, the
+// players' names). Null for notes and photo-only boxes.
+export type BoxCard = { stamp: string; place: string; to: string; from: string };
 
 // Footprint layout as seen by the player who places the box: columns run
 // across the facing direction (positive = right), rows run away from the
@@ -86,13 +97,23 @@ export type Box = {
   loc: string | null; // world id while standing in the world; null while held
   tiles: number[]; // footprint tiles in that world; [] while held
   fwd: Vec3; // placer's facing at placement (orients the chest)
+  style: BoxStyle;
   // contents - only present when the recipient may see them
   text?: string;
   media?: MediaRef[];
+  card?: BoxCard | null;
 };
 
-export type BoxDenyReason = "invalid" | "overlap" | "partner" | "creator" | "owner" | "missing";
-export type BoxOp = "place" | "open" | "keep" | "label" | "put";
+export type BoxDenyReason =
+  | "invalid"
+  | "overlap"
+  | "partner"
+  | "creator" // keeping a box you left yourself
+  | "owner"
+  | "missing"
+  | "notcreator" // taking back a box someone else left
+  | "opened"; // taking back a box that has been opened
+export type BoxOp = "place" | "open" | "keep" | "label" | "put" | "delete";
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
@@ -108,6 +129,8 @@ export type ClientMessage =
   | {
       t: "box-place";
       size: BoxSize;
+      style: BoxStyle;
+      card?: BoxCard | null;
       text: string;
       media: MediaRef[];
       announce: boolean;
@@ -118,7 +141,8 @@ export type ClientMessage =
   | { t: "box-open"; id: number }
   | { t: "box-keep"; id: number; label?: string }
   | { t: "box-label"; id: number; label: string }
-  | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 };
+  | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 }
+  | { t: "box-delete"; id: number }; // take back your own box while it is still sealed
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
@@ -140,4 +164,5 @@ export type ServerMessage =
   | { t: "peer-joined"; id: PlayerId }
   | { t: "peer-left"; id: PlayerId }
   | { t: "box"; box: Box } // one box changed (or answers your box-open)
+  | { t: "box-gone"; id: number } // a sealed box was taken back by its creator
   | { t: "box-deny"; op: BoxOp; id?: number; reason: BoxDenyReason }; // id present whenever the request named a box (place has none)

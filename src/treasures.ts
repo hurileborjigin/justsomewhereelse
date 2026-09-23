@@ -37,6 +37,8 @@ const DENY_TEXT: Record<BoxDenyReason, string> = {
   creator: "You can't keep a box you left yourself.",
   owner: "Only its owner can do that.",
   missing: "That box isn't there anymore.",
+  notcreator: "Only the one who left it can take it back.",
+  opened: "It has been opened already, so it stays.",
 };
 
 export type PlayerSpot = { world: World; tile: number; forward: Vector3; moving: boolean };
@@ -54,7 +56,7 @@ export type TreasureHooks = {
   onDialog(open: boolean): void;
   /** The treasures panel was opened (small screens tidy other panels). */
   onPanelOpen(): void;
-  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox">;
+  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox">;
 };
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };
@@ -193,6 +195,14 @@ export class Treasures {
     this.toast(DENY_TEXT[msg.reason]);
   }
 
+  /** A sealed box was taken back by its creator: gone from the world and from every list. */
+  remove(id: number) {
+    this.unmount(id);
+    this.boxes.delete(id);
+    if (this.pendingOpen === id) this.pendingOpen = null;
+    this.renderPanel();
+  }
+
   /** A room was just created on this client: its boxes can stand in it now. */
   mountWorld(world: World) {
     for (const b of this.boxes.values()) {
@@ -277,6 +287,8 @@ export class Treasures {
           () =>
             this.hooks.net.placeBox({
               size: draft.size,
+              style: "postcard",
+              card: null,
               text: draft.text,
               media,
               announce: draft.announce,

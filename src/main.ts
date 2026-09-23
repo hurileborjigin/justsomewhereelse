@@ -366,6 +366,10 @@ async function boot() {
           treasures.deny(msg);
           break;
         }
+        case "box-gone": {
+          treasures.remove(msg.id);
+          break;
+        }
       }
     },
   });

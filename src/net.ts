@@ -1,6 +1,8 @@
 import {
   SEND_HZ,
+  type BoxCard,
   type BoxSize,
+  type BoxStyle,
   type ClientMessage,
   type MediaRef,
   type PlayerId,
@@ -81,6 +83,8 @@ export class Net {
 
   placeBox(draft: {
     size: BoxSize;
+    style: BoxStyle;
+    card: BoxCard | null;
     text: string;
     media: MediaRef[];
     announce: boolean;
@@ -105,6 +109,10 @@ export class Net {
 
   putBox(id: number, loc: string, tiles: number[], fwd: Vec3) {
     this.send({ t: "box-put", id, loc, tiles, fwd });
+  }
+
+  deleteBox(id: number) {
+    this.send({ t: "box-delete", id });
   }
 
   /** Called every frame; sends the local state at SEND_HZ once joined. */

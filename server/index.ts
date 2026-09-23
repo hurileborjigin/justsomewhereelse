@@ -16,6 +16,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import {
   BOX_LABEL_MAX_LEN,
   BOX_MEDIA_MAX,
+  BOX_PLACE_MAX_LEN,
+  BOX_STAMP_MAX_LEN,
   BOX_TEXT_MAX_LEN,
   CHAT_MAX_LEN,
   MEDIA_MAX_BYTES,
@@ -28,9 +30,11 @@ import {
 } from "../shared/protocol.ts";
 import type {
   Box,
+  BoxCard,
   BoxDenyReason,
   BoxOp,
   BoxSize,
+  BoxStyle,
   ClientMessage,
   MediaRef,
   PlayerId,
@@ -172,8 +176,19 @@ function deny(ws: WebSocket, op: BoxOp, reason: BoxDenyReason, id?: number) {
 
 /** What `viewer` may see of a box: contents only for the creator, or once opened. */
 function viewOf(box: FullBox, viewer: PlayerId): Box {
-  const { text, media, ...rest } = box;
-  return box.creator === viewer || box.opened !== null ? { ...rest, text, media } : rest;
+  const { text, media, card, ...rest } = box;
+  return box.creator === viewer || box.opened !== null ? { ...rest, text, media, card } : rest;
+}
+
+/** Delete an uploaded file by its /media/<name> url; anything odd or already gone is ignored. */
+function removeMediaFile(url: string) {
+  const name = url.split("/").pop() ?? "";
+  if (!/^[\w.-]+$/.test(name) || name === "." || name === "..") return;
+  try {
+    unlinkSync(join(MEDIA_DIR, name));
+  } catch {
+    /* already gone */
+  }
 }
 
 function broadcastBox(box: FullBox) {
@@ -193,6 +208,23 @@ const isMediaRef = (m: unknown): m is MediaRef =>
   existsSync(join(MEDIA_DIR, (m as MediaRef).url.split("/").pop()!));
 
 const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
+const isStyle = (s: unknown): s is BoxStyle => s === "postcard" || s === "note" || s === "media";
+
+/** The sender's postcard dressing: four short trimmed strings; null unless the box is a postcard. */
+function cleanCard(raw: unknown, style: BoxStyle): BoxCard | null {
+  if (style !== "postcard" || typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const field = (key: string, max: number) => {
+    const v = r[key];
+    return typeof v === "string" ? v.slice(0, max).trim() : "";
+  };
+  return {
+    stamp: field("stamp", BOX_STAMP_MAX_LEN),
+    place: field("place", BOX_PLACE_MAX_LEN),
+    to: field("to", NAME_MAX_LEN),
+    from: field("from", NAME_MAX_LEN),
+  };
+}
 
 const GLOBE_TILES = 6 * N * N;
 
@@ -346,16 +378,7 @@ wss.on("connection", (ws) => {
       const m = store.getMessage(mid);
       if (!m || m.sender !== id || Date.now() - m.ts > RECALL_WINDOW_MS) return;
       store.deleteMessage(mid);
-      if (m.media) {
-        const name = m.media.url.split("/").pop() ?? "";
-        if (/^[\w.-]+$/.test(name)) {
-          try {
-            unlinkSync(join(MEDIA_DIR, name));
-          } catch {
-            /* already gone */
-          }
-        }
-      }
+      if (m.media) removeMediaFile(m.media.url);
       broadcast({ t: "recalled", id: mid });
       console.log(`[planet] ${store.names()[id]} recalled message ${mid}`);
     } else if (msg.t === "rename") {
@@ -369,12 +392,17 @@ wss.on("connection", (ws) => {
       const text = String(msg.text ?? "").slice(0, BOX_TEXT_MAX_LEN).trim();
       const media = Array.isArray(msg.media) ? msg.media.filter(isMediaRef).slice(0, BOX_MEDIA_MAX) : [];
       const loc = msg.loc;
+      const style = msg.style;
+      // a note needs words, a photo box needs photos, a postcard needs one or the other
+      const filled =
+        style === "note" ? text.length > 0 : style === "media" ? media.length > 0 : text.length > 0 || media.length > 0;
       if (
         !isSize(msg.size) ||
+        !isStyle(style) ||
         !validLoc(loc) ||
         !validFootprint(msg.size, loc, msg.tiles) ||
         !isVec3(msg.fwd) ||
-        (!text && media.length === 0)
+        !filled
       ) {
         deny(ws, "place", "invalid");
         return;
@@ -387,6 +415,8 @@ wss.on("connection", (ws) => {
       const box = store.addBox({
         creator: id,
         size: msg.size,
+        style,
+        card: cleanCard(msg.card, style),
         text,
         media,
         announce: !!msg.announce,
@@ -465,6 +495,26 @@ wss.on("connection", (ws) => {
       store.putBox(box.id, loc, msg.tiles, msg.fwd);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} placed treasure box #${box.id} in ${loc}`);
+    } else if (msg.t === "box-delete") {
+      // taking back your own box, only while nobody has opened it
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
+      if (!box) {
+        deny(ws, "delete", "missing", boxId);
+        return;
+      }
+      if (box.creator !== id) {
+        deny(ws, "delete", "notcreator", boxId);
+        return;
+      }
+      if (box.opened !== null) {
+        deny(ws, "delete", "opened", boxId);
+        return;
+      }
+      store.deleteBox(box.id);
+      for (const m of box.media) removeMediaFile(m.url);
+      broadcast({ t: "box-gone", id: box.id });
+      console.log(`[planet] ${store.names()[id]} took back treasure box #${box.id}`);
     }
   });
 
