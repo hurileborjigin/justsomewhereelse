@@ -23,6 +23,12 @@ const LID_SPEED = 4; // rad/s
 const REQUEST_TIMEOUT_MS = 15_000;
 const CHEST: Record<BoxSize, AssetName> = { s: "chest_s", m: "chest_m", l: "chest_l" };
 const SIZE_NAME: Record<BoxSize, string> = { s: "S", m: "M", l: "L" };
+// How far below the tile tops a chest's center sits on the globe. A flat base
+// spanning several curved tiles would float at its ends; sinking by about the
+// sagitta of its corners (d^2 / 2R, plus a little for the flat tile facets)
+// lets the corners touch the grass while the middle settles in. Measured with
+// a raycast from each base corner: L's corners float 0.34-0.42 at a 0.03 sink.
+const SINK: Record<BoxSize, number> = { s: 0.03, m: 0.15, l: 0.42 };
 
 const DENY_TEXT: Record<BoxDenyReason, string> = {
   invalid: "The planet didn't accept that box.",
@@ -367,7 +373,7 @@ export class Treasures {
     const center = new Vector3();
     for (const t of box.tiles) center.add(world.tilePos(t, 0, _p));
     center.divideScalar(box.tiles.length);
-    if (world.isGlobe) center.normalize().multiplyScalar(SURFACE - 0.03);
+    if (world.isGlobe) center.normalize().multiplyScalar(SURFACE - SINK[box.size]);
     else center.y = 0;
     group.position.copy(center);
     const up = world.up(center, new Vector3());
