@@ -2,17 +2,12 @@
 // walks player A around, and saves screenshots to /tmp/tinyplanet-*.png so a
 // human (or agent) can eyeball movement, camera and multiplayer sync.
 // Usage: node scripts/drive.mjs [url]
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { chromium } from "playwright-core";
+import { headlessShell } from "./_browser.mjs";
 
 const URL = process.argv[2] ?? "http://localhost:5173";
-const SHELL = join(
-  homedir(),
-  "Library/Caches/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-mac-arm64/chrome-headless-shell",
-);
 
-const browser = await chromium.launch({ executablePath: SHELL, args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: headlessShell(), args: ["--no-sandbox"] });
 
 async function openPlayer(name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -23,7 +18,7 @@ async function openPlayer(name) {
     if (m.type() === "error") console.log(`[${name}] console.error: ${m.text()}`);
   });
   await page.goto(URL);
-  await page.waitForSelector("#who", { timeout: 15000 });
+  await page.waitForFunction(() => window.__tp?.joined(), { timeout: 15000 });
   await page.waitForFunction(() => !document.getElementById("loading"), { timeout: 15000 });
   return page;
 }
@@ -34,9 +29,7 @@ await a.waitForTimeout(1500);
 
 const hud = async (p) =>
   p.evaluate(() => ({
-    who: document.getElementById("who")?.textContent,
     status: document.getElementById("status-text")?.textContent,
-    waiting: document.getElementById("waiting")?.hidden,
   }));
 console.log("A hud:", await hud(a));
 console.log("B hud:", await hud(b));
@@ -58,15 +51,6 @@ await a.keyboard.up("d");
 await a.waitForTimeout(600);
 await a.screenshot({ path: "/tmp/tinyplanet-A2.png" });
 await b.screenshot({ path: "/tmp/tinyplanet-B2.png" });
-
-// B swaps characters, both screenshot
-await b.click("#swap");
-await b.waitForTimeout(800);
-await a.screenshot({ path: "/tmp/tinyplanet-A3.png" });
-await b.screenshot({ path: "/tmp/tinyplanet-B3.png" });
-
-console.log("A hud after swap:", await hud(a));
-console.log("B hud after swap:", await hud(b));
 
 await browser.close();
 console.log("done - screenshots in /tmp/tinyplanet-*.png");

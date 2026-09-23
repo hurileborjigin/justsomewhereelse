@@ -1,17 +1,12 @@
 // Visual check for the chat feature: two headless players, A chats while B has
 // the panel minimized (badge check), B replies, both screenshot.
 // Usage: node scripts/drive-chat.mjs [url]
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { chromium } from "playwright-core";
+import { headlessShell } from "./_browser.mjs";
 
 const URL = process.argv[2] ?? "http://localhost:5173";
-const SHELL = join(
-  homedir(),
-  "Library/Caches/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-mac-arm64/chrome-headless-shell",
-);
 
-const browser = await chromium.launch({ executablePath: SHELL, args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: headlessShell(), args: ["--no-sandbox"] });
 
 async function openPlayer(name) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -30,12 +25,11 @@ const a = await openPlayer("A");
 const b = await openPlayer("B");
 await a.waitForTimeout(1200);
 
-// B walks two steps to the side so both characters are in each other's view,
-// then minimizes the chat panel (to check the unread badge).
+// B walks two steps to the side so both characters are in each other's view.
+// The chat panel starts minimized, which is what the unread badge check needs.
 await b.keyboard.down("a");
 await b.waitForTimeout(1100);
 await b.keyboard.up("a");
-await b.click("#chat-min");
 
 // A types while holding nothing - also proves WASD is ignored while typing
 await a.click("#chat-input");
