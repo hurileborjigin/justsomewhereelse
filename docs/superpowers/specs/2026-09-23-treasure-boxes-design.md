@@ -28,8 +28,11 @@ A box has these properties.
 - `origin`: the world id where the box was first left, so the postmark stays right after the box moves.
 - `loc` and `tiles`: the world id and the footprint tiles while the box stands in the world, or none while it is held in a collection.
 - `fwd`: the creator's facing direction at placement, as a unit vector, used to orient the model.
+- `style`: what the box holds: `postcard` (the full card), `note` (a plain sheet of paper with words) or `media` (photos and videos with an optional caption).
+- `card`: for postcards, the dressing the sender typed: the stamp picture (up to 4 characters), the place (up to 40), and the "To" and "from" names (up to 24 each); empty fields fall back to the defaults; null for the other styles.
 
-A box is never deleted and its media files are never removed.
+A box is deleted only when its creator takes it back while it is still sealed; then its media files go too.
+Otherwise boxes and their media files are never removed.
 
 ### Sizes and footprints
 
@@ -66,6 +69,7 @@ Near cube corners a large footprint may fail to close, and then that size does n
 - Only the owner may label a box or place a held box back into the world.
 - A placed box keeps its owner, so the owner may pick it up again and the creator still may not.
 - Contents are visible to a player only if they created the box or the box has been opened.
+- Only the creator may take a box back, and only while it is still sealed.
 
 ## Player flows
 
@@ -73,7 +77,15 @@ Near cube corners a large footprint may fail to close, and then that size does n
 
 A 🎁 button sits in the top-left corner of the screen and opens the Treasures panel.
 The panel has a "Leave a treasure here" button that opens the postcard in compose mode.
-While any postcard dialog is open, walking input and the E key are ignored, and Esc closes the dialog.
+While any postcard dialog is open, walking input and the E key are ignored, the mouse wheel scrolls the dialog instead of zooming the world, and Esc closes the dialog.
+
+A style picker at the top of the dialog chooses what the box holds: **Postcard**, **Note** or **Just photos**.
+A note needs words, a photo box needs at least one file, a postcard needs one or the other.
+The text field travels between the three layouts, so switching styles keeps what was typed.
+
+On a postcard the sender can type straight onto the dressing: the stamp picture, the "To" name, the place written on the address line (echoed on the stamp caption and the postmark), and the "from" signature.
+Each field comes prefilled with the default and grows with what is typed.
+The reader sees exactly what the sender chose; an empty field shows the default.
 
 The compose dialog shows the sizes that fit where the player currently stands and disables the others with the hint "no room here".
 When any size is disabled, a line under the size picker reads "Sizes greyed out do not fit where you stand", so phone users see the hint too.
@@ -104,6 +116,13 @@ Keeping removes the box from the world for both players and adds it to the keepe
 Leaving it closes the dialog and the box stays where it is with its lid open.
 The creator sees only a footer with "Still sealed" or "Opened by khurlee on 24 Sep".
 
+### Taking a box back
+
+A box you left can be taken back as long as nobody has opened it.
+The postcard view of your own sealed box offers "Take it back" next to Close, and the "Boxes you left" list offers "Take back" on sealed rows; both ask for confirmation.
+The server allows it only for the creator and only while sealed, deletes the box and its media files, and tells both players so the chest disappears at once.
+Once opened, a box can no longer be taken back.
+
 ### The Treasures panel
 
 The panel opens from the 🎁 button and mirrors the chat panel on the opposite side of the screen.
@@ -126,6 +145,13 @@ Once a box that carries a label stands in the world, the action button reads "Op
 
 The postcard is the heart of the feature and gets a real design.
 It is used in three places: composing a new box, reading a box you opened in the world, and rereading a box from the panel.
+
+### Three styles
+
+The reading view follows the style the sender picked.
+A postcard shows the card with its dressing and the prints below.
+A note shows a plain white sheet with faint ruled lines and the words in the same handwriting, then the prints.
+A photo box shows the prints alone, larger, with the caption underneath in handwriting on the dark backdrop.
 
 ### Typography
 
@@ -228,6 +254,8 @@ A new `boxes` table is created on start with `CREATE TABLE IF NOT EXISTS`, next 
 | loc | TEXT | world id, null while held |
 | tiles | TEXT NOT NULL | JSON array, empty while held |
 | fwd | TEXT NOT NULL | JSON array of three numbers |
+| style | TEXT NOT NULL DEFAULT 'postcard' | `postcard`, `note` or `media`; older databases gain the column on start |
+| card | TEXT | JSON of the sender's dressing, or NULL |
 
 The store offers: add a box, get one, list all, list those standing in a world, mark opened, keep, label, and put back.
 
@@ -237,20 +265,22 @@ Shared constants: `BOX_TEXT_MAX_LEN = 2000`, `BOX_MEDIA_MAX = 6`, `BOX_LABEL_MAX
 
 New client messages.
 
-- `box-place` with `size`, `text`, `media`, `announce`, `loc`, `tiles`, `fwd`.
+- `box-place` with `size`, `style`, an optional `card`, `text`, `media`, `announce`, `loc`, `tiles`, `fwd`.
 - `box-open` with `id`.
 - `box-keep` with `id` and an optional `label`.
 - `box-label` with `id` and `label`.
 - `box-put` with `id`, `loc`, `tiles`, `fwd`.
+- `box-delete` with `id`: take back your own box while it is still sealed.
 
 New server messages.
 
 - `welcome` gains `boxes`, the full list filtered for the recipient.
 - `box` with one box, sent to both players after every change, filtered per recipient.
 - `box-deny` with `op` (which request it answers: place, open, keep, label or put), an optional `id` when the request named a box, and `reason`, sent only to the requester when a request is refused.
-  Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`.
+  Reasons: `invalid`, `overlap`, `partner`, `creator`, `owner`, `missing`, `notcreator` (taking back someone else's box), `opened` (taking back a box that has been opened).
+- `box-gone` with `id`, sent to both players when a sealed box was taken back.
 
-Filtering means the server omits `text` and `media` unless the recipient created the box or the box has been opened.
+Filtering means the server omits `text`, `media` and `card` unless the recipient created the box or the box has been opened.
 
 ### Validation
 
@@ -258,6 +288,9 @@ The server does not know the terrain, so terrain rules are the client's job, in 
 The server enforces everything it can.
 
 - Text length, media count, label length (a string or nothing), size value, `fwd` shape.
+- The style value, and the card's four fields trimmed to their limits (a card is stored only for postcards).
+- A note needs words, a photo box needs at least one file, a postcard needs one or the other.
+- Taking back is refused for anyone but the creator (`notcreator`) and once the box has been opened (`opened`).
 - Each media reference has the upload endpoint's shape and names a file that endpoint actually stored.
 - `loc` looks like a building id: 1 to 32 characters of lowercase letters, digits, `_` or `-`.
 - The tile count matches the size and all tiles are distinct non-negative integers, below `6 * N * N` on the globe.
@@ -288,7 +321,6 @@ The server enforces everything it can.
 
 ## Out of scope
 
-- Taking back or deleting your own sealed box.
 - Voice notes or drawings inside boxes.
 - A sparkle or glow that helps spotting sealed boxes from afar.
 - Hanging box photos on the existing room picture frames.

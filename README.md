@@ -101,10 +101,13 @@ galleries later:
 
 ## Treasure boxes 🎁
 
-Write a postcard, tuck photos or videos into it, and leave it as a treasure
-chest anywhere: on the globe or on the floor of any room.
-The 🎁 button (top left) opens your Treasures panel; **Leave a treasure here**
-puts a chest on the squares in front of you.
+Write a postcard, a plain note, or just tuck in photos and videos, and leave it
+as a treasure chest anywhere: on the globe or on the floor of any room.
+The chest button (top left) opens your Treasures panel; **Leave a treasure
+here** puts a chest on the squares in front of you.
+Pick **Postcard**, **Note** or **Just photos** at the top of the card.
+On a postcard you can type your own stamp, place, "To" and "from" straight
+onto the dressing; leave them alone and the defaults stay.
 Three sizes: **S** takes one square, **M** four (2 x 2), **L** twelve (3 x 4) -
 the card only offers sizes that fit where you stand.
 Chests block walking like trees do.
@@ -117,6 +120,8 @@ was left.
 **Leave it here** and it stays, open.
 You can't keep a box you left yourself, but you can reread it and see whether
 it has been opened.
+While nobody has opened it you can **Take it back**, which deletes the box and
+its files for both of you.
 From the panel you can relabel a kept box, reread it, or **Place here** to put
 it down again - in your own house, say, which makes it a treasure house you
 can wander through together.
