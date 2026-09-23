@@ -309,3 +309,28 @@ export class RoomWorld implements World {
     return { tile: this.exitTile, forward: new Vector3(0, 0, -1) };
   }
 }
+
+/**
+ * The nearest tile `character` can stand on, searching outward a few rings.
+ * Used when a persisted position is now inside a treasure box that appeared
+ * while the player was away. Returns `start` itself when nothing nearby is
+ * free (the player can still step out: only target tiles are checked).
+ */
+export function nearestFreeTile(world: World, start: number, character: CharacterId): number {
+  if (!world.isBlockedFor(start, character)) return start;
+  const seen = new Set([start]);
+  let ring = [start];
+  for (let depth = 0; depth < 4; depth++) {
+    const next: number[] = [];
+    for (const k of ring) {
+      for (const n of world.neighbors(k)) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        if (!world.isBlockedFor(n, character)) return n;
+        next.push(n);
+      }
+    }
+    ring = next;
+  }
+  return start;
+}

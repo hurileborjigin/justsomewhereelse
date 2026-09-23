@@ -5,7 +5,7 @@ import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
 import { Chat } from "./chat.ts";
-import { greatCircleDir, tileCenter } from "./grid.ts";
+import { SPAWN_TILES, greatCircleDir, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
 import { Player } from "./player.ts";
@@ -13,7 +13,8 @@ import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
 import { applySkyForHour, createScene } from "./scene.ts";
 import { setupTouchControls } from "./touch.ts";
-import { BUILDING_NAMES, GlobeWorld, RoomWorld } from "./world.ts";
+import { Treasures } from "./treasures.ts";
+import { BUILDING_NAMES, GlobeWorld, RoomWorld, nearestFreeTile } from "./world.ts";
 
 const $ = (id: string) => {
   const el = document.getElementById(id);
@@ -51,6 +52,7 @@ async function boot() {
     if (!room) {
       room = new RoomWorld(b.id, b.kind, assets);
       rooms.set(b.id, room);
+      treasures.mountWorld(room);
     }
     return room;
   };
@@ -74,6 +76,7 @@ async function boot() {
   const dot = $("dot");
   const statusText = $("status-text");
   const enterBtn = $("enter") as HTMLButtonElement;
+  const boxBtn = $("box-btn") as HTMLButtonElement;
 
   /** Characters are fixed: identity 0 is the bee, identity 1 the donkey. */
   function applyCharacters() {
@@ -197,7 +200,7 @@ async function boot() {
         const fwd = new Vector3(0, 0, 1).applyQuaternion(
           new Quaternion(state.q[0], state.q[1], state.q[2], state.q[3]),
         );
-        switchWorld(state.tile, fwd, world);
+        switchWorld(nearestFreeTile(world, state.tile, CHARACTER_OF[myId]), fwd, world);
         return;
       }
     }
@@ -208,9 +211,11 @@ async function boot() {
   }
 
   let doorAction: (() => void) | null = null;
-  const refreshDoorAction = () => {
+  let boxAction: (() => void) | null = null;
+  const refreshActions = () => {
     doorAction = null;
-    if (!player.moving) {
+    boxAction = null;
+    if (!player.moving && !treasures.dialogOpen) {
       if (player.world.isGlobe) {
         const b = doorTileMap.get(player.tile);
         if (b) {
@@ -221,17 +226,31 @@ async function boot() {
         enterBtn.textContent = "Go back outside 🚪 (E)";
         doorAction = leaveBuilding;
       }
+      const box = treasures.actionAt(player.world, player.tile, player.forward);
+      if (box) {
+        // E fires the first visible button, so the box only claims it when alone
+        const key = doorAction ? "" : " (E)";
+        boxBtn.textContent = box.label ? `Open “${box.label}” 🎁${key}` : `Open the treasure box 🎁${key}`;
+        boxAction = () => treasures.open(box);
+      }
     }
     enterBtn.hidden = !doorAction;
+    boxBtn.hidden = !boxAction;
   };
   enterBtn.addEventListener("click", () => {
     doorAction?.();
     enterBtn.blur();
   });
+  boxBtn.addEventListener("click", () => {
+    boxAction?.();
+    boxBtn.blur();
+  });
   addEventListener("keydown", (e) => {
     if (e.code !== "KeyE") return;
-    if (document.activeElement instanceof HTMLInputElement) return;
-    doorAction?.();
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+    if (treasures.dialogOpen) return;
+    (doorAction ?? boxAction)?.();
   });
 
   // ---- networking ----------------------------------------------------------
@@ -279,6 +298,8 @@ async function boot() {
           myId = msg.id;
           names = msg.names;
           applyCharacters();
+          treasures.setIdentity(myId, names);
+          treasures.setAll(msg.boxes); // before restore(): blocked tiles must exist for the nudge
           if (!spawned) {
             restore(msg.state);
             spawned = true;
@@ -330,6 +351,15 @@ async function boot() {
         case "names": {
           names = msg.names;
           chat.setNames(names[myId], names[1 - myId]);
+          treasures.setIdentity(myId, names);
+          break;
+        }
+        case "box": {
+          treasures.apply(msg.box);
+          break;
+        }
+        case "box-deny": {
+          treasures.deny(msg);
           break;
         }
       }
@@ -347,6 +377,37 @@ async function boot() {
     },
     (id) => net.recall(id),
   );
+
+  const placeName = (loc: string) => {
+    if (loc === "globe") return "Tiny Planet";
+    const b = buildings.find((x) => x.id === loc);
+    return b ? `the ${BUILDING_NAMES[b.kind]}` : "somewhere";
+  };
+
+  const treasures = new Treasures(assets, {
+    player: () => ({ world: player.world, tile: player.tile, forward: player.forward, moving: player.moving }),
+    resolveWorld: (loc) => (loc === "globe" ? globeWorld : (rooms.get(loc) ?? null)),
+    placeName,
+    canPlaceOn: (world, k) => {
+      // the donkey's rule covers trees, buildings, furniture, other boxes AND water
+      if (world.isBlockedFor(k, "donkey")) return false;
+      if (world.isGlobe) {
+        if (doorTileMap.has(k) || SPAWN_TILES.includes(k)) return false;
+      } else if (k === (world as RoomWorld).exitTile) {
+        return false;
+      }
+      return !(remote.present && remote.loc === world.id && remote.tile === k);
+    },
+    onDialog: (open) => input.setMuted(open),
+    onPanelOpen: () => {
+      if (innerWidth < 640) chat.setOpen(false);
+    },
+    net,
+  });
+  // on a phone the two panels would overlap: opening one tucks the other away
+  $("chat-open").addEventListener("click", () => {
+    if (innerWidth < 640) treasures.setPanelOpen(false);
+  });
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
@@ -376,7 +437,8 @@ async function boot() {
 
     player.update(dt, input, cam.camera);
     cam.update(dt, player);
-    refreshDoorAction();
+    treasures.update(dt);
+    refreshActions();
 
     // reunion hops: whenever the two end up on neighboring squares
     const adjacent = together && remote.tile >= 0 && world.areNeighbors(player.tile, remote.tile);
@@ -428,6 +490,8 @@ async function boot() {
       teleport: (tile: number) => switchWorld(tile, player.forward.clone(), globeWorld),
       setHour: (h: number | null) => (hourOverride = h),
       animals: () => animals.debug(),
+      joined: () => net.joined,
+      treasures: { list: () => treasures.list() },
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,
