@@ -417,6 +417,7 @@ async function boot() {
     onPanelOpen: () => {
       if (innerWidth < 640) chat.setOpen(false);
     },
+    takePicture: () => photo.take(PHOTO_AIM[player.character]),
     net,
   });
   // on a phone the two panels would overlap: opening one tucks the other away

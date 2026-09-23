@@ -59,6 +59,8 @@ export type TreasureHooks = {
   onDialog(open: boolean): void;
   /** The treasures panel was opened (small screens tidy other panels). */
   onPanelOpen(): void;
+  /** Photo mode: a JPEG of the world, or null when the sender came back without a shot. */
+  takePicture(): Promise<Blob | null>;
   net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
 };
 
@@ -277,6 +279,26 @@ export class Treasures {
 
   // ---- placing ----------------------------------------------------------------
 
+  private fitsAt(spot: PlayerSpot): Record<BoxSize, boolean> {
+    const { world, tile, forward } = spot;
+    const free = (k: number) => this.hooks.canPlaceOn(world, k);
+    return {
+      s: footprintFor(world, tile, forward, "s", free) !== null,
+      m: footprintFor(world, tile, forward, "m", free) !== null,
+      l: footprintFor(world, tile, forward, "l", free) !== null,
+    };
+  }
+
+  /** Walking is allowed while framing a shot; the dialog is muted again afterwards. */
+  private async photo(): Promise<Blob | null> {
+    this.hooks.onDialog(false);
+    try {
+      return await this.hooks.takePicture();
+    } finally {
+      this.hooks.onDialog(true);
+    }
+  }
+
   private compose() {
     if (this.postcard.isOpen) return;
     const spot = this.hooks.player();
@@ -284,30 +306,28 @@ export class Treasures {
       this.toast("Stand still first");
       return;
     }
-    const { world, tile } = spot;
-    const forward = spot.forward.clone();
-    const free = (k: number) => this.hooks.canPlaceOn(world, k);
-    const fits: Record<BoxSize, boolean> = {
-      s: footprintFor(world, tile, forward, "s", free) !== null,
-      m: footprintFor(world, tile, forward, "m", free) !== null,
-      l: footprintFor(world, tile, forward, "l", free) !== null,
-    };
     this.setPanelOpen(false);
     this.postcard.compose({
-      mark: this.mark(this.me, world.id, new Date()),
-      fits,
+      mark: this.mark(this.me, spot.world.id, new Date()),
+      fits: this.fitsAt(spot),
+      fitsNow: () => this.fitsAt(this.hooks.player()),
+      takePicture: () => this.photo(),
       onSend: async (draft) => {
         const size = draft.size;
         if (!size) throw new Error("Pick a size first");
+        // the sender may have walked during photo mode: the box goes where they stand now
+        const now = this.hooks.player();
+        if (now.moving) throw new Error("Stand still first");
+        const { world, tile } = now;
+        const forward = now.forward.clone();
         const contents = await this.contentsOf(draft);
-        const tiles = footprintFor(world, tile, forward, size, free);
+        const tiles = footprintFor(world, tile, forward, size, (k) => this.hooks.canPlaceOn(world, k));
         if (!tiles) throw new Error("No room for that size here anymore");
         await this.request(
           "place",
           undefined,
           (b, isNew) => isNew && b.creator === this.me,
-          () =>
-            this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
+          () => this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
         );
       },
     });
@@ -338,6 +358,7 @@ export class Treasures {
       mark: this.mark(box.creator, box.origin, new Date(box.created)),
       fits: { s: false, m: false, l: false },
       initial: { contents, announce: box.announce },
+      takePicture: () => this.photo(),
       onSend: async (draft) => {
         const contents = await this.contentsOf(draft);
         // only a still-sealed, still-unkept update is the answer to a save; an opened

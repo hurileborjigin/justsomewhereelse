@@ -51,6 +51,8 @@ export type ComposeOptions = {
   onSend: (draft: Draft) => Promise<void>;
   /** Photo mode: hides the dialog, returns a JPEG of the world, or null when cancelled. Absent when unavailable. */
   takePicture?: () => Promise<Blob | null>;
+  /** Which sizes fit where the player stands now: asked again when photo mode returns (new boxes only). */
+  fitsNow?: () => Record<BoxSize, boolean>;
 };
 
 export type ReadOptions = {
@@ -117,6 +119,7 @@ export class Postcard {
   /** Returns false to keep the dialog open (a half-written card). */
   private guard: (() => boolean) | null = null;
   private cleanup: (() => void) | null = null;
+  private away = false;
 
   constructor(onToggle: (open: boolean) => void) {
     this.onToggle = onToggle;
@@ -126,7 +129,7 @@ export class Postcard {
     this.root = root;
     this.fileInput = file;
     addEventListener("keydown", (e) => {
-      if (e.code === "Escape" && this.isOpen) this.close();
+      if (e.code === "Escape" && this.isOpen && !this.away) this.close();
     });
     // a click on the dark backdrop (not on the sheet) closes too
     this.root.addEventListener("click", (e) => {
@@ -136,6 +139,14 @@ export class Postcard {
 
   get isOpen() {
     return !this.root.hidden;
+  }
+
+  /** Photo mode: hide the dialog (it stays open, nothing is lost) and bring it back. */
+  setAway(on: boolean) {
+    this.away = on;
+    this.root.classList.toggle("pc-away", on);
+    // a focused caption or message field must not keep WASD muted while the viewfinder is up
+    if (on && this.root.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
   }
 
   close() {
@@ -170,16 +181,29 @@ export class Postcard {
     const total = () => keep.length + files.length;
 
     const error = el("div", "pc-error");
+    let flipper: ReturnType<Postcard["flipCard"]> | null = null;
+    // reassigned once the size buttons exist, below; nothing calls this before then
+    let applyFits: (fits: Record<BoxSize, boolean>) => void = () => {};
     const editor = pictureEditor(
       c?.style === "postcard" && c.picture
         ? { source: c.picture.image, focus: { ...c.picture.focus }, zoom: c.picture.zoom, caption: c.picture.caption }
         : null,
       {
-        takePicture: opts.takePicture,
+        takePicture: opts.takePicture
+          ? async () => {
+              this.setAway(true);
+              try {
+                return await opts.takePicture!();
+              } finally {
+                this.setAway(false);
+                flipper?.flip("picture");
+                if (opts.fitsNow) applyFits(opts.fitsNow());
+              }
+            }
+          : undefined,
         onError: (m) => (error.textContent = m),
       },
     );
-    let flipper: ReturnType<Postcard["flipCard"]> | null = null;
     // one text field travels between the three layouts, so switching keeps the words
     const textarea = el("textarea", "pc-text");
     textarea.maxLength = BOX_TEXT_MAX_LEN;
@@ -272,7 +296,7 @@ export class Postcard {
         textarea.placeholder = `Dear ${fields.to.value.trim() || opts.mark.to},`;
         const card = this.card(opts.mark, textarea, fields);
         card.querySelector(".pc-msg")!.append(count);
-        flipper =this.flipCard(card, editor.root, "compose", false);
+        flipper = this.flipCard(card, editor.root, "compose", false);
         body.append(flipper.root);
       } else if (style === "note") {
         textarea.placeholder = "Write something…";
@@ -319,10 +343,22 @@ export class Postcard {
       return b;
     });
     // the per-button "no room here" tooltip never shows on a phone
-    const hint =
-      editing || ORDER.every((s) => opts.fits[s])
-        ? null
-        : el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
+    const hint = el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
+    hint.hidden = editing || ORDER.every((s) => opts.fits[s]);
+    applyFits = (fits: Record<BoxSize, boolean>) => {
+      for (const b of sizeBtns) {
+        const s = b.dataset.size as BoxSize;
+        b.disabled = !fits[s];
+        b.title = fits[s] ? "" : "no room here";
+      }
+      if (size && !fits[size]) {
+        size = null;
+        for (const b of sizeBtns) b.classList.remove("picked");
+        error.textContent = "Pick a size that fits where you stand now";
+      }
+      const someOut = ORDER.some((s) => !fits[s]);
+      hint.hidden = !someOut;
+    };
     const announce = el("label", "pc-announce");
     const check = el("input");
     check.type = "checkbox";
@@ -385,7 +421,7 @@ export class Postcard {
         sendLabel();
       }
     });
-    controls.append(...(editing ? [] : [sizes]), ...(hint ? [hint] : []), announce, send, error);
+    controls.append(...(editing ? [] : [sizes]), hint, announce, send, error);
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), styles, body, controls);
