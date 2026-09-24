@@ -15,8 +15,10 @@ npm run dev      # game server on :3001 + Vite dev server on :5173
 
 Open http://localhost:5173. You'll be asked **who you are** (the two
 identities live in the database - rename yourself anytime with the ✏️ next to
-your name) and for the **secret word** (`PLANET_PASS` env var; defaults to
-`planet` in dev). Each browser remembers you after the first login.
+your name) and for the **secret word**. On the very first visit gloria
+(identity 0) chooses the word in-game; set the `PLANET_PASS` env var to use a
+fixed word instead (the drive scripts and tests use `planet`). Each browser
+remembers you after the first login.
 
 **Walk with WASD or arrow keys** (one square per step; trees block, grass
 doesn't). The **Swap** button trades characters at any time.
@@ -48,13 +50,18 @@ volume). One-time setup with [flyctl](https://fly.io/docs/flyctl/):
 ```bash
 fly launch --no-deploy        # create the app (keep the existing fly.toml)
 fly volumes create planet_data --size 1 --region fra
-fly secrets set PLANET_PASS=your-secret-word
 fly deploy
 ```
 
-After that, every update is just `fly deploy`. The app stays always-on
-(`min_machines_running = 1`) so nobody waits at the door - a shared-cpu
-256 MB machine plus the volume costs a few euros per month.
+After that, every update is just `fly deploy` (or a push to `main`, which the
+GitHub Action tests and deploys). The secret word is chosen in-game by
+gloria on the very first visit and stored hashed in the database. To start
+over with a new word, run the **Reset the secret word** action from the
+GitHub Actions tab: it runs `scripts/forget-secret-word.mjs` on the machine,
+the planet drops back into setup mode at once, and gloria picks the new word
+at her next login. The app stays always-on (`min_machines_running = 1`) so
+nobody waits at the door - a shared-cpu 256 MB machine plus the volume costs
+a few euros per month.
 
 ## The world is a grid
 
