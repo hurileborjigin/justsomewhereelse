@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FIXED_OWNERS, type PlayerId } from "../shared/protocol.ts";
+import { FIXED_OWNERS, KNOCK_TTL_MS, type PlayerId } from "../shared/protocol.ts";
 import { Access } from "./access.ts";
 
 /** A tiny in-memory owner map, standing in for the store during unit tests. */
 function make() {
   const owners = new Map<string, PlayerId>();
   const ownerOf = (id: string): PlayerId | null =>
-    id in FIXED_OWNERS ? FIXED_OWNERS[id] : (owners.get(id) ?? null);
+    Object.hasOwn(FIXED_OWNERS, id) ? FIXED_OWNERS[id] : (owners.get(id) ?? null);
   const setOwner = (id: string, owner: PlayerId | null) => {
     if (owner === null) owners.delete(id);
     else owners.set(id, owner);
@@ -15,7 +15,7 @@ function make() {
   let t = 0;
   const clock = { now: () => t, tick: (ms: number) => (t += ms) };
   const access = new Access(ownerOf, clock.now);
-  return { access, setOwner, clock };
+  return { access, setOwner, ownerOf, clock };
 }
 
 test("claiming an open building makes it the claimer's", () => {
@@ -166,4 +166,32 @@ test("grants and knocksFor report the live state for each building's owner", () 
   assert.deepEqual(access.knocksFor(1), [{ id: "house2", from: 0 }]);
   access.open(0, "house1");
   assert.deepEqual(access.grants(), [{ id: "house1", guest: 1 }]);
+});
+
+test("'constructor' and '__proto__' are ordinary open buildings, not prototype leaks", () => {
+  const { access, setOwner, ownerOf } = make();
+  for (const id of ["constructor", "__proto__"]) {
+    assert.equal(access.knock(1, id, true), "open", `${id}: knocking at an open building is refused as already open`);
+    assert.equal(access.claim(0, id, 0), null, `${id}: claiming an open building succeeds`);
+    setOwner(id, 0);
+    assert.equal(ownerOf(id), 0, `${id}: ownerOf now answers the claimer, not the prototype's property`);
+    assert.equal(access.claim(1, id, 1), "owner", `${id}: the other player cannot take it`);
+  }
+});
+
+test("a non-string id is refused as invalid instead of reaching the store", () => {
+  const { access } = make();
+  const bad = 123 as unknown as string;
+  assert.equal(access.validBuildingId(bad), false);
+  assert.equal(access.claim(0, bad, 0), "invalid");
+  assert.equal(access.knock(0, bad, true), "invalid");
+  assert.equal(access.open(0, bad), "invalid");
+});
+
+test("open refuses a stale knock on its own, even when expire() never ran", () => {
+  const { access, setOwner, clock } = make();
+  setOwner("house1", 0);
+  access.knock(1, "house1", true);
+  clock.tick(KNOCK_TTL_MS);
+  assert.equal(access.open(0, "house1"), "noknock");
 });

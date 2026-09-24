@@ -18,16 +18,16 @@ export class Access {
     this.now = now;
   }
 
-  /** The existing world-id pattern, minus the globe itself (never a building). */
+  /** The existing world-id pattern, minus the globe itself (never a building); a non-string is refused too. */
   validBuildingId(id: string): boolean {
-    return /^[a-z0-9_-]{1,32}$/.test(id) && id !== "globe";
+    return typeof id === "string" && /^[a-z0-9_-]{1,32}$/.test(id) && id !== "globe";
   }
 
   /** `owner` is the sender's own id to claim, or null to open the building to both. */
   claim(me: PlayerId, id: string, owner: PlayerId | null): BuildingDenyReason | null {
     this.ended = [];
     if (!this.validBuildingId(id)) return "invalid";
-    if (id in FIXED_OWNERS) return "fixed";
+    if (Object.hasOwn(FIXED_OWNERS, id)) return "fixed";
     const current = this.ownerOf(id);
     if (owner !== null) {
       if (current !== null || owner !== me) return "owner";

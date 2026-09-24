@@ -286,3 +286,19 @@ test("owners lists every owned building plus the fixed houses", () => {
     ],
   );
 });
+
+test("'constructor' and '__proto__' are never mistaken for fixed houses", () => {
+  const s = fresh();
+  assert.equal(s.ownerOf("constructor"), null);
+  assert.equal(s.ownerOf("__proto__"), null);
+  s.setOwner("constructor", 0);
+  assert.equal(s.ownerOf("constructor"), 0);
+  assert.deepEqual(
+    s.owners().sort((a, b) => a.id.localeCompare(b.id)),
+    [
+      { id: "constructor", owner: 0 },
+      { id: "hall", owner: 1 },
+      { id: "hive", owner: 0 },
+    ],
+  );
+});

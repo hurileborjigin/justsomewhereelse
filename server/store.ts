@@ -376,7 +376,7 @@ export class Store {
 
   /** null means open to both. The fixed houses are answered from code, never from the table. */
   ownerOf(id: string): PlayerId | null {
-    if (id in FIXED_OWNERS) return FIXED_OWNERS[id];
+    if (Object.hasOwn(FIXED_OWNERS, id)) return FIXED_OWNERS[id];
     const row = this.db.prepare("SELECT owner FROM buildings WHERE id = ?").get(id) as
       | { owner: number }
       | undefined;
