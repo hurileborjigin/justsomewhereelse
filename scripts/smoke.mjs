@@ -551,6 +551,139 @@ try {
       ),
     "reconnect: history keeps the text message, not the recalled one; the box is where khurlee put it",
   );
+  expect(
+    Array.isArray(w2.buildings) &&
+      w2.buildings.length === 2 &&
+      w2.buildings.some((x) => x.id === "hive" && x.owner === 0) &&
+      w2.buildings.some((x) => x.id === "hall" && x.owner === 1) &&
+      w2.doors.length === 0 &&
+      w2.knocks.length === 0,
+    "welcome carries the fixed houses' owners, and no doors or knocks yet",
+  );
+  expect((await b.next()).t === "peer-joined", "khurlee told gloria reconnected");
+
+  // ---- building ownership: claim, knock, let in, and grants ending -----------
+  a2.send({ t: "building-claim", id: "b0", owner: 0 });
+  const claimA = await a2.next();
+  const claimB = await b.next();
+  expect(
+    claimA.t === "building" &&
+      claimA.id === "b0" &&
+      claimA.owner === 0 &&
+      claimB.t === "building" &&
+      claimB.id === "b0" &&
+      claimB.owner === 0,
+    "gloria claims b0, both players see her as owner",
+  );
+
+  b.send({ t: "building-claim", id: "b0", owner: 1 });
+  const claimDeny = await b.next();
+  expect(
+    claimDeny.t === "building-deny" && claimDeny.op === "claim" && claimDeny.id === "b0" && claimDeny.reason === "owner",
+    "khurlee cannot claim gloria's building",
+  );
+
+  a2.send({ t: "building-claim", id: "hive", owner: 0 });
+  expect((await a2.next()).reason === "fixed", "the Hive refuses even its own owner's claim");
+  b.send({ t: "building-claim", id: "hive", owner: 1 });
+  expect((await b.next()).reason === "fixed", "the Hive refuses the other player too");
+  a2.send({ t: "building-claim", id: "hall", owner: 0 });
+  expect((await a2.next()).reason === "fixed", "the Copper Hall refuses gloria too");
+  b.send({ t: "building-claim", id: "hall", owner: 1 });
+  expect((await b.next()).reason === "fixed", "the Copper Hall refuses even its own owner's claim");
+
+  a2.send({ t: "building-claim", id: "globe", owner: 0 });
+  expect((await a2.next()).reason === "invalid", "the globe itself is never a building id");
+
+  b.send({ t: "knock", id: "b0" });
+  const knockMsg = await a2.next();
+  expect(
+    knockMsg.t === "knock" && knockMsg.id === "b0" && knockMsg.from === 1,
+    "khurlee knocks at b0, gloria the owner is told",
+  );
+
+  a2.send({ t: "door-open", id: "b0" });
+  const openA = await a2.next();
+  const openB = await b.next();
+  expect(
+    openA.t === "door" &&
+      openA.id === "b0" &&
+      openA.guest === 1 &&
+      openA.open === true &&
+      openB.t === "door" &&
+      openB.id === "b0" &&
+      openB.guest === 1 &&
+      openB.open === true,
+    "gloria lets khurlee in, both players see the door open",
+  );
+
+  const stateAt = (loc) => ({ t: "state", p: [0, 0.6, 0], q: [0, 0, 0, 1], m: 1, loc, tile: 0 });
+  b.send(stateAt("b0"));
+  const stateIn = await a2.next();
+  expect(stateIn.t === "state" && stateIn.id === 1 && stateIn.loc === "b0", "gloria is told khurlee walked into b0");
+  b.send(stateAt("globe"));
+  const stateOut = await a2.next();
+  expect(stateOut.t === "state" && stateOut.id === 1 && stateOut.loc === "globe", "gloria is told khurlee stepped back out");
+  const closedA = await a2.next();
+  const closedB = await b.next();
+  expect(
+    closedA.t === "door" &&
+      closedA.id === "b0" &&
+      closedA.guest === 1 &&
+      closedA.open === false &&
+      closedB.t === "door" &&
+      closedB.id === "b0" &&
+      closedB.guest === 1 &&
+      closedB.open === false,
+    "the grant ends the moment khurlee steps back out, told to both",
+  );
+
+  b.send({ t: "door-open", id: "b0" });
+  expect((await b.next()).reason === "owner", "only the owner opens the door");
+  a2.send({ t: "door-open", id: "b0" });
+  expect((await a2.next()).reason === "noknock", "no knock is pending any more");
+
+  a2.ws.close();
+  expect((await b.next()).t === "peer-left", "khurlee told gloria left");
+  b.send({ t: "knock", id: "b0" });
+  expect((await b.next()).reason === "away", "gloria is off the planet, the knock is refused");
+
+  const a3 = client("A3");
+  await a3.open;
+  await a3.next(); // lobby
+  a3.send({ t: "join", id: 0, pass: PASS });
+  await a3.next(); // welcome
+  expect((await b.next()).t === "peer-joined", "khurlee told gloria is back");
+
+  b.send({ t: "knock", id: "b0" });
+  const knockAgain = await a3.next();
+  expect(
+    knockAgain.t === "knock" && knockAgain.id === "b0" && knockAgain.from === 1,
+    "gloria is told khurlee knocked again",
+  );
+  a3.send({ t: "door-open", id: "b0" });
+  const openA2 = await a3.next();
+  const openB2 = await b.next();
+  expect(
+    openA2.t === "door" && openA2.open === true && openB2.t === "door" && openB2.open === true,
+    "gloria lets khurlee in again",
+  );
+
+  b.ws.close();
+  const peerLeftB = await a3.next();
+  expect(peerLeftB.t === "peer-left" && peerLeftB.id === 1, "gloria told khurlee left");
+  const grantEnded = await a3.next();
+  expect(
+    grantEnded.t === "door" && grantEnded.id === "b0" && grantEnded.guest === 1 && grantEnded.open === false,
+    "khurlee's disconnect ends his grant, gloria is told",
+  );
+
+  a3.send({ t: "building-claim", id: "b0", owner: null });
+  const openedToBoth = await a3.next();
+  expect(
+    openedToBoth.t === "building" && openedToBoth.id === "b0" && openedToBoth.owner === null,
+    "gloria opens b0 back to both",
+  );
 
   console.log("SMOKE PASSED");
   done = true;

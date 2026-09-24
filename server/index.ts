@@ -37,6 +37,7 @@ import type {
   StateData,
   Vec3,
 } from "../shared/protocol.ts";
+import { Access } from "./access.ts";
 import { parseContents } from "./contents.ts";
 import { Store, type FullBox } from "./store.ts";
 
@@ -50,6 +51,7 @@ const ENV_PASS = process.env.PLANET_PASS ?? null;
 const DB_PATH = process.env.DB_PATH ?? "data/planet.db";
 
 const store = new Store(DB_PATH);
+const access = new Access((id) => store.ownerOf(id), Date.now);
 
 const distDir = fileURLToPath(new URL("../dist", import.meta.url));
 const serveStatic = existsSync(distDir) ? sirv(distDir, { single: true }) : null;
@@ -312,6 +314,9 @@ wss.on("connection", (ws) => {
         },
         history: store.history(200),
         boxes: store.boxes().map((b) => viewOf(b, wanted)),
+        buildings: store.owners(),
+        doors: access.grants(),
+        knocks: access.knocksFor(id),
         build: BUILD_ID,
       });
       sendTo(peerId, { t: "peer-joined", id });
@@ -335,6 +340,9 @@ wss.on("connection", (ws) => {
         me.lastSave = now;
       }
       sendTo((1 - id) as PlayerId, { t: "state", id, ...state });
+      for (const g of access.moved(id, state.loc)) {
+        broadcast({ t: "door", id: g.id, guest: g.guest, open: false });
+      }
     } else if (msg.t === "chat") {
       const text = String(msg.text ?? "").slice(0, CHAT_MAX_LEN).trim();
       let media: MediaRef | undefined;
@@ -535,6 +543,35 @@ wss.on("connection", (ws) => {
       store.liftBox(box.id);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} picked treasure box #${box.id} up`);
+    } else if (msg.t === "building-claim") {
+      const reason = access.claim(id, msg.id, msg.owner);
+      if (reason) {
+        send(ws, { t: "building-deny", op: "claim", id: msg.id, reason });
+        return;
+      }
+      store.setOwner(msg.id, msg.owner);
+      broadcast({ t: "building", id: msg.id, owner: msg.owner });
+      for (const g of access.lastEnded()) {
+        broadcast({ t: "door", id: g.id, guest: g.guest, open: false });
+      }
+      console.log(`[planet] ${store.names()[id]} ${msg.owner === null ? "opened" : "claimed"} ${msg.id}`);
+    } else if (msg.t === "knock") {
+      const owner = store.ownerOf(msg.id);
+      const reason = access.knock(id, msg.id, owner !== null && conns.has(owner));
+      if (reason) {
+        send(ws, { t: "building-deny", op: "knock", id: msg.id, reason });
+        return;
+      }
+      sendTo(owner as PlayerId, { t: "knock", id: msg.id, from: id });
+      console.log(`[planet] ${store.names()[id]} knocked at ${msg.id}`);
+    } else if (msg.t === "door-open") {
+      const result = access.open(id, msg.id);
+      if (typeof result === "string") {
+        send(ws, { t: "building-deny", op: "open", id: msg.id, reason: result });
+        return;
+      }
+      broadcast({ t: "door", id: msg.id, guest: result.guest, open: true });
+      console.log(`[planet] ${store.names()[id]} let ${store.names()[result.guest]} into ${msg.id}`);
     }
   };
 
@@ -567,6 +604,9 @@ wss.on("connection", (ws) => {
     if (c.live) store.saveState(id, c.live);
     conns.delete(id);
     sendTo((1 - id) as PlayerId, { t: "peer-left", id });
+    for (const g of access.left(id)) {
+      broadcast({ t: "door", id: g.id, guest: g.guest, open: false });
+    }
     refreshLobbies();
     console.log(`[planet] ${store.names()[id]} (${id}) left`);
   });
@@ -580,6 +620,9 @@ setInterval(() => {
     }
     c.alive = false;
     c.ws.ping();
+  }
+  for (const g of access.expire()) {
+    broadcast({ t: "door", id: g.id, guest: g.guest, open: false });
   }
 }, 30_000);
 
