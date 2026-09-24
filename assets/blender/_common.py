@@ -65,6 +65,24 @@ PALETTE = {
     "highland_fringe": "d9924f",
     "muzzle": "3a2a22",
     "horn_tip": "4a3a2a",
+    # the Hive: honey gold, amber glow, honey-stone plinths
+    "honey": "e8a93a",
+    "honey_light": "f5cf6e",
+    "honey_dark": "b8741f",
+    "honey_wall": "f3d08a",
+    "honey_floor": "d8a04a",
+    "honey_stone": "e6c98e",
+    "honey_stone_dark": "c9a466",
+    "amber": "ffb347",
+    # the Copper Hall: dark brick, slate, verdigris, warm round windows
+    "dark_brick": "6e3528",
+    "dark_brick_2": "592a20",
+    "slate": "4c5561",
+    "slate_light": "68717d",
+    "slate_dark": "3a414b",
+    "copper_dark": "3f8c76",
+    "timber": "6a4026",
+    "window_glow": "ffd98a",
 }
 
 
