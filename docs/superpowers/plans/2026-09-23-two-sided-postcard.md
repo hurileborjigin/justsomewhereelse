@@ -2869,7 +2869,8 @@ git commit -m "Drive and README: the picture side, the flip and photo mode"
 
 ### Task 11: Name the planet Haven
 
-The planet is officially called Haven from now on. The name "Haven" (in any casing, and the `haven` prefix) disappears from copy, code, tests, scripts and docs. Infrastructure identifiers stay: the Fly app id in `fly.toml` and its URL cannot be renamed in place, the `tp-auth` and `tp-reloaded-for` storage keys stay so nobody is logged out, the `__tp` dev hook and the `[planet]` log prefix are not the name.
+The planet is officially called Haven from now on.
+The old name, in any casing, and its lower-case one-word prefix on temporary files disappear from copy, code, tests, scripts and docs. Infrastructure identifiers stay: the Fly app id in `fly.toml` and its URL cannot be renamed in place, the `tp-auth` and `tp-reloaded-for` storage keys stay so nobody is logged out, the `__tp` dev hook and the `[planet]` log prefix are not the name.
 
 **Files:**
 - Modify: `index.html` (the `<title>` and the loading line), `src/main.ts` (`placeName`), `src/treasures.ts` (a doc comment), `server/index.ts` (the header comment and the HTTP root message), `package.json` and `package-lock.json` (the `name` fields), `Dockerfile` (comment), `README.md` (title and the script table), `scripts/smoke.mjs`, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs`, `scripts/fit_room.py`, `assets/blender/_common.py`, `docs/superpowers/specs/2026-09-23-treasure-boxes-design.md`, `docs/superpowers/specs/2026-09-23-two-sided-postcard-design.md`, `docs/superpowers/plans/2026-09-23-treasure-boxes.md`, `docs/superpowers/plans/2026-09-23-two-sided-postcard.md`.
@@ -2890,9 +2891,9 @@ Paste the hit list into the report. Every hit is handled in the next step.
 - `server/index.ts`: the header comment starts `// Haven game server: ...`; the root response reads `Haven game server is running. In dev, open the Vite URL instead.`.
 - `package.json` `"name": "haven"`; in `package-lock.json` change both top-level `"name": "tiny-planet"` fields (the root and `packages[""]`) to `"haven"` by hand; do not regenerate the lock file.
 - `Dockerfile` comment: `# Haven - single Node process serving the built client + WebSocket.`
-- `README.md`: title `# Haven 🌍🐝🫏`; every `/tmp/haven-` becomes `/tmp/haven-`; read the whole file and reword any sentence that says "Haven" in prose.
-- Scripts: every `haven-` file prefix becomes `haven-` (`scripts/smoke.mjs` temp database, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs` screenshot paths and console lines); `scripts/fit_room.py` and `assets/blender/_common.py` docstrings say Haven.
-- Docs: in both specs and both plans replace "Haven" with "Haven" and `haven-` with `haven-` (the older plan quotes code that said `"Haven"`; it becomes `"Haven"` too, so the docs read as the current product). One sentence per line stays as it is.
+- `README.md`: title `# Haven 🌍🐝🫏`; every `/tmp/` screenshot prefix that carried the old name becomes `/tmp/haven-`; read the whole file and reword any sentence that says the old name in prose.
+- Scripts: every temporary-file prefix that carried the old name becomes `haven-` (`scripts/smoke.mjs` temp database, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs` screenshot paths and console lines); `scripts/fit_room.py` and `assets/blender/_common.py` docstrings say Haven.
+- Docs: in both specs and both plans replace the old name with "Haven" and the old prefix with `haven-` (the older plan quotes code that returned the old name for the globe; it returns `"Haven"` now, so the docs read as the current product). One sentence per line stays as it is.
 
 - [ ] **Step 3: Verify**
 
@@ -2908,8 +2909,10 @@ With `PLANET_PASS=planet npm run dev` running against a fresh database, compose 
 
 ```bash
 git add -A
-git commit -m "Haven: the planet has its name; Haven is gone from copy, code, scripts and docs"
+git commit -m "Haven: the planet has its name; the old name is gone from copy, code, scripts and docs"
 ```
+
+The commit that landed this task spells the old name in its message; that is git history, not the repository's copy.
 
 `git add -A` is acceptable here because the change is a rename across many files; check `git status` first so nothing untracked (screenshots, databases) is inside the worktree.
 
