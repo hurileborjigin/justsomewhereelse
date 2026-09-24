@@ -151,19 +151,21 @@ test("opening a building to both drops a pending knock too", () => {
   const { access, setOwner } = make();
   setOwner("house1", 0);
   access.knock(1, "house1", true);
-  assert.deepEqual(access.knocksFor(0), [{ id: "house1", from: 1 }]);
+  assert.deepEqual(access.knocksFor(0), [{ id: "house1", from: 1, ageMs: 0 }]);
   access.claim(0, "house1", null);
   assert.deepEqual(access.knocksFor(0), []);
 });
 
 test("grants and knocksFor report the live state for each building's owner", () => {
-  const { access, setOwner } = make();
+  const { access, setOwner, clock } = make();
   setOwner("house1", 0);
   setOwner("house2", 1);
   access.knock(1, "house1", true);
+  clock.tick(1500);
   access.knock(0, "house2", true);
-  assert.deepEqual(access.knocksFor(0), [{ id: "house1", from: 1 }]);
-  assert.deepEqual(access.knocksFor(1), [{ id: "house2", from: 0 }]);
+  clock.tick(500);
+  assert.deepEqual(access.knocksFor(0), [{ id: "house1", from: 1, ageMs: 2000 }], "each knock says how old it is");
+  assert.deepEqual(access.knocksFor(1), [{ id: "house2", from: 0, ageMs: 500 }]);
   access.open(0, "house1");
   assert.deepEqual(access.grants(), [{ id: "house1", guest: 1 }]);
 });

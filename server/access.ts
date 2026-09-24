@@ -120,12 +120,12 @@ export class Access {
     return [...this.grantsById].map(([id, g]) => ({ id, guest: g.guest }));
   }
 
-  /** Live pending knocks at buildings this owner owns. */
-  knocksFor(owner: PlayerId): { id: string; from: PlayerId }[] {
+  /** Live pending knocks at buildings this owner owns, with how long ago each was made. */
+  knocksFor(owner: PlayerId): { id: string; from: PlayerId; ageMs: number }[] {
     const now = this.now();
-    const result: { id: string; from: PlayerId }[] = [];
+    const result: { id: string; from: PlayerId; ageMs: number }[] = [];
     for (const [id, k] of this.knocks) {
-      if (now - k.at < KNOCK_TTL_MS && this.ownerOf(id) === owner) result.push({ id, from: k.from });
+      if (now - k.at < KNOCK_TTL_MS && this.ownerOf(id) === owner) result.push({ id, from: k.from, ageMs: now - k.at });
     }
     return result;
   }

@@ -4,7 +4,8 @@
 // must knock again; A opens it to both while B waits and B walks in freely.
 // Then the Hive: B knocks, A lets him in from inside on the exit tile, B
 // reloads inside and is put back on the doorstep. Signs at both treasure
-// houses, and a pennant in each colour.
+// houses, a pennant in each colour, and the camera fading the building a
+// player steps out of (the Hive, the Copper Hall, the opera house).
 // Screenshots land in /tmp/haven-houses-t6-*.png.
 // Run against a FRESH database so nothing is owned yet:
 //   rm -f /tmp/tp-t6.db; DB_PATH=/tmp/tp-t6.db PLANET_PASS=planet npm run dev
@@ -62,6 +63,7 @@ const b3 = await building(a, "b3");
 const hive = await building(a, "hive");
 const hall = await building(a, "hall");
 const b4 = await building(a, "b4");
+const opera = await building(a, "opera");
 
 /** Stands `p` on building `bd`'s doorstep facing it. */
 async function toDoor(p, bd) {
@@ -79,7 +81,8 @@ async function stepAside(p, bd) {
   }, bd);
   await p.waitForTimeout(300);
 }
-const text = (p, sel) => p.evaluate((s) => document.querySelector(s)?.textContent ?? "", sel);
+// labels keep the door emoji on the last word with a no-break space; compare them as plain text
+const text = (p, sel) => p.evaluate((s) => (document.querySelector(s)?.textContent ?? "").replaceAll("\u00a0", " "), sel);
 const visible = (p, sel) => p.evaluate((s) => !document.querySelector(s)?.hidden, sel);
 const loc = (p) => p.evaluate(() => window.__tp.debug().loc);
 const waitToast = async (p, want) => {
@@ -87,7 +90,7 @@ const waitToast = async (p, want) => {
   return text(p, "#toast");
 };
 const waitEnter = async (p, want) => {
-  await p.waitForFunction((w) => document.getElementById("enter").textContent === w, want, { timeout: 5000 }).catch(() => {});
+  await p.waitForFunction((w) => document.getElementById("enter").textContent.replaceAll("\u00a0", " ") === w, want, { timeout: 5000 }).catch(() => {});
   return text(p, "#enter");
 };
 
@@ -96,6 +99,10 @@ await toDoor(a, b3);
 check((await text(a, "#enter")) === "Enter the crooked house 🚪 (E)", "A: an open house reads Enter the crooked house");
 check(await visible(a, "#sign-btn"), "A: the Sign button shows on the doorstep");
 await shot(a, "01-doorstep-open");
+check(
+  (await a.evaluate(() => getComputedStyle(document.querySelector("#enter .key-hint")).display)) === (MOBILE ? "none" : "inline"),
+  MOBILE ? "A: no (E) hint on a phone" : "A: the (E) hint shows on a keyboard",
+);
 await a.click("#sign-btn");
 check((await text(a, "#sign-text")) === "The crooked house is open to both.", "A: the sign says open to both");
 check((await text(a, "#sign-action")) === "Make it mine", "A: the sign offers Make it mine");
@@ -144,8 +151,22 @@ await toDoor(a, b3);
 check((await text(a, "#let-in")) === "Let khurlee in (E)", "A: Let khurlee in (E) on the doorstep");
 check((await text(a, "#enter")) === "Enter your crooked house 🚪", "A: the Enter button gives up its (E)");
 await shot(a, "08-let-in-outside");
-if (MOBILE) await a.click("#let-in");
-else await a.keyboard.press("KeyE"); // E fires the first button: the let-in
+await a.evaluate(() => {
+  // count door-open requests: a double tap must send only one
+  const send = WebSocket.prototype.send;
+  window.__opens = 0;
+  WebSocket.prototype.send = function (data) {
+    if (String(data).includes('"door-open"')) window.__opens++;
+    return send.call(this, data);
+  };
+});
+if (MOBILE) await a.evaluate(() => { const btn = document.getElementById("let-in"); btn.click(); btn.click(); });
+else {
+  await a.keyboard.press("KeyE"); // E fires the first button: the let-in
+  await a.evaluate(() => document.getElementById("let-in").click()); // and a stray click right after
+}
+const opens = await a.evaluate(() => window.__opens);
+check(opens === 1, "A: a double press sends one door-open");
 check((await waitToast(b, "gloria opened the door")) === "gloria opened the door", "B: gloria opened the door");
 check((await loc(a)) === "globe", "A: E let him in rather than walking in herself");
 await a.waitForFunction(() => document.getElementById("let-in").hidden, null, { timeout: 5000 });
@@ -247,7 +268,23 @@ await b.waitForTimeout(800);
 check((await loc(b)) === "globe", "B: logging in inside the Hive puts him outside");
 check((await b.evaluate(() => window.__tp.debug().tile)) === hive.doorTiles[0], "B: on the Hive's doorstep");
 check((await text(b, "#enter")) === "Knock at gloria's Hive 🚪 (E)", "B: and he must knock again");
+check(Object.keys(await b.evaluate(() => window.__tp.fade())).includes("hive"), "B: the Hive behind him fades so he can be seen");
 await shot(b, "16-restored-doorstep");
+
+// ---- the camera: a building behind a player who steps out of it fades ------
+await stepAside(b, hive);
+for (const bd of [hive, hall, opera]) {
+  await a.evaluate((id) => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.id === id)), bd.id);
+  await a.waitForTimeout(300);
+  await a.evaluate(() => window.__tp.leaveBuilding());
+  await a.waitForFunction((id) => window.__tp.fade()[id] === 0.25, bd.id, { timeout: 5000 }).catch(() => {});
+  check((await a.evaluate(() => window.__tp.fade()))[bd.id] === 0.25, `A: stepping out of the ${bd.id}, it fades behind her`);
+  await shot(a, `17-camera-${bd.id}`);
+  await a.evaluate((d) => window.__tp.lookAt(d.tiles[0]), bd);
+  await a.waitForFunction((id) => !(id in window.__tp.fade()), bd.id, { timeout: 5000 }).catch(() => {});
+  check(!(bd.id in (await a.evaluate(() => window.__tp.fade()))), `A: turned to face the ${bd.id}, it is solid again`);
+  await shot(a, `18-camera-${bd.id}-solid`);
+}
 
 await browser.close();
 console.log(process.exitCode ? "DOORS FAILED" : "DOORS PASSED");

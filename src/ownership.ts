@@ -25,10 +25,15 @@ export class Ownership {
   }
 
   /** Replace everything from a welcome (also after a reconnect). */
-  reset(w: { buildings: { id: string; owner: PlayerId }[]; doors: DoorGrant[]; knocks: { id: string; from: PlayerId }[] }) {
+  reset(w: {
+    buildings: { id: string; owner: PlayerId }[];
+    doors: DoorGrant[];
+    knocks: { id: string; from: PlayerId; ageMs: number }[];
+  }) {
     this.owners = new Map(w.buildings.map((b) => [b.id, b.owner]));
     this.grants = new Map(w.doors.map((d) => [d.id, d.guest]));
-    this.knocks = new Map(w.knocks.map((k) => [k.id, { from: k.from, at: this.now() }]));
+    // a knock keeps its age across a reconnect, so it still expires ten minutes after it was made
+    this.knocks = new Map(w.knocks.map((k) => [k.id, { from: k.from, at: this.now() - k.ageMs }]));
     this.sent.clear();
   }
 
@@ -48,6 +53,11 @@ export class Ownership {
   /** A `knock` message: someone knocks at a building this player owns (again renews it). */
   knocked(id: string, from: PlayerId) {
     this.knocks.set(id, { from, at: this.now() });
+  }
+
+  /** The owner pressed Let in: the knock is answered here and now, so the button cannot fire twice. */
+  answered(id: string) {
+    this.knocks.delete(id);
   }
 
   /** A `door` message: a grant started or ended. */

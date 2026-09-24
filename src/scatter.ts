@@ -43,7 +43,7 @@ const LANDMARKS: {
 // The two treasure houses, placed AFTER all the seeded scatter so every tree,
 // building and grass tuft stays where it was. Their tiles and doorsteps were
 // chosen among tiles that scatter leaves completely empty (no building, tree,
-// grass, lake, spawn, doorstep or landmark plaza; see world.test.ts). gloria's
+// grass, lake, spawn, doorstep or landmark plaza; see scatter.test.ts). gloria's
 // Hive faces the opera house across a small square on face 3; khurlee's Copper
 // Hall stands a few steps from the ger and the Frauenkirche on face 2, its
 // door toward them. Like the landmarks, the first tile touches the door.
@@ -119,6 +119,7 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
       const building = assets.barn.clone(true);
       building.position.copy(mid).multiplyScalar(SURFACE - 0.03);
       tangentFrameQuat(mid.clone(), axis, building.quaternion);
+      building.userData.building = `b${buildings.length}`; // the camera fades buildings by this (src/fade.ts)
       scene.add(building);
       occupy([k, nb], true);
       // doors at both gable ends: the walkable tiles just beyond each end
@@ -139,6 +140,7 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
       // face the door tile (models keep their door on the local +Z side)
       tangentFrameQuat(c.clone(), greatCircleDir(c, tileCenter(doorTile), new Vector3()), building.quaternion);
       building.scale.setScalar(0.9 + rng() * 0.2);
+      building.userData.building = `b${buildings.length}`;
       scene.add(building);
       occupy([k], true);
       protectedTiles.add(doorTile); // keep the doorstep clear of trees
@@ -192,6 +194,7 @@ function placeLandmark(
   const obj = assets[lm.kind].clone(true);
   obj.position.copy(anchor).multiplyScalar(SURFACE - 0.03);
   tangentFrameQuat(anchor.clone(), greatCircleDir(anchor, tileCenter(door), new Vector3()), obj.quaternion);
+  obj.userData.building = lm.kind;
   scene.add(obj);
   occupy(tiles, true);
   return { id: lm.kind, kind: lm.kind, tiles, doorTiles: [door] };

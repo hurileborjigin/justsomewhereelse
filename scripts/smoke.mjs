@@ -661,8 +661,28 @@ try {
     knockAgain.t === "knock" && knockAgain.id === "b0" && knockAgain.from === 1,
     "gloria is told khurlee knocked again",
   );
-  a3.send({ t: "door-open", id: "b0" });
-  const openA2 = await a3.next();
+
+  // the knock outlives gloria stepping away: her next welcome carries it with its age
+  a3.ws.close();
+  expect((await b.next()).t === "peer-left", "khurlee told gloria left while he waits");
+  const a4 = client("A4");
+  await a4.open;
+  await a4.next(); // lobby
+  a4.send({ t: "join", id: 0, pass: PASS });
+  const w4 = await a4.next();
+  expect(
+    w4.t === "welcome" &&
+      w4.knocks.length === 1 &&
+      w4.knocks[0].id === "b0" &&
+      w4.knocks[0].from === 1 &&
+      typeof w4.knocks[0].ageMs === "number" &&
+      w4.knocks[0].ageMs >= 0 &&
+      w4.knocks[0].ageMs < 60_000,
+    "welcome carries the pending knock and how long ago it was made",
+  );
+  expect((await b.next()).t === "peer-joined", "khurlee told gloria is back again");
+  a4.send({ t: "door-open", id: "b0" });
+  const openA2 = await a4.next();
   const openB2 = await b.next();
   expect(
     openA2.t === "door" && openA2.open === true && openB2.t === "door" && openB2.open === true,
@@ -670,16 +690,16 @@ try {
   );
 
   b.ws.close();
-  const peerLeftB = await a3.next();
+  const peerLeftB = await a4.next();
   expect(peerLeftB.t === "peer-left" && peerLeftB.id === 1, "gloria told khurlee left");
-  const grantEnded = await a3.next();
+  const grantEnded = await a4.next();
   expect(
     grantEnded.t === "door" && grantEnded.id === "b0" && grantEnded.guest === 1 && grantEnded.open === false,
     "khurlee's disconnect ends his grant, gloria is told",
   );
 
-  a3.send({ t: "building-claim", id: "b0", owner: null });
-  const openedToBoth = await a3.next();
+  a4.send({ t: "building-claim", id: "b0", owner: null });
+  const openedToBoth = await a4.next();
   expect(
     openedToBoth.t === "building" && openedToBoth.id === "b0" && openedToBoth.owner === null,
     "gloria opens b0 back to both",

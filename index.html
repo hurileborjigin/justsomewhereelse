@@ -277,7 +277,7 @@
       @media (max-width: 640px) {
         body.touch #actions {
           left: auto;
-          right: 12px;
+          right: 16px;
           bottom: 88px;
           transform: none;
           width: calc(100vw - 212px);
@@ -295,9 +295,13 @@
         }
         body.touch #toast {
           /* up top, clear of the character, the d-pad and the stack */
-          top: 70px;
+          top: max(70px, calc(var(--panels-bottom, 0px) + 10px)); /* and below an open panel */
           bottom: auto;
         }
+      }
+      /* phones have no E key: the hint on the action buttons is for keyboards only */
+      body.touch .key-hint {
+        display: none;
       }
       #actions #sign-btn {
         padding: 5px 14px;

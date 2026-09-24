@@ -32,6 +32,8 @@ export interface World {
   id: string;
   isGlobe: boolean;
   scene: Scene;
+  /** How far the camera may zoom out here. */
+  zoomMax: number;
   /** True for a tile key that exists in this world (data from the network may not). */
   hasTile(k: number): boolean;
   up(pos: Vector3, out: Vector3): Vector3;
@@ -67,6 +69,7 @@ const _b = new Vector3();
 export class GlobeWorld implements World {
   id = "globe";
   isGlobe = true;
+  zoomMax = 11; // the whole planet fits on screen
   scene: Scene;
 
   constructor(scene: Scene) {
@@ -388,7 +391,7 @@ export function nearestFreeTile(world: World, start: number, character: Characte
   if (!world.isBlockedFor(start, character)) return start;
   const seen = new Set([start]);
   let ring = [start];
-  for (let depth = 0; depth < 4; depth++) {
+  for (let depth = 0; depth < 6; depth++) {
     const next: number[] = [];
     for (const k of ring) {
       for (const n of world.neighbors(k)) {

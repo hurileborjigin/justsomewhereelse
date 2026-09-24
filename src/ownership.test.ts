@@ -53,9 +53,20 @@ test("the welcome carries owners, grants and knocks", () => {
   o.reset({ buildings: [{ id: "b3", owner: 1 }], doors: [{ id: "b3", guest: 0 }], knocks: [] });
   assert.equal(o.ownerOf("b3"), 1);
   assert.equal(doorChoice(0, "b3", o), "enter");
-  o.reset({ buildings: [], doors: [], knocks: [{ id: "hive", from: 1 }] });
+  o.reset({ buildings: [], doors: [], knocks: [{ id: "hive", from: 1, ageMs: 0 }] });
   assert.equal(o.ownerOf("b3"), null, "a later welcome replaces everything");
   assert.equal(letIn(0, "hive", o), 1);
+});
+
+test("a knock from a welcome keeps its age: it expires ten minutes after it was made", () => {
+  let t = 1_000_000;
+  const o = new Ownership(() => t);
+  o.reset({ buildings: [], doors: [], knocks: [{ id: "hive", from: 1, ageMs: KNOCK_TTL_MS - 30_000 }] });
+  assert.equal(letIn(0, "hive", o), 1);
+  t += 29_999;
+  assert.equal(letIn(0, "hive", o), 1);
+  t += 1;
+  assert.equal(letIn(0, "hive", o), null);
 });
 
 test("letIn names the pending knocker to the owner only", () => {
@@ -72,6 +83,13 @@ test("opening the door answers the knock", () => {
   o.knocked("hive", 1);
   o.door("hive", 1, true);
   assert.equal(letIn(0, "hive", o), null);
+});
+
+test("pressing Let in answers the knock at once, before the server's door message", () => {
+  const o = mirror();
+  o.knocked("hive", 1);
+  o.answered("hive");
+  assert.equal(letIn(0, "hive", o), null, "a second tap finds nothing to answer");
 });
 
 test("a knock expires after ten minutes, and knocking again renews it", () => {

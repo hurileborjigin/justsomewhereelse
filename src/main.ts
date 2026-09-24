@@ -5,12 +5,13 @@ import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
 import { Chat } from "./chat.ts";
-import { toast } from "./dom.ts";
+import { el, toast } from "./dom.ts";
 import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
 import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
 import { Pennants } from "./pennant.ts";
+import { BuildingFade } from "./fade.ts";
 import { PHOTO_AIM, PhotoMode } from "./photo.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
@@ -60,6 +61,7 @@ async function boot() {
   scene.add(assets.globe);
   const globeWorld = new GlobeWorld(scene);
   const buildings = scatterWorld(scene, assets);
+  const fade = new BuildingFade(scene); // buildings between the camera and the character fade out
   const animals = new Animals(scene, assets, buildings);
   const doorTileMap = new Map<number, Building>();
   for (const b of buildings) for (const d of b.doorTiles) doorTileMap.set(d, b);
@@ -287,6 +289,7 @@ async function boot() {
     setText(signAction, s.action === "open" ? "Open it to both" : "Make it mine");
   };
   function setSign(b: Building | null) {
+    if (!b && !signAt) return; // nothing to close: leave the walking mute to whoever owns it (photo mode)
     signAt = b;
     signEl.hidden = !b;
     input.setMuted(!!b || treasures.dialogOpen);
@@ -298,6 +301,12 @@ async function boot() {
     signBtn.blur();
   });
   $("sign-close").addEventListener("click", () => setSign(null));
+  /** Photo mode: the sign steps away first, it has no place in the viewfinder. */
+  function takePhoto() {
+    setSign(null);
+    input.setMuted(false); // walking works while framing a shot (the Treasures dialog mutes again afterwards)
+    return photo.take(PHOTO_AIM[player.character]);
+  }
   signAction.addEventListener("click", () => {
     if (!signAt) return;
     const owner = ownership.ownerOf(signAt.id);
@@ -315,6 +324,14 @@ async function boot() {
   function setText(e: HTMLElement, text: string) {
     if (e.textContent !== text) e.textContent = text;
   }
+  /** An action button's label: text, an optional icon, and the " (E)" hint that touch phones hide (no E key there). */
+  function setAction(btn: HTMLElement, text: string, key: boolean, icon?: () => Node) {
+    const id = `${text}|${key}|${!!icon}`;
+    if (btn.dataset.label === id) return;
+    btn.dataset.label = id;
+    const hint = key ? [el("span", "key-hint", " (E)")] : [];
+    btn.replaceChildren(text, ...(icon ? [icon()] : []), ...hint);
+  }
   const refreshActions = () => {
     letInAction = null;
     doorAction = null;
@@ -328,32 +345,34 @@ async function boot() {
       const at = doorstep ?? inside;
       const guest = at ? letIn(myId, at.id, ownership) : null;
       if (at && guest !== null) {
-        setText(letInBtn, `Let ${names[guest]} in (E)`);
-        letInAction = () => net.openDoor(at.id);
+        setAction(letInBtn, `Let ${names[guest]} in`, true);
+        letInAction = () => {
+          // the button goes at once, even within this frame: a second tap cannot send a second door-open
+          ownership.answered(at.id);
+          letInAction = null;
+          letInBtn.hidden = true;
+          net.openDoor(at.id);
+        };
       }
       // E fires the first visible button, so only that one shows (E)
-      const e = letInAction ? "" : " (E)";
+      const e = !letInAction;
       if (doorstep) {
         const b = doorstep;
         if (doorChoice(myId, b.id, ownership) === "enter") {
-          setText(enterBtn, `Enter ${phrase(b)} 🚪${e}`);
+          setAction(enterBtn, `Enter ${phrase(b)}\u00a0🚪`, e);
           doorAction = () => enterBuilding(b);
         } else {
-          setText(enterBtn, `Knock at ${phrase(b)} 🚪${e}`);
+          setAction(enterBtn, `Knock at ${phrase(b)}\u00a0🚪`, e);
           doorAction = () => knockAt(b);
         }
       } else if (inside) {
-        setText(enterBtn, `Go back outside 🚪${e}`);
+        setAction(enterBtn, "Go back outside\u00a0🚪", e); // the door never wraps onto a line of its own
         doorAction = leaveBuilding;
       }
       const box = treasures.actionAt(player.world, player.tile, player.forward);
       if (box) {
-        const before = box.label ? `Open “${box.label}” ` : "Open the treasure box ";
-        const after = letInAction || doorAction ? "" : " (E)";
-        if (boxBtn.dataset.label !== before + after) {
-          boxBtn.dataset.label = before + after;
-          boxBtn.replaceChildren(before, chestIcon(), ...(after ? [after] : []));
-        }
+        const text = box.label ? `Open “${box.label}” ` : "Open the treasure box ";
+        setAction(boxBtn, text, !letInAction && !doorAction, chestIcon);
         boxAction = () => treasures.open(box);
       }
     }
@@ -573,7 +592,7 @@ async function boot() {
     onPanelOpen: () => {
       if (innerWidth < 640) chat.setOpen(false);
     },
-    takePicture: () => photo.take(PHOTO_AIM[player.character]),
+    takePicture: takePhoto,
     cancelPicture: () => photo.cancel(),
     net,
   });
@@ -587,6 +606,13 @@ async function boot() {
     cam.resize();
   };
   addEventListener("resize", resize);
+  // a phone floats the toast at the top: it goes below whichever panel is open instead of over it
+  const panels = [$("treasure-panel"), $("chat-panel")];
+  const panelsObserver = new ResizeObserver(() => {
+    const bottom = Math.max(0, ...panels.map((p) => p.getBoundingClientRect()).map((r) => (r.height > 0 ? r.bottom : 0)));
+    document.documentElement.style.setProperty("--panels-bottom", `${Math.round(bottom)}px`);
+  });
+  for (const p of panels) panelsObserver.observe(p);
   resize();
 
   // ---- frame loop -----------------------------------------------------------
@@ -594,6 +620,7 @@ async function boot() {
   const timer = new Timer();
   timer.connect(document); // a hidden tab resumes without one huge step
   const up = new Vector3();
+  const _chest = new Vector3();
   const camRight = new Vector3();
   const Y = new Vector3(0, 1, 0);
   let remoteScene: Scene | null = null;
@@ -612,6 +639,9 @@ async function boot() {
 
     player.update(dt, input, cam.camera);
     cam.update(dt, player);
+    // any building hiding the character (say the tall Hive right behind a player who just stepped out) fades
+    const chest = world.isGlobe ? _chest.copy(player.pos).setLength(player.pos.length() + 0.5) : null;
+    fade.update(dt, cam.camera.position, chest);
     treasures.update(dt);
     refreshActions();
 
@@ -668,10 +698,11 @@ async function boot() {
       joined: () => net.joined,
       ownership: () => ownership.snapshot(),
       pennants: () => pennants.debug(),
+      fade: () => fade.debug(),
       neighbors: (tile: number) => neighborsOf(tile),
       walkable: (tile: number) => !isBlockedFor(tile, false) && !doorTileMap.has(tile),
       treasures: { list: () => treasures.list() },
-      photo: () => photo.take(PHOTO_AIM[player.character]),
+      photo: takePhoto,
       look: () => cam.look,
       lookAt: (tile: number) =>
         switchWorld(

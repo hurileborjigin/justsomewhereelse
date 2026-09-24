@@ -197,7 +197,7 @@ export type ServerMessage =
       boxes: Box[]; // every box, contents stripped unless you may see them
       buildings: { id: string; owner: PlayerId }[]; // every non-empty owner, the fixed houses included
       doors: DoorGrant[]; // open grants
-      knocks: { id: string; from: PlayerId }[]; // pending knocks for the recipient
+      knocks: { id: string; from: PlayerId; ageMs: number }[]; // pending knocks for the recipient, and how long ago each was made
       build: string; // the server's build id; a tab running another bundle reloads once (see main.ts)
     }
   | ({ t: "state"; id: PlayerId } & StateData)

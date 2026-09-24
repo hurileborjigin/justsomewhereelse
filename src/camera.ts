@@ -1,7 +1,6 @@
 import { PerspectiveCamera, Vector3 } from "three";
 import { dampFactor } from "./math.ts";
 import type { Player } from "./player.ts";
-import { RoomWorld } from "./world.ts";
 
 const _up = new Vector3();
 const _fwd = new Vector3();
@@ -11,7 +10,6 @@ const _dir = new Vector3();
 const _right = new Vector3();
 
 const ZOOM_MIN = 0.45; // right over the character's shoulder
-const ZOOM_MAX_GLOBE = 11; // the whole planet fits on screen
 const FAR_LOOK_BLEND = 0.85; // how much the far view centers on the planet
 const TILT_MIN = -0.26; // a little below the usual view
 const TILT_MAX = 1.31; // nearly straight up
@@ -34,6 +32,7 @@ export class FollowCamera {
 
   private zoom = 1;
   private targetZoom = 1;
+  private zoomMax = 11; // the current world's farthest zoom (World.zoomMax)
   // photo mode: the camera walks around the character (yaw) and tilts its view
   private yaw = 0;
   private tilt = 0;
@@ -100,8 +99,8 @@ export class FollowCamera {
   }
 
   private clampZoom(player: Player) {
-    const max = player.world instanceof RoomWorld ? player.world.zoomMax : ZOOM_MAX_GLOBE;
-    if (this.targetZoom > max) this.targetZoom = max;
+    this.zoomMax = player.world.zoomMax;
+    if (this.targetZoom > this.zoomMax) this.targetZoom = this.zoomMax;
   }
 
   private finish(player: Player) {
@@ -177,13 +176,13 @@ export class FollowCamera {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Zoom as a 0..1 fraction (0 = closest) - used by the mobile slider. */
+  /** Zoom as a 0..1 fraction of the current world's range (0 = closest) - used by the mobile slider. */
   zoomFraction(): number {
-    return Math.log(this.targetZoom / ZOOM_MIN) / Math.log(ZOOM_MAX_GLOBE / ZOOM_MIN);
+    return Math.log(this.targetZoom / ZOOM_MIN) / Math.log(this.zoomMax / ZOOM_MIN);
   }
 
   setZoomFraction(f: number) {
     const c = Math.min(1, Math.max(0, f));
-    this.targetZoom = ZOOM_MIN * Math.pow(ZOOM_MAX_GLOBE / ZOOM_MIN, c);
+    this.targetZoom = ZOOM_MIN * Math.pow(this.zoomMax / ZOOM_MIN, c);
   }
 }

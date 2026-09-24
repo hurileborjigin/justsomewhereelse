@@ -101,6 +101,19 @@ test("gallery: bays hold boxes on plinths but are never walked on; pillars hold 
   assert.equal(house.floorHeight(house.key(1, 1)), 0);
 });
 
+test("nearestFreeTile: a player saved on an L bay's wall-side tile restores onto the aisle", () => {
+  const hive = new RoomWorld("hive", "hive", galleryAssets);
+  // the middle row of the second L bay against the left wall, four tiles from the aisle
+  const wallSide = hive.key(0, 7);
+  assert.equal(bayAt(0, 7)?.size, "l");
+  assert.deepEqual(hive.unkey(nearestFreeTile(hive, wallSide, "donkey")), [4, 7], "the aisle tile across from it");
+  // boxes on the aisle beside the bay: the nearest open tile is five steps away, inside the search depth
+  const boxes = [hive.key(4, 6), hive.key(4, 7), hive.key(4, 8)];
+  hive.setBlocked(boxes, true);
+  assert.deepEqual(hive.unkey(nearestFreeTile(hive, wallSide, "donkey")), [5, 7]);
+  hive.setBlocked(boxes, false);
+});
+
 test("globe: canHold is exactly the donkey's walkability", () => {
   const globe = new GlobeWorld(new Scene());
   globe.setBlocked([SPAWN_TILES[0]], true);
