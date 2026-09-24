@@ -641,7 +641,7 @@ async function boot() {
     cam.update(dt, player);
     // any building hiding the character (say the tall Hive right behind a player who just stepped out) fades
     const chest = world.isGlobe ? _chest.copy(player.pos).setLength(player.pos.length() + 0.5) : null;
-    fade.update(dt, cam.camera.position, chest);
+    fade.update(dt, cam.camera, chest);
     treasures.update(dt);
     refreshActions();
 
@@ -699,6 +699,7 @@ async function boot() {
       ownership: () => ownership.snapshot(),
       pennants: () => pennants.debug(),
       fade: () => fade.debug(),
+      buildingVisible: (id: string) => scene.children.find((o) => o.userData.building === id)?.visible,
       neighbors: (tile: number) => neighborsOf(tile),
       walkable: (tile: number) => !isBlockedFor(tile, false) && !doorTileMap.has(tile),
       treasures: { list: () => treasures.list() },

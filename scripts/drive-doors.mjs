@@ -268,23 +268,51 @@ await b.waitForTimeout(800);
 check((await loc(b)) === "globe", "B: logging in inside the Hive puts him outside");
 check((await b.evaluate(() => window.__tp.debug().tile)) === hive.doorTiles[0], "B: on the Hive's doorstep");
 check((await text(b, "#enter")) === "Knock at gloria's Hive 🚪 (E)", "B: and he must knock again");
-check(Object.keys(await b.evaluate(() => window.__tp.fade())).includes("hive"), "B: the Hive behind him fades so he can be seen");
+// the tall Hive fills his view: it fades out completely rather than hanging over the screen as a haze
+await b.waitForFunction(() => window.__tp.fade().hive === 0, null, { timeout: 5000 }).catch(() => {});
+check((await b.evaluate(() => window.__tp.fade())).hive === 0, "B: the Hive behind him fades out so he can be seen");
+check(await b.evaluate(() => window.__tp.buildingVisible("hive") === false), "B: the faded-out Hive is not drawn at all");
 await shot(b, "16-restored-doorstep");
 
 // ---- the camera: a building behind a player who steps out of it fades ------
 await stepAside(b, hive);
-for (const bd of [hive, hall, opera]) {
+// the tall treasure houses fill the view behind her and fade out completely (nothing drawn);
+// the low opera house stays a see-through silhouette
+for (const [bd, want] of [[hive, 0], [hall, 0], [opera, 0.35]]) {
   await a.evaluate((id) => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.id === id)), bd.id);
   await a.waitForTimeout(300);
   await a.evaluate(() => window.__tp.leaveBuilding());
-  await a.waitForFunction((id) => window.__tp.fade()[id] === 0.25, bd.id, { timeout: 5000 }).catch(() => {});
-  check((await a.evaluate(() => window.__tp.fade()))[bd.id] === 0.25, `A: stepping out of the ${bd.id}, it fades behind her`);
+  await a.waitForFunction(([id, w]) => window.__tp.fade()[id] === w, [bd.id, want], { timeout: 5000 }).catch(() => {});
+  check(
+    (await a.evaluate(() => window.__tp.fade()))[bd.id] === want,
+    `A: stepping out of the ${bd.id}, it fades ${want ? "to a silhouette" : "out"} behind her`,
+  );
+  check(
+    await a.evaluate(([id, w]) => window.__tp.buildingVisible(id) === w > 0, [bd.id, want]),
+    `A: the faded ${bd.id} is ${want ? "still" : "not"} drawn`,
+  );
   await shot(a, `17-camera-${bd.id}`);
   await a.evaluate((d) => window.__tp.lookAt(d.tiles[0]), bd);
   await a.waitForFunction((id) => !(id in window.__tp.fade()), bd.id, { timeout: 5000 }).catch(() => {});
   check(!(bd.id in (await a.evaluate(() => window.__tp.fade()))), `A: turned to face the ${bd.id}, it is solid again`);
+  check(await a.evaluate((id) => window.__tp.buildingVisible(id) === true, bd.id), `A: and drawn again`);
   await shot(a, `18-camera-${bd.id}-solid`);
 }
+
+// ---- a small house between the camera and the character: a see-through silhouette
+await a.evaluate((d) => {
+  const tp = window.__tp;
+  const bt = d.tiles[0];
+  // the tile behind the house, seen from its door, with her back to the house
+  const back = tp.neighbors(bt).find((t) => t !== d.doorTiles[0] && !tp.neighbors(d.doorTiles[0]).includes(t));
+  tp.teleport(back);
+  tp.lookAt(bt);
+  tp.player.enterWorld(tp.player.world, back, tp.player.forward.clone().negate());
+}, b3);
+await a.waitForFunction(() => window.__tp.fade().b3 === 0.35, null, { timeout: 5000 }).catch(() => {});
+check((await a.evaluate(() => window.__tp.fade())).b3 === 0.35, "A: a house between the camera and her fades to a silhouette");
+check(await a.evaluate(() => window.__tp.buildingVisible("b3") === true), "A: the silhouette is still drawn");
+await shot(a, "19-camera-silhouette");
 
 await browser.close();
 console.log(process.exitCode ? "DOORS FAILED" : "DOORS PASSED");
