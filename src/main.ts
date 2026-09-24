@@ -28,6 +28,7 @@ const AUTH_KEY = "tp-auth";
 
 /** True when this tab runs an older bundle than the server serves and has not reloaded for it yet. */
 function staleBundle(serverBuild: string): boolean {
+  if (import.meta.env.DEV) return false; // the dev bundle (a fresh timestamp each run) is never stale
   if (serverBuild === "dev" || serverBuild === __BUILD_ID__) return false;
   const key = "tp-reloaded-for";
   try {
