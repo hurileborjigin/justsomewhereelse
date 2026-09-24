@@ -270,6 +270,11 @@ try {
   expect((await b.next()).reason === "invalid", "a video cannot be the picture side");
   b.send(picturePlace({ image: { url: "/media/1-deadbeef.png", kind: "image" }, focus: { x: 0.5, y: 0.5 }, zoom: 1, caption: "" }));
   expect((await b.next()).reason === "invalid", "the picture must be a file the upload endpoint stored");
+  // a name too long for the file system is refused like any unknown file, and the server stays up to answer the next one
+  b.send(picturePlace({ image: { url: `/media/${"a".repeat(300)}.png`, kind: "image" }, focus: { x: 0.5, y: 0.5 }, zoom: 1, caption: "" }));
+  expect((await b.next()).reason === "invalid", "a picture url too long for the file system is refused");
+  b.send(picturePlace({ image: { url: "/media/..", kind: "image" }, focus: { x: 0.5, y: 0.5 }, zoom: 1, caption: "" }));
+  expect((await b.next()).reason === "invalid", "a picture url naming the parent directory is refused, and the server is still up");
   b.send(picturePlace(null));
   expect((await b.next()).reason === "invalid", "a postcard needs words or a picture");
   b.send({ t: "box-place", size: "s", style: "postcard", text: "old tab", media: [], announce: false, loc: "globe", tiles: [300], fwd: [0, 0, 1] });
@@ -373,6 +378,8 @@ try {
   expect((await fetch(`http://localhost:${PORT}${media2.url}`)).status === 404, "the picture the edit replaced is deleted from disk");
   b.send({ t: "box-edit", id: boxId, contents: { style: "note", text: "mine now", media: [] }, announce: true });
   expect((await b.next()).reason === "notcreator", "only the creator edits a box");
+  a.send({ t: "box-edit", id: boxId, style: "note", text: "old tab", media: [], announce: false });
+  expect((await a.next()).reason === "invalid", "an edit in the old flat shape is refused");
 
   // she picks it up and puts it down again; her partner cannot
   b.send({ t: "box-lift", id: boxId });

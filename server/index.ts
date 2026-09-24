@@ -112,16 +112,20 @@ function handleUpload(req: IncomingMessage, res: ServerResponse) {
   });
 }
 
+/** Whether the media file is there; any stat error (a name too long, no permission) counts as not there. */
+const fileExists = (name: string) => {
+  try {
+    return statSync(join(MEDIA_DIR, name), { throwIfNoEntry: false })?.isFile() === true;
+  } catch {
+    return false;
+  }
+};
+
 function serveMedia(req: IncomingMessage, res: ServerResponse) {
   const name = (req.url ?? "").slice("/media/".length);
   const file = join(MEDIA_DIR, name);
   // "." and ".." pass the pattern but name directories; only regular files are served
-  const isFile =
-    /^[\w.-]+$/.test(name) &&
-    name !== "." &&
-    name !== ".." &&
-    statSync(file, { throwIfNoEntry: false })?.isFile() === true;
-  if (!isFile) {
+  if (!/^[\w.-]+$/.test(name) || !fileExists(name)) {
     res.statusCode = 404;
     res.end("not found");
     return;
@@ -201,7 +205,6 @@ const isVec3 = (v: unknown): v is Vec3 =>
 
 const isSize = (s: unknown): s is BoxSize => s === "s" || s === "m" || s === "l";
 
-const fileExists = (name: string) => statSync(join(MEDIA_DIR, name), { throwIfNoEntry: false })?.isFile() === true;
 /** Style, words, picture or prints of a box request, cleaned; null when they make no valid box. */
 const contentsOf = (raw: unknown) => parseContents(raw, fileExists);
 
@@ -263,14 +266,7 @@ wss.on("connection", (ws) => {
 
   send(ws, lobbyMsg());
 
-  ws.on("message", (data) => {
-    let msg: ClientMessage;
-    try {
-      msg = JSON.parse(data.toString());
-    } catch {
-      return;
-    }
-
+  const handle = (msg: ClientMessage) => {
     if (msg.t === "join") {
       if (id !== null) return;
       const wanted: PlayerId = msg.id === 0 ? 0 : 1;
@@ -539,6 +535,21 @@ wss.on("connection", (ws) => {
       store.liftBox(box.id);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} picked treasure box #${box.id} up`);
+    }
+  };
+
+  ws.on("message", (data) => {
+    let msg: ClientMessage;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+    // each op denies what it refuses; this is the last resort, so no single frame takes the server down
+    try {
+      handle(msg);
+    } catch (err) {
+      console.log(`[planet] bad message from ${id ?? "unjoined"}: ${err instanceof Error ? err.message : String(err)}`);
     }
   });
 
