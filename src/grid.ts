@@ -127,6 +127,23 @@ export function tileCenter(k: number): Vector3 {
   return centers[k];
 }
 
+/**
+ * The four corners of a tile as unit vectors, in order around it (the same
+ * corners the globe mesh's tile quads are spherified from).
+ */
+export function tileCorners(k: number, out: Vector3[]): Vector3[] {
+  const [f, i, j] = unkey(k);
+  const u0 = -1 + (2 * i) / N;
+  const u1 = -1 + (2 * (i + 1)) / N;
+  const v0 = -1 + (2 * j) / N;
+  const v1 = -1 + (2 * (j + 1)) / N;
+  dirAt(f, u0, v0, out[0]);
+  dirAt(f, u1, v0, out[1]);
+  dirAt(f, u1, v1, out[2]);
+  dirAt(f, u0, v1, out[3]);
+  return out;
+}
+
 export function neighborsOf(k: number): number[] {
   return [
     neighborKeys[k * 4],

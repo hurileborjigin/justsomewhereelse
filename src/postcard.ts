@@ -9,7 +9,6 @@ import {
   NAME_MAX_LEN,
   type Box,
   type BoxContents,
-  type BoxSize,
   type BoxStyle,
   type MediaRef,
 } from "../shared/protocol.ts";
@@ -34,23 +33,21 @@ export type Draft = {
   keep: MediaRef[];
   /** New prints to upload. */
   files: File[];
-  /** The chest size; null when editing, since the chest already stands. */
-  size: BoxSize | null;
   announce: boolean;
 };
 
 export type ComposeOptions = {
   mark: Postmark;
-  /** Which sizes fit where the player stands right now. */
-  fits: Record<BoxSize, boolean>;
-  /** Editing a box that already exists: prefill from it and hide the size picker. */
+  /** Editing a box that already exists: prefill from it. */
   initial?: { contents: BoxContents; announce: boolean };
-  /** Resolve once the box stands in the world (or the edit is saved); reject with a message to show. */
-  onSend: (draft: Draft) => Promise<void>;
+  /**
+   * "Leave it here" or "Save changes". Resolve true once the box stands in the world (or the edit
+   * is saved) and the card may close; false when the sender comes back to the card as it was
+   * (placing cancelled); reject with a message to show.
+   */
+  onSend: (draft: Draft) => Promise<boolean>;
   /** Photo mode: hides the dialog, returns a JPEG of the world, or null when cancelled. Absent when unavailable. */
   takePicture?: () => Promise<Blob | null>;
-  /** Which sizes fit where the player stands now: asked again when photo mode returns (new boxes only). */
-  fitsNow?: () => Record<BoxSize, boolean>;
 };
 
 export type ReadOptions = {
@@ -77,8 +74,6 @@ type CardInputs = {
   from: HTMLInputElement;
 };
 
-const ORDER: BoxSize[] = ["s", "m", "l"];
-const SIZE_LABEL: Record<BoxSize, string> = { s: "S · 1 square", m: "M · 4 squares", l: "L · 12 squares" };
 const STYLES: BoxStyle[] = ["postcard", "note", "media"];
 const STYLE_LABEL: Record<BoxStyle, string> = { postcard: "Postcard", note: "Note", media: "Just photos" };
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -180,15 +175,12 @@ export class Postcard {
     const keep: MediaRef[] = c !== undefined && c.style !== "postcard" ? [...c.media] : [];
     const files: File[] = [];
     const urls: string[] = [];
-    let size: BoxSize | null = editing ? null : (ORDER.find((s) => opts.fits[s]) ?? null);
     let style: BoxStyle = c?.style ?? "postcard";
     let busy = false;
     const total = () => keep.length + files.length;
 
     const error = el("div", "pc-error");
     let flipper: ReturnType<Postcard["flipCard"]> | null = null;
-    // reassigned once the size buttons exist, below; nothing calls this before then
-    let applyFits: (fits: Record<BoxSize, boolean>) => void = () => {};
     const editor = pictureEditor(
       c?.style === "postcard" && c.picture
         ? { source: c.picture.image, focus: { ...c.picture.focus }, zoom: c.picture.zoom, caption: c.picture.caption }
@@ -202,7 +194,6 @@ export class Postcard {
               } finally {
                 this.setAway(false);
                 flipper?.flip("picture");
-                if (opts.fitsNow) applyFits(opts.fitsNow());
               }
             }
           : undefined,
@@ -330,41 +321,8 @@ export class Postcard {
     });
     render();
 
-    // size (new boxes only), announce, send
+    // announce, send
     const controls = el("div", "pc-controls");
-    const sizes = el("div", "pc-sizes");
-    const sizeBtns = ORDER.map((s) => {
-      const b = el("button", undefined, SIZE_LABEL[s]);
-      b.type = "button";
-      b.dataset.size = s;
-      b.disabled = !opts.fits[s];
-      if (!opts.fits[s]) b.title = "no room here";
-      b.classList.toggle("picked", size === s);
-      b.addEventListener("click", () => {
-        size = s;
-        for (const o of sizeBtns) o.classList.toggle("picked", o === b);
-        error.textContent = "";
-      });
-      sizes.append(b);
-      return b;
-    });
-    // the per-button "no room here" tooltip never shows on a phone
-    const hint = el("span", "pc-hint", "Sizes greyed out do not fit where you stand");
-    hint.hidden = editing || ORDER.every((s) => opts.fits[s]);
-    applyFits = (fits: Record<BoxSize, boolean>) => {
-      for (const b of sizeBtns) {
-        const s = b.dataset.size as BoxSize;
-        b.disabled = !fits[s];
-        b.title = fits[s] ? "" : "no room here";
-      }
-      if (size && !fits[size]) {
-        size = null;
-        for (const b of sizeBtns) b.classList.remove("picked");
-        error.textContent = "Pick a size that fits where you stand now";
-      }
-      const someOut = ORDER.some((s) => !fits[s]);
-      hint.hidden = !someOut;
-    };
     const announce = el("label", "pc-announce");
     const check = el("input");
     check.type = "checkbox";
@@ -375,12 +333,8 @@ export class Postcard {
     sendLabel();
     send.id = "pc-send";
     send.type = "button";
-    if (!editing && !size) {
-      send.disabled = true;
-      error.textContent = "No room for a box here. Step somewhere more open.";
-    }
     send.addEventListener("click", async () => {
-      if (busy || (!editing && !size)) return;
+      if (busy) return;
       const text = textarea.value.trim();
       const missing =
         style === "note"
@@ -403,7 +357,7 @@ export class Postcard {
       send.textContent = "⏳ packing…";
       error.textContent = "";
       try {
-        await opts.onSend({
+        const done = await opts.onSend({
           style,
           text,
           dressing: {
@@ -415,11 +369,17 @@ export class Postcard {
           picture: style === "postcard" ? editor.draft() : null,
           keep: [...keep],
           files: [...files],
-          size,
           announce: check.checked,
         });
-        this.guard = null;
-        this.close();
+        if (done) {
+          this.guard = null;
+          this.close();
+          return;
+        }
+        // back from placing mode: the card is as it was
+        busy = false;
+        send.disabled = false;
+        sendLabel();
       } catch (err) {
         error.textContent = err instanceof Error ? err.message : "Something went wrong";
         busy = false;
@@ -427,7 +387,7 @@ export class Postcard {
         sendLabel();
       }
     });
-    controls.append(...(editing ? [] : [sizes]), hint, announce, send, error);
+    controls.append(announce, send, error);
 
     const sheet = el("div", "pc-sheet");
     sheet.append(this.closeButton(), styles, body, controls);

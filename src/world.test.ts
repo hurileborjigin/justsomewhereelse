@@ -146,3 +146,32 @@ test("gallery: every bay is exactly the footprint of its size from some aisle ti
     }
   }
 });
+
+test("tileCorners: the top a box stands on, on the floor, a plinth, or a raised globe tile", () => {
+  const corners = () => [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+  const room = new RoomWorld("b0", "house_a", fakeAssets);
+  const k = room.key(2, 2);
+  const mid = room.tilePos(k, 0, new Vector3());
+  const c = room.tileCorners(k, corners());
+  for (const p of c) {
+    assert.equal(p.y, 0);
+    assert.equal(Math.abs(p.x - mid.x), 1);
+    assert.equal(Math.abs(p.z - mid.z), 1);
+  }
+  assert.equal(c[0].distanceTo(c[2]), Math.hypot(2, 2), "in order around the tile: 0 and 2 are opposite");
+
+  const hive = new RoomWorld("hive", "hive", galleryAssets);
+  const [bi, bj] = GALLERY.bays[0].tiles[0];
+  assert.ok(hive.tileCorners(hive.key(bi, bj), corners()).every((p) => p.y === PLINTH_H), "on a bay: the plinth top");
+
+  const globe = new GlobeWorld(new Scene());
+  const t = SPAWN_TILES[0];
+  const g = globe.tileCorners(t, corners());
+  const center = g.reduce((s, p) => s.add(p), new Vector3()).divideScalar(4);
+  const up = globe.tilePos(t, 0, new Vector3());
+  assert.ok(center.angleTo(up) < 1e-3, "centered on the tile");
+  // the flat top between the corners dips a little below the raised tile center the characters stand on
+  assert.ok(up.length() - center.length() > 0 && up.length() - center.length() < 0.08, `${up.length() - center.length()}`);
+  const r = g[0].distanceTo(center);
+  for (const p of g) assert.ok(Math.abs(p.distanceTo(center) - r) < 0.05, "a near-square quad");
+});

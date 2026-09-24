@@ -5,7 +5,7 @@ import {
   Scene,
   Vector3,
 } from "three";
-import { CHARACTERS, SURFACE, type CharacterId } from "../shared/protocol.ts";
+import { CHARACTERS, R, SURFACE, type CharacterId } from "../shared/protocol.ts";
 import type { Assets } from "./assets.ts";
 import { GALLERY, GALLERY_H, GALLERY_W, PLINTH_H, bayAt } from "./gallery.ts";
 import {
@@ -20,6 +20,7 @@ import {
   spawnForward,
   tileAt,
   tileCenter,
+  tileCorners as globeCorners,
 } from "./grid.ts";
 
 /**
@@ -51,6 +52,12 @@ export interface World {
   canHold(k: number): boolean;
   /** Height of the ground a box stands on: a gallery bay's plinth, else 0. */
   floorHeight(k: number): number;
+  /**
+   * The four corners of the top a box stands on, in order around the tile:
+   * the raised (or sunken) tile top on the globe, the floor or a bay's
+   * plinth top in a room.
+   */
+  tileCorners(k: number, out: Vector3[]): Vector3[];
   /** True when the two tiles share an edge (the reunion-hop trigger). */
   areNeighbors(a: number, b: number): boolean;
   /** Edge neighbors of a tile (never -1). */
@@ -65,6 +72,7 @@ export interface World {
 
 const _a = new Vector3();
 const _b = new Vector3();
+const LAKE_DEPTH = -0.05; // globe.py sinks lake tiles this far
 
 export class GlobeWorld implements World {
   id = "globe";
@@ -118,6 +126,14 @@ export class GlobeWorld implements World {
 
   floorHeight(_k: number) {
     return 0;
+  }
+
+  tileCorners(k: number, out: Vector3[]) {
+    // globe.py pushes a land tile's flat top out along its normal (a lake tile's in), corners on the sphere
+    const lift = globeWater(k) ? LAKE_DEPTH : SURFACE - R;
+    const n = tileCenter(k);
+    for (const c of globeCorners(k, out)) c.multiplyScalar(R).addScaledVector(n, lift);
+    return out;
   }
 
   areNeighbors(a: number, b: number) {
@@ -339,6 +355,16 @@ export class RoomWorld implements World {
 
   floorHeight(k: number) {
     return this.isBay(k) ? PLINTH_H : 0;
+  }
+
+  tileCorners(k: number, out: Vector3[]) {
+    this.tilePos(k, this.floorHeight(k), _a);
+    const h = T / 2;
+    out[0].set(_a.x - h, _a.y, _a.z - h);
+    out[1].set(_a.x + h, _a.y, _a.z - h);
+    out[2].set(_a.x + h, _a.y, _a.z + h);
+    out[3].set(_a.x - h, _a.y, _a.z + h);
+    return out;
   }
 
   private isBay(k: number) {

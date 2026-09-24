@@ -13,6 +13,7 @@ import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./owners
 import { Pennants } from "./pennant.ts";
 import { BuildingFade } from "./fade.ts";
 import { PHOTO_AIM, PhotoMode } from "./photo.ts";
+import { Placing } from "./placing.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
 import { scatterWorld, type Building } from "./scatter.ts";
@@ -20,7 +21,7 @@ import { applySkyForHour, createScene } from "./scene.ts";
 import { setupTouchControls } from "./touch.ts";
 import { chestIcon } from "./postcard.ts";
 import { Treasures } from "./treasures.ts";
-import { BUILDING_NAMES, GlobeWorld, RoomWorld, nearestFreeTile } from "./world.ts";
+import { BUILDING_NAMES, GlobeWorld, RoomWorld, nearestFreeTile, type World } from "./world.ts";
 
 const $ = (id: string) => {
   const el = document.getElementById(id);
@@ -303,6 +304,7 @@ async function boot() {
   $("sign-close").addEventListener("click", () => setSign(null));
   /** Photo mode: the sign steps away first, it has no place in the viewfinder. */
   function takePhoto() {
+    if (placing.active) return Promise.resolve(null); // the shade and the viewfinder never share the screen
     setSign(null);
     input.setMuted(false); // walking works while framing a shot (the Treasures dialog mutes again afterwards)
     return photo.take(PHOTO_AIM[player.character]);
@@ -574,21 +576,33 @@ async function boot() {
     return b ? `the ${BUILDING_NAMES[b.kind]}` : "somewhere";
   };
 
+  /** Per-tile placement rule: may part of a box stand on tile `k` of `world`? */
+  const canPlaceOn = (world: World, k: number) => {
+    // terrain: trees, buildings, furniture, pillars, other boxes and water refuse; gallery bays hold
+    if (!world.canHold(k)) return false;
+    if (world.isGlobe) {
+      if (doorTileMap.has(k) || SPAWN_TILES.includes(k)) return false;
+    } else if (k === (world as RoomWorld).exitTile) {
+      return false;
+    }
+    return !(remote.present && remote.loc === world.id && remote.tile === k);
+  };
+  // walking works while placing (the shade follows); the card or the sign mute it again afterwards
+  const placing = new Placing({
+    player: () => ({ world: player.world, tile: player.tile, forward: player.forward }),
+    canPlaceOn,
+    onActive: (on) => {
+      if (on) setSign(null);
+      input.setMuted(!on && (treasures.dialogOpen || signAt !== null));
+    },
+  });
+
   const treasures = new Treasures(assets, {
-    player: () => ({ world: player.world, tile: player.tile, forward: player.forward, moving: player.moving }),
+    currentWorld: () => player.world,
     resolveWorld: (loc) => (loc === "globe" ? globeWorld : (rooms.get(loc) ?? null)),
     placeName,
-    canPlaceOn: (world, k) => {
-      // terrain: trees, buildings, furniture, pillars, other boxes and water refuse; gallery bays hold
-      if (!world.canHold(k)) return false;
-      if (world.isGlobe) {
-        if (doorTileMap.has(k) || SPAWN_TILES.includes(k)) return false;
-      } else if (k === (world as RoomWorld).exitTile) {
-        return false;
-      }
-      return !(remote.present && remote.loc === world.id && remote.tile === k);
-    },
-    onDialog: (open) => input.setMuted(open || signAt !== null),
+    placing,
+    onDialog: (open) => input.setMuted((open || signAt !== null) && !placing.active),
     onPanelOpen: () => {
       if (innerWidth < 640) chat.setOpen(false);
     },
@@ -639,6 +653,7 @@ async function boot() {
 
     player.update(dt, input, cam.camera);
     cam.update(dt, player);
+    placing.update();
     // any building hiding the character (say the tall Hive right behind a player who just stepped out) fades
     const chest = world.isGlobe ? _chest.copy(player.pos).setLength(player.pos.length() + 0.5) : null;
     fade.update(dt, cam.camera, chest);
@@ -704,6 +719,7 @@ async function boot() {
       walkable: (tile: number) => !isBlockedFor(tile, false) && !doorTileMap.has(tile),
       treasures: { list: () => treasures.list() },
       photo: takePhoto,
+      placing: () => placing.debug(),
       look: () => cam.look,
       lookAt: (tile: number) =>
         switchWorld(

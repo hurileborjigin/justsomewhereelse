@@ -15,9 +15,9 @@ import {
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { el, toast } from "./dom.ts";
-import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
+import type { Placing } from "./placing.ts";
 import { Postcard, TAKE_BACK_CONFIRM, chestIcon, type Draft, type Postmark } from "./postcard.ts";
 import type { World } from "./world.ts";
 
@@ -45,17 +45,15 @@ const DENY_TEXT: Record<BoxDenyReason, string> = {
   kept: "Your partner has kept it already, so it stays as it is.",
 };
 
-export type PlayerSpot = { world: World; tile: number; forward: Vector3; moving: boolean };
-
 export type TreasureHooks = {
-  /** The local player's whereabouts right now. */
-  player(): PlayerSpot;
+  /** The world the local player is in right now. */
+  currentWorld(): World;
   /** The globe, or a room that has already been created; null otherwise. */
   resolveWorld(loc: string): World | null;
   /** "Haven" or "the crooked house": for postmarks and panel rows. */
   placeName(loc: string): string;
-  /** Per-tile placement rule for `world`: terrain, doors, spawns, the partner. */
-  canPlaceOn(world: World, tile: number): boolean;
+  /** Placing mode: where a new or kept box goes down. */
+  placing: Pick<Placing, "start" | "active">;
   /** A postcard dialog opened or closed (walking is muted while open). */
   onDialog(open: boolean): void;
   /** The treasures panel was opened (small screens tidy other panels). */
@@ -282,16 +280,6 @@ export class Treasures {
 
   // ---- placing ----------------------------------------------------------------
 
-  private fitsAt(spot: PlayerSpot): Record<BoxSize, boolean> {
-    const { world, tile, forward } = spot;
-    const free = (k: number) => this.hooks.canPlaceOn(world, k);
-    return {
-      s: footprintFor(world, tile, forward, "s", free) !== null,
-      m: footprintFor(world, tile, forward, "m", free) !== null,
-      l: footprintFor(world, tile, forward, "l", free) !== null,
-    };
-  }
-
   /** Walking is allowed while framing a shot; the dialog is muted again afterwards. */
   private async photo(): Promise<Blob | null> {
     this.hooks.onDialog(false);
@@ -304,36 +292,39 @@ export class Treasures {
   }
 
   private compose() {
-    if (this.postcard.isOpen) return;
-    const spot = this.hooks.player();
-    if (spot.moving) {
-      this.toast("Stand still first");
-      return;
-    }
+    if (this.postcard.isOpen || this.hooks.placing.active) return;
     this.setPanelOpen(false);
     this.postcard.compose({
-      mark: this.mark(this.me, spot.world.id, new Date()),
-      fits: this.fitsAt(spot),
-      fitsNow: () => this.fitsAt(this.hooks.player()),
+      mark: this.mark(this.me, this.hooks.currentWorld().id, new Date()),
       takePicture: () => this.photo(),
-      onSend: async (draft) => {
-        const size = draft.size;
-        if (!size) throw new Error("Pick a size first");
-        // the sender may have walked during photo mode: the box goes where they stand now
-        const now = this.hooks.player();
-        if (now.moving) throw new Error("Stand still first");
-        const { world, tile } = now;
-        const forward = now.forward.clone();
-        const contents = await this.contentsOf(draft);
-        const tiles = footprintFor(world, tile, forward, size, (k) => this.hooks.canPlaceOn(world, k));
-        if (!tiles) throw new Error("No room for that size here anymore");
-        await this.request(
-          "place",
-          undefined,
-          (b, isNew) => isNew && b.creator === this.me,
-          () => this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
-        );
-      },
+      // the card steps aside and the shade decides where the box goes; Cancel brings the card back
+      onSend: (draft) =>
+        new Promise<boolean>((resolve) => {
+          this.postcard.setAway(true);
+          // uploaded once: a refused placement tried again elsewhere sends the same files
+          let contents: Promise<BoxContents> | null = null;
+          this.hooks.placing.start({
+            size: null,
+            onConfirm: async (tiles, size, world, forward) => {
+              contents ??= this.contentsOf(draft).catch((err: unknown) => {
+                contents = null; // a failed upload is tried again on the next confirm
+                throw err;
+              });
+              const packed = await contents;
+              await this.request(
+                "place",
+                undefined,
+                (b, isNew) => isNew && b.creator === this.me,
+                () => this.hooks.net.placeBox({ size, contents: packed, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
+              );
+              resolve(true);
+            },
+            onCancel: () => {
+              this.postcard.setAway(false);
+              resolve(false);
+            },
+          });
+        }),
     });
   }
 
@@ -351,7 +342,7 @@ export class Treasures {
     return draft.style === "note" ? { style: "note", text: draft.text, media } : { style: "media", caption: draft.text, media };
   }
 
-  /** Change a sealed box you left: the same dialog, prefilled, without the size picker. */
+  /** Change a sealed box you left: the same dialog, prefilled; it stays where it stands. */
   private edit(box: Box) {
     if (this.postcard.isOpen) this.postcard.close();
     if (this.postcard.isOpen) return; // the reader kept the dialog (a send in flight)
@@ -360,7 +351,6 @@ export class Treasures {
     this.setPanelOpen(false);
     this.postcard.compose({
       mark: this.mark(box.creator, box.origin, new Date(box.created)),
-      fits: { s: false, m: false, l: false },
       initial: { contents, announce: box.announce },
       takePicture: () => this.photo(),
       onSend: async (draft) => {
@@ -373,6 +363,7 @@ export class Treasures {
           (b) => b.id === box.id && b.opened === null && b.owner === null,
           () => this.hooks.net.editBox(box.id, contents, draft.announce),
         );
+        return true;
       },
     });
   }
@@ -382,28 +373,24 @@ export class Treasures {
     this.hooks.net.liftBox(box.id);
   }
 
+  /** "Place here" for a kept or lifted box: placing mode with its size; the panel steps aside meanwhile. */
   private place(box: Box) {
-    const spot = this.hooks.player();
-    if (spot.moving) {
-      this.toast("Stand still first");
-      return;
-    }
-    const { world, tile } = spot;
-    const forward = spot.forward.clone();
-    const tiles = footprintFor(world, tile, forward, box.size, (k) => this.hooks.canPlaceOn(world, k));
-    if (!tiles) {
-      this.toast(`No room for an ${SIZE_NAME[box.size]} box here. Step somewhere more open.`);
-      return;
-    }
-    this.request(
-      "put",
-      box.id,
-      (b) => b.id === box.id && b.loc === world.id,
-      () => this.hooks.net.putBox(box.id, world.id, tiles, vec(forward)),
-    ).then(
-      () => this.toast("Placed it here"),
-      (e: Error) => this.toast(e.message),
-    );
+    if (this.hooks.placing.active) return;
+    this.hooks.placing.start({
+      size: null,
+      fixedSize: box.size,
+      onConfirm: async (tiles, _size, world, forward) => {
+        await this.request(
+          "put",
+          box.id,
+          (b) => b.id === box.id && b.loc === world.id,
+          () => this.hooks.net.putBox(box.id, world.id, tiles, vec(forward)),
+        );
+        this.setPanelOpen(false);
+        this.toast("Placed it here");
+      },
+      onCancel: () => {},
+    });
   }
 
   private relabel(box: Box) {
