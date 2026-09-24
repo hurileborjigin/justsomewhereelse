@@ -4,6 +4,7 @@
 // carries it into the ger and places it there, relabels it with a long label
 // and picks it up again. Act 1b: a postcard whose picture A takes in photo
 // mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
+// Every box goes down through placing mode: an all-green shade, then E (or the button).
 // Screenshots land in /tmp/haven-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
@@ -37,7 +38,7 @@ async function openPlayer(name) {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log(`[${name}] pageerror: ${e.message}`));
   page.on("console", (m) => {
-    if (m.type() === "error") console.log(`[${name}] console.error: ${m.text()}`);
+    if (m.type() === "error") console.log(`[${name}] console.error: ${m.text()} ${m.location().url ?? ""}`);
   });
   await page.goto(URL);
   await page.waitForFunction(() => window.__tp?.joined(), { timeout: 20000 });
@@ -63,6 +64,25 @@ const waitBox = (p, id, field, value) =>
   p.waitForFunction(([i, f, v]) => window.__tp.treasures.list().find((x) => x.id === i)?.[f] === v, [id, field, value], {
     timeout: 5000,
   });
+const tapOrClick = (p, sel) => (MOBILE ? p.tap(sel) : p.click(sel));
+/**
+ * "Leave it here" and "Place here" start placing mode: wait for an all-green shade of `size`
+ * in front of the player, then put it down (E on a keyboard, the button on a phone).
+ */
+async function putDown(p, size = "s") {
+  await p.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
+  if (size !== "s") await tapOrClick(p, `#pl-sizes [data-size="${size}"]`);
+  await p.waitForFunction(
+    () => {
+      const s = window.__tp.placing();
+      return s.tiles.length > 0 && s.ok.every(Boolean);
+    },
+    null,
+    { timeout: 5000 },
+  );
+  await (MOBILE ? p.tap("#pl-put") : p.keyboard.press("e"));
+  await p.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 20000 });
+}
 
 // ---- A composes and leaves an S box with a photo -------------------------
 await a.click("#treasure-open");
@@ -167,16 +187,12 @@ check(
     (await a.textContent("#postcard .pc-postmark span:nth-child(2)")) === "Sydney",
   "the stamp caption and the postmark echo the place as it is typed",
 );
-const fitsAll = await a.evaluate(() => [...document.querySelectorAll("#postcard .pc-sizes button")].every((x) => !x.disabled));
-check(
-  (await a.locator("#postcard .pc-hint").count()) === (fitsAll ? 0 : 1),
-  `the size hint shows exactly when a size is greyed out (all fit: ${fitsAll})`,
-);
-await a.click('#postcard [data-size="s"]');
+check((await a.locator("#postcard .pc-sizes, #postcard .pc-hint").count()) === 0, "the card has no size picker: the shade shows the fit");
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "A1-compose");
 const senderPlaced = await placed();
 await a.click("#pc-send");
+await putDown(a);
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 const isFirst = (x) => x.creator === 0 && x.contents?.writing?.text?.startsWith("Dear khurlee");
 await a.waitForFunction(`window.__tp.treasures.list().some(${isFirst})`, null, { timeout: 15000 });
@@ -237,8 +253,9 @@ await a.evaluate((front) => {
 await a.click("#treasure-open");
 check((await a.locator("#treasure-left .tr-place").count()) === 1, "the panel offers Place here for the box in her pocket");
 await a.click("#treasure-left .tr-place");
+await putDown(a);
 await waitBox(a, firstId, "loc", "globe");
-await a.click("#treasure-min");
+check(await a.isHidden("#treasure-panel"), "once the box stands again the panel stays closed");
 await a.waitForTimeout(400);
 const moved = await boxById(a, firstId);
 check(moved.tiles[0] !== box.tiles[0] && moved.owner === null && moved.opened === null, "the box stands on another tile, still sealed and nobody's");
@@ -340,6 +357,7 @@ await shot(b, "B5-collection");
 await b.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.kind === "ger")));
 await b.waitForTimeout(600);
 await b.click("#treasure-mine .tr-place");
+await putDown(b);
 await waitBox(b, firstId, "loc", "ger");
 await b.waitForTimeout(500);
 await shot(b, "B6-in-the-ger");
@@ -352,7 +370,6 @@ check(finalA.loc === "ger" && finalA.contents !== undefined, "A sees the placed 
 // ---- B relabels it with a long label, then picks it up again ----------------
 const LONG = "the softest grass on the whole planet!!!"; // BOX_LABEL_MAX_LEN characters
 check(LONG.length === 40, "the long label is 40 characters");
-await b.click("#treasure-min");
 b.once("dialog", (d) => d.accept(LONG));
 await b.click("#treasure-open");
 await b.click("#treasure-mine .tr-label");
@@ -432,7 +449,6 @@ await a.evaluate(([from, away]) => {
   const back = w.neighbors(from).filter((n) => !w.isBlockedFor(n, "bee")).sort((x, y) => dist(y) - dist(x))[0];
   tp.lookAt(back);
 }, [SPAWN_A, SPAWN_B]);
-const tapOrClick = (p, sel) => (MOBILE ? p.tap(sel) : p.click(sel));
 await a.click("#treasure-open");
 await a.click("#treasure-leave");
 await a.waitForSelector("#postcard textarea.pc-text");
@@ -548,8 +564,8 @@ check(
     (await a.locator("body.photo").count()) === 0,
   "Escape leaves photo mode with the card open and the old shot untouched",
 );
-await tapOrClick(a, '#postcard [data-size="s"]');
 await tapOrClick(a, "#pc-send");
+await putDown(a);
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
 await a.waitForFunction(
   () => window.__tp.treasures.list().some((x) => x.creator === 0 && x.contents?.writing?.text === "Look at our sky tonight." && x.loc !== null),
@@ -585,6 +601,7 @@ await a.fill("#postcard textarea.pc-text", "Just a quick one:\nthe kettle is on.
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "C1-note-compose");
 await a.click("#pc-send");
+await putDown(a);
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 const notePred = (x) => x.creator === 0 && x.contents?.style === "note";
 await a.waitForFunction(`window.__tp.treasures.list().some(${notePred})`, null, { timeout: 5000 });
@@ -610,6 +627,7 @@ await a.fill("#postcard textarea.pc-caption", "the view from up here");
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "C3-photos-compose");
 await a.click("#pc-send");
+await putDown(a);
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
 const photosPred = (x) => x.creator === 0 && x.contents?.style === "media";
 await a.waitForFunction(`window.__tp.treasures.list().some(${photosPred})`, null, { timeout: 5000 });
@@ -632,6 +650,7 @@ await a.click("#treasure-open");
 await a.click("#treasure-leave");
 await a.fill("#postcard textarea.pc-text", "Oops, wrong spot.");
 await a.click("#pc-send");
+await putDown(a);
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 const oopsPred = (x) => x.creator === 0 && x.contents?.style === "postcard" && x.contents.writing.text === "Oops, wrong spot.";
 await a.waitForFunction(`window.__tp.treasures.list().some(${oopsPred})`, null, { timeout: 5000 });
