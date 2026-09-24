@@ -240,3 +240,49 @@ test("lifting takes the box out of the world but gives it no owner", () => {
   s.putBox(id, "ger", [12], [1, 0, 0]);
   assert.equal(s.getBox(id)?.loc, "ger");
 });
+
+// --- building ownership ------------------------------------------------
+
+test("owners round-trip through setOwner and ownerOf", () => {
+  const s = fresh();
+  assert.equal(s.ownerOf("house1"), null);
+  s.setOwner("house1", 0);
+  assert.equal(s.ownerOf("house1"), 0);
+  s.setOwner("house1", 1);
+  assert.equal(s.ownerOf("house1"), 1);
+});
+
+test("setting an owner to null deletes the row", () => {
+  const s = fresh();
+  s.setOwner("house1", 0);
+  s.setOwner("house1", null);
+  assert.equal(s.ownerOf("house1"), null);
+  assert.deepEqual(
+    s.owners().sort((a, b) => a.id.localeCompare(b.id)),
+    [
+      { id: "hall", owner: 1 },
+      { id: "hive", owner: 0 },
+    ],
+  );
+});
+
+test("the fixed houses are answered from code, without any row", () => {
+  const s = fresh();
+  assert.equal(s.ownerOf("hive"), 0);
+  assert.equal(s.ownerOf("hall"), 1);
+});
+
+test("owners lists every owned building plus the fixed houses", () => {
+  const s = fresh();
+  s.setOwner("house1", 0);
+  s.setOwner("house2", 1);
+  assert.deepEqual(
+    s.owners().sort((a, b) => a.id.localeCompare(b.id)),
+    [
+      { id: "hall", owner: 1 },
+      { id: "hive", owner: 0 },
+      { id: "house1", owner: 0 },
+      { id: "house2", owner: 1 },
+    ],
+  );
+});

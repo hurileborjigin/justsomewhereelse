@@ -120,6 +120,19 @@ export type Box = {
   contents?: BoxContents; // only present when the recipient may see them
 };
 
+// ---- building ownership ----------------------------------------------------
+
+// The two treasure houses: nobody can change who they belong to.
+export const FIXED_OWNERS: Record<string, PlayerId> = { hive: 0, hall: 1 };
+
+export const KNOCK_TTL_MS = 10 * 60 * 1000; // a pending knock, or an unentered grant, expires after this long
+
+export type BuildingOp = "claim" | "knock" | "open";
+export type BuildingDenyReason = "invalid" | "fixed" | "owner" | "away" | "noknock" | "open";
+
+/** A guest's one-visit pass into a building they do not own. */
+export type DoorGrant = { id: string; guest: PlayerId };
+
 export type BoxDenyReason =
   | "invalid"
   | "overlap"
@@ -158,7 +171,10 @@ export type ClientMessage =
   | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 }
   | { t: "box-delete"; id: number } // take back your own box while it is still sealed
   | { t: "box-edit"; id: number; contents: BoxContents; announce: boolean } // change what a sealed box you left holds
-  | { t: "box-lift"; id: number }; // pick your own box up to move it, until your partner keeps it
+  | { t: "box-lift"; id: number } // pick your own box up to move it, until your partner keeps it
+  | { t: "building-claim"; id: string; owner: PlayerId | null } // your own id to claim, or null to open to both
+  | { t: "knock"; id: string }
+  | { t: "door-open"; id: string }; // the owner lets the pending knocker in
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
@@ -179,6 +195,9 @@ export type ServerMessage =
       peer: { online: boolean; state: StateData | null };
       history: ChatEntry[];
       boxes: Box[]; // every box, contents stripped unless you may see them
+      buildings: { id: string; owner: PlayerId }[]; // every non-empty owner, the fixed houses included
+      doors: DoorGrant[]; // open grants
+      knocks: { id: string; from: PlayerId }[]; // pending knocks for the recipient
       build: string; // the server's build id; a tab running another bundle reloads once (see main.ts)
     }
   | ({ t: "state"; id: PlayerId } & StateData)
@@ -189,4 +208,8 @@ export type ServerMessage =
   | { t: "peer-left"; id: PlayerId }
   | { t: "box"; box: Box } // one box changed (or answers your box-open)
   | { t: "box-gone"; id: number } // a sealed box was taken back by its creator
-  | { t: "box-deny"; op: BoxOp; id?: number; reason: BoxDenyReason }; // id present whenever the request named a box (place has none)
+  | { t: "box-deny"; op: BoxOp; id?: number; reason: BoxDenyReason } // id present whenever the request named a box (place has none)
+  | { t: "building"; id: string; owner: PlayerId | null } // to both players after a change
+  | { t: "knock"; id: string; from: PlayerId } // to the owner
+  | { t: "door"; id: string; guest: PlayerId; open: boolean } // to both players when a grant starts or ends
+  | { t: "building-deny"; op: BuildingOp; id: string; reason: BuildingDenyReason };

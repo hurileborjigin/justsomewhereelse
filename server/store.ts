@@ -6,16 +6,17 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type {
-  Box,
-  BoxContents,
-  BoxSize,
-  ChatEntry,
-  MediaRef,
-  PlayerId,
-  StateData,
-  Vec3,
-  Writing,
+import {
+  FIXED_OWNERS,
+  type Box,
+  type BoxContents,
+  type BoxSize,
+  type ChatEntry,
+  type MediaRef,
+  type PlayerId,
+  type StateData,
+  type Vec3,
+  type Writing,
 } from "../shared/protocol.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
@@ -135,6 +136,7 @@ export class Store {
       );
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS boxes (${BOX_COLUMNS});
+      CREATE TABLE IF NOT EXISTS buildings (id TEXT PRIMARY KEY, owner INTEGER NOT NULL);
     `);
     const seed = this.db.prepare("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)");
     seed.run(0, DEFAULT_NAMES[0]);
@@ -368,5 +370,39 @@ export class Store {
   /** The creator picked their own box up to move it: out of the world, still nobody's. */
   liftBox(id: number) {
     this.db.prepare("UPDATE boxes SET loc = NULL, tiles = '[]' WHERE id = ?").run(id);
+  }
+
+  // --- building ownership ----------------------------------------------------
+
+  /** null means open to both. The fixed houses are answered from code, never from the table. */
+  ownerOf(id: string): PlayerId | null {
+    if (id in FIXED_OWNERS) return FIXED_OWNERS[id];
+    const row = this.db.prepare("SELECT owner FROM buildings WHERE id = ?").get(id) as
+      | { owner: number }
+      | undefined;
+    return row ? (row.owner as PlayerId) : null;
+  }
+
+  /** null deletes the row (open to both); anything else upserts it. */
+  setOwner(id: string, owner: PlayerId | null) {
+    if (owner === null) {
+      this.db.prepare("DELETE FROM buildings WHERE id = ?").run(id);
+    } else {
+      this.db
+        .prepare(
+          "INSERT INTO buildings (id, owner) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET owner = excluded.owner",
+        )
+        .run(id, owner);
+    }
+  }
+
+  /** Every owned building, the fixed houses included. */
+  owners(): { id: string; owner: PlayerId }[] {
+    const rows = this.db.prepare("SELECT id, owner FROM buildings").all() as {
+      id: string;
+      owner: number;
+    }[];
+    const fixed = Object.entries(FIXED_OWNERS).map(([id, owner]) => ({ id, owner }));
+    return [...fixed, ...rows.map((r) => ({ id: r.id, owner: r.owner as PlayerId }))];
   }
 }
