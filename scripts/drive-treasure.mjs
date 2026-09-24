@@ -47,6 +47,22 @@ async function openPlayer(name) {
 const a = await openPlayer("A");
 const b = await openPlayer("B");
 await a.waitForTimeout(1200);
+// every later check finds boxes in a world that starts empty; a stale database or a leftover server makes them lie
+check(
+  (await a.evaluate(() => window.__tp.treasures.list().length)) === 0,
+  "fresh database: no boxes yet (delete /tmp/tp-drive.db and restart the dev server if this fails)",
+);
+if (process.exitCode) {
+  await browser.close();
+  process.exit(1);
+}
+/** A box as `p` sees it, by id (undefined once it is gone). */
+const boxById = (p, id) => p.evaluate((i) => window.__tp.treasures.list().find((x) => x.id === i), id);
+/** Waits until `p` sees box `id` with `field` equal to `value`. */
+const waitBox = (p, id, field, value) =>
+  p.waitForFunction(([i, f, v]) => window.__tp.treasures.list().find((x) => x.id === i)?.[f] === v, [id, field, value], {
+    timeout: 5000,
+  });
 
 // ---- A composes and leaves an S box with a photo -------------------------
 await a.click("#treasure-open");
@@ -162,8 +178,10 @@ await shot(a, "A1-compose");
 const senderPlaced = await placed();
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
-await a.waitForTimeout(500);
-let box = await a.evaluate(() => window.__tp.treasures.list()[0]);
+const isFirst = (x) => x.creator === 0 && x.contents?.writing?.text?.startsWith("Dear khurlee");
+await a.waitForFunction(`window.__tp.treasures.list().some(${isFirst})`, null, { timeout: 15000 });
+let box = await a.evaluate(`window.__tp.treasures.list().find(${isFirst})`);
+const firstId = box.id;
 check(box && box.size === "s" && box.loc === "globe" && box.tiles.length === 1, "A's box stands on the globe");
 
 // ---- A changes her mind: edits the sealed box, then moves it one tile over -------
@@ -193,17 +211,21 @@ await shot(a, "A1b-edit");
 await a.fill("#postcard textarea.pc-text", `${await a.inputValue("#postcard textarea.pc-text")}\nP.S. I moved it a little.`);
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
-await a.waitForFunction(() => window.__tp.treasures.list()[0].contents.writing.text.endsWith("I moved it a little."), { timeout: 5000 });
-check((await b.evaluate(() => window.__tp.treasures.list()[0].contents)) === undefined, "B still cannot read the edited sealed box");
+await a.waitForFunction(
+  (id) => window.__tp.treasures.list().find((x) => x.id === id)?.contents.writing.text.endsWith("I moved it a little."),
+  firstId,
+  { timeout: 5000 },
+);
+const editedForB = await boxById(b, firstId);
+check(editedForB !== undefined && editedForB.contents === undefined, "B still cannot read the edited sealed box");
 await a.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
 await a.keyboard.press("e");
 await a.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
 await a.click("#pc-lift");
-await a.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
-await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
+await waitBox(a, firstId, "loc", null);
+await waitBox(b, firstId, "loc", null);
 check(
-  (await a.evaluate(() => window.__tp.treasures.list()[0].loc)) === null &&
-    (await b.evaluate(() => window.__tp.treasures.list()[0].loc)) === null,
+  (await boxById(a, firstId)).loc === null && (await boxById(b, firstId)).loc === null,
   "the lifted chest left both worlds",
 );
 await a.evaluate((front) => {
@@ -215,15 +237,15 @@ await a.evaluate((front) => {
 await a.click("#treasure-open");
 check((await a.locator("#treasure-left .tr-place").count()) === 1, "the panel offers Place here for the box in her pocket");
 await a.click("#treasure-left .tr-place");
-await a.waitForFunction(() => window.__tp.treasures.list()[0].loc === "globe", { timeout: 5000 });
+await waitBox(a, firstId, "loc", "globe");
 await a.click("#treasure-min");
 await a.waitForTimeout(400);
-const moved = await a.evaluate(() => window.__tp.treasures.list()[0]);
+const moved = await boxById(a, firstId);
 check(moved.tiles[0] !== box.tiles[0] && moved.owner === null && moved.opened === null, "the box stands on another tile, still sealed and nobody's");
 box = moved;
 await shot(a, "A2-placed");
 await shot(b, "B2-sees-box");
-const sealedForB = await b.evaluate(() => window.__tp.treasures.list()[0]);
+const sealedForB = await boxById(b, firstId);
 check(sealedForB && sealedForB.contents === undefined, "B cannot read the sealed box");
 check((await b.textContent("#treasure-badge")) === "1", "B's chest badge announces one waiting box");
 const badge = await b.evaluate(() => {
@@ -307,10 +329,10 @@ await b.keyboard.type("the softest grass");
 check((await b.evaluate(() => document.activeElement?.className)) === "pc-label", "label input keeps focus");
 await b.click("#pc-keep");
 await b.waitForFunction(() => document.getElementById("postcard").hidden);
-await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
-const kept = await b.evaluate(() => window.__tp.treasures.list()[0]);
+await waitBox(b, firstId, "loc", null);
+const kept = await boxById(b, firstId);
 check(kept.owner === 1 && kept.label === "the softest grass", "B kept it with a label");
-check((await a.evaluate(() => window.__tp.treasures.list()[0].loc)) === null, "the chest left A's world too");
+check((await boxById(a, firstId)).loc === null, "the chest left A's world too");
 await b.click("#treasure-open");
 await shot(b, "B5-collection");
 
@@ -318,13 +340,13 @@ await shot(b, "B5-collection");
 await b.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.kind === "ger")));
 await b.waitForTimeout(600);
 await b.click("#treasure-mine .tr-place");
-await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === "ger", { timeout: 5000 });
+await waitBox(b, firstId, "loc", "ger");
 await b.waitForTimeout(500);
 await shot(b, "B6-in-the-ger");
 await a.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.kind === "ger")));
 await a.waitForTimeout(600);
 await shot(a, "A6-visits-the-ger");
-const finalA = await a.evaluate(() => window.__tp.treasures.list()[0]);
+const finalA = await boxById(a, firstId);
 check(finalA.loc === "ger" && finalA.contents !== undefined, "A sees the placed box and still reads her own words");
 
 // ---- B relabels it with a long label, then picks it up again ----------------
@@ -334,7 +356,7 @@ await b.click("#treasure-min");
 b.once("dialog", (d) => d.accept(LONG));
 await b.click("#treasure-open");
 await b.click("#treasure-mine .tr-label");
-await b.waitForFunction((l) => window.__tp.treasures.list()[0].label === l, LONG, { timeout: 5000 });
+await waitBox(b, firstId, "label", LONG);
 await b.click("#treasure-min");
 await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
 await b.waitForTimeout(300);
@@ -355,8 +377,8 @@ await shot(b, "B8-pick-up");
 await b.focus("#postcard input.pc-label");
 await b.keyboard.press("Enter");
 await b.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
-await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
-const picked = await b.evaluate(() => window.__tp.treasures.list()[0]);
+await waitBox(b, firstId, "loc", null);
+const picked = await boxById(b, firstId);
 check(picked.owner === 1 && picked.label === LONG, "Enter in the label field picks it up, label kept");
 
 // ---- Act 2: back on the globe. A note, a photo box, and taking one back --------
@@ -518,10 +540,12 @@ await tapOrClick(a, '#postcard [data-size="s"]');
 await tapOrClick(a, "#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
 await a.waitForFunction(
-  () => window.__tp.treasures.list().some((x) => x.contents?.writing?.text === "Look at our sky tonight." && x.loc !== null),
+  () => window.__tp.treasures.list().some((x) => x.creator === 0 && x.contents?.writing?.text === "Look at our sky tonight." && x.loc !== null),
   { timeout: 5000 },
 );
-const skyBox = (await a.evaluate(() => window.__tp.treasures.list())).find((x) => x.contents?.writing?.text === "Look at our sky tonight.");
+const skyBox = await a.evaluate(() =>
+  window.__tp.treasures.list().find((x) => x.creator === 0 && x.contents?.writing?.text === "Look at our sky tonight."),
+);
 check(skyBox.contents.picture?.image.url.startsWith("/media/") === true, "the shot was uploaded and the box carries it");
 check(
   await a.evaluate(([stand, tile]) => window.__tp.player.world.neighbors(stand).includes(tile), [standTile, skyBox.tiles[0]]),
@@ -550,8 +574,9 @@ await a.evaluate(() => document.fonts.ready);
 await shot(a, "C1-note-compose");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
-await a.waitForTimeout(400);
-const note = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "note"));
+const notePred = (x) => x.creator === 0 && x.contents?.style === "note";
+await a.waitForFunction(`window.__tp.treasures.list().some(${notePred})`, null, { timeout: 5000 });
+const note = await a.evaluate(`window.__tp.treasures.list().find(${notePred})`);
 check(note && note.loc === "globe", "A's note stands on the globe");
 await approach(b, note.tiles[0], SPAWN_A);
 await readOpen(b);
@@ -574,8 +599,9 @@ await a.evaluate(() => document.fonts.ready);
 await shot(a, "C3-photos-compose");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
-await a.waitForTimeout(400);
-const photos = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "media"));
+const photosPred = (x) => x.creator === 0 && x.contents?.style === "media";
+await a.waitForFunction(`window.__tp.treasures.list().some(${photosPred})`, null, { timeout: 5000 });
+const photos = await a.evaluate(`window.__tp.treasures.list().find(${photosPred})`);
 check(photos && photos.loc === "globe", "A's photo box stands on the globe");
 await approach(b, photos.tiles[0], SPAWN_A);
 await readOpen(b);
@@ -595,8 +621,9 @@ await a.click("#treasure-leave");
 await a.fill("#postcard textarea.pc-text", "Oops, wrong spot.");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
-await a.waitForTimeout(400);
-const oops = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "postcard" && x.contents.writing.text === "Oops, wrong spot."));
+const oopsPred = (x) => x.creator === 0 && x.contents?.style === "postcard" && x.contents.writing.text === "Oops, wrong spot.";
+await a.waitForFunction(`window.__tp.treasures.list().some(${oopsPred})`, null, { timeout: 5000 });
+const oops = await a.evaluate(`window.__tp.treasures.list().find(${oopsPred})`);
 check(oops && oops.loc === "globe", "A's third box stands sealed on the globe");
 await a.click("#treasure-open");
 check((await a.locator("#treasure-left .tr-take").count()) === 1, "the panel offers Take back on the sealed box only");
