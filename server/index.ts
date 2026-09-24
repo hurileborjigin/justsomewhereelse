@@ -247,6 +247,7 @@ const lobbyMsg = (): ServerMessage => ({
   online: online(),
   setup: setupMode(),
   open: OPEN,
+  build: BUILD_ID,
 });
 
 /** Anyone still on the login screen gets a fresh lobby (names/online/setup). */

@@ -162,7 +162,14 @@ export type ClientMessage =
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
-  | { t: "lobby"; names: [string, string]; online: [boolean, boolean]; setup: boolean; open: boolean }
+  | {
+      t: "lobby";
+      names: [string, string];
+      online: [boolean, boolean];
+      setup: boolean;
+      open: boolean;
+      build: string; // the server's build id, so a stale tab can reload before it even logs in
+    }
   | { t: "deny"; reason: "pass" | "taken" | "setup" | "exists" }
   | {
       t: "welcome";

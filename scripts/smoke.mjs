@@ -85,8 +85,13 @@ try {
   await a.open;
   const lobbyA = await a.next();
   expect(
-    lobbyA.t === "lobby" && lobbyA.names[0] === "gloria" && lobbyA.names[1] === "khurlee" && lobbyA.setup === true,
-    "fresh world: lobby announces gloria & khurlee and asks for setup",
+    lobbyA.t === "lobby" &&
+      lobbyA.names[0] === "gloria" &&
+      lobbyA.names[1] === "khurlee" &&
+      lobbyA.setup === true &&
+      typeof lobbyA.build === "string" &&
+      lobbyA.build.length > 0,
+    "fresh world: lobby announces gloria & khurlee, asks for setup, and carries a build id",
   );
 
   a.send({ t: "join", id: 1, pass: PASS, create: true });

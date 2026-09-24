@@ -288,6 +288,10 @@ async function boot() {
     onMessage(msg) {
       switch (msg.t) {
         case "lobby": {
+          if (staleBundle(msg.build)) {
+            location.reload();
+            break;
+          }
           if (net.joined) break;
           names = msg.names;
           setupMode = msg.setup;
