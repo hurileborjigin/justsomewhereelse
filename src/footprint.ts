@@ -1,6 +1,7 @@
 import { Vector3 } from "three";
 import { BOX_SIZES, type BoxSize } from "../shared/protocol.ts";
-import type { World } from "./world.ts";
+import { footprintVerdict } from "./gallery.ts";
+import { RoomWorld, type World } from "./world.ts";
 
 const _pos = new Vector3();
 const _up = new Vector3();
@@ -14,24 +15,18 @@ const _ahead = new Vector3();
 /**
  * Where a box of `size` would stand if the player on `tile`, facing
  * `forward`, left it right now: the footprint tiles in row-major order
- * (rows away from the player, columns left to right), or null when it does
- * not fit.
+ * (rows away from the player, columns left to right), whatever stands on
+ * them. Null only when the rectangle does not exist: the grid ends, or it
+ * does not close.
  *
  * Tiles are found by walking neighbor lookups and carrying the heading along
  * (on the globe the grid bends across cube edges, so a straight walk has to
  * be re-aimed after every step). The rectangle must also CLOSE: walking
  * forward-then-sideways must reach the same tile as sideways-then-forward.
  * Around the cube's eight corners that fails, and the size simply does not
- * fit there. `free(k)` is the caller's per-tile rule (terrain, doors, the
- * partner, ...).
+ * fit there.
  */
-export function footprintFor(
-  world: World,
-  tile: number,
-  forward: Vector3,
-  size: BoxSize,
-  free: (k: number) => boolean,
-): number[] | null {
+export function footprintTiles(world: World, tile: number, forward: Vector3, size: BoxSize): number[] | null {
   const { cols, rows } = BOX_SIZES[size];
   world.up(world.tilePos(tile, 0, _pos), _up);
   _fwd.copy(forward).addScaledVector(_up, -forward.dot(_up));
@@ -56,12 +51,45 @@ export function footprintFor(
       if (s1 < 0) return null;
       _ahead.crossVectors(upAt(s1, _up1), _h);
       const b = walk(world, s1, _ahead, r);
-      if (a < 0 || a !== b || seen.has(a) || !free(a)) return null;
+      if (a < 0 || a !== b || seen.has(a)) return null;
       seen.add(a);
       out.push(a);
     }
   }
   return out;
+}
+
+/**
+ * Per tile of a footprint, in order: may this part of the box stand there?
+ * `free(k)` is the caller's per-tile rule (terrain, doors, the partner, ...);
+ * in a treasure hall the bay rule is AND-ed in, so a box lies either wholly
+ * inside one bay big enough for it or wholly on open floor.
+ */
+export function footprintCheck(
+  world: World,
+  tiles: number[],
+  size: BoxSize,
+  free: (k: number) => boolean,
+): boolean[] {
+  const ok = tiles.map((k) => free(k));
+  if (world instanceof RoomWorld && world.gallery) {
+    const bays = footprintVerdict(tiles.map((k) => world.unkey(k)), size);
+    return ok.map((v, n) => v && bays[n]);
+  }
+  return ok;
+}
+
+/** The footprint when every tile of it may hold the box, else null. */
+export function footprintFor(
+  world: World,
+  tile: number,
+  forward: Vector3,
+  size: BoxSize,
+  free: (k: number) => boolean,
+): number[] | null {
+  const tiles = footprintTiles(world, tile, forward, size);
+  if (!tiles) return null;
+  return footprintCheck(world, tiles, size, free).every(Boolean) ? tiles : null;
 }
 
 /**

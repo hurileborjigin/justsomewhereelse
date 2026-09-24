@@ -19,6 +19,11 @@ const HEAD_HEIGHT: Record<CharacterId, number> = { bee: 0.55, donkey: 1.85 };
 
 const now = () => performance.now() / 1000;
 
+// the key hints only help with a keyboard; on a phone they just crowd the narrow field
+const KEYS = typeof matchMedia === "function" && !matchMedia("(pointer: coarse)").matches;
+const SAY_PLACEHOLDER = KEYS ? "Say something… (Enter)" : "Say something…";
+const CAPTION_PLACEHOLDER = KEYS ? "Add a caption… (Enter to send)" : "Add a caption…";
+
 /** Full-screen viewer for photos and videos; click anywhere to close. */
 export function openLightbox(media: MediaRef) {
   const box = document.getElementById("lightbox");
@@ -213,6 +218,7 @@ export class Chat {
       return el;
     };
     this.input = $("chat-input") as HTMLInputElement;
+    this.input.placeholder = SAY_PLACEHOLDER;
     this.log = $("chat-log");
     this.panel = $("chat-panel");
     this.openBtn = $("chat-open") as HTMLButtonElement;
@@ -309,7 +315,7 @@ export class Chat {
       thumb.replaceChildren(img);
     }
     document.getElementById("chat-preview")!.hidden = false;
-    this.input.placeholder = "Add a caption… (Enter to send)";
+    this.input.placeholder = CAPTION_PLACEHOLDER;
   }
 
   private clearPending() {
@@ -318,7 +324,7 @@ export class Chat {
     this.pendingUrl = null;
     document.getElementById("chat-preview-thumb")!.replaceChildren();
     document.getElementById("chat-preview")!.hidden = true;
-    this.input.placeholder = "Say something… (Enter)";
+    this.input.placeholder = SAY_PLACEHOLDER;
   }
 
   setOpen(open: boolean) {

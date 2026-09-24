@@ -496,7 +496,7 @@ export class Treasures {
     for (const t of box.tiles) center.add(world.tilePos(t, 0, _p));
     center.divideScalar(box.tiles.length);
     if (world.isGlobe) center.normalize().multiplyScalar(SURFACE - SINK[box.size]);
-    else center.y = 0;
+    else center.y = world.floorHeight(box.tiles[0]); // on top of a gallery bay's plinth
     group.position.copy(center);
     const up = world.up(center, new Vector3());
     tangentFrameQuat(up, new Vector3(-box.fwd[0], -box.fwd[1], -box.fwd[2]), group.quaternion);

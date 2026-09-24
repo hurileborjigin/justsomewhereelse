@@ -7,6 +7,7 @@ import {
 } from "three";
 import { CHARACTERS, SURFACE, type CharacterId } from "../shared/protocol.ts";
 import type { Assets } from "./assets.ts";
+import { GALLERY, GALLERY_H, GALLERY_W, PLINTH_H, bayAt } from "./gallery.ts";
 import {
   SPAWN_TILES,
   TILE_COUNT,
@@ -40,6 +41,14 @@ export interface World {
   stepLength(fromK: number, toK: number): number;
   neighborInDirection(k: number, dir: Vector3): number;
   isBlockedFor(k: number, character: CharacterId): boolean;
+  /**
+   * The terrain part of placement: may a box stand on this tile? On the
+   * globe, wherever the donkey could walk; in a room, open floor or a gallery
+   * bay, never furniture, a pillar or another box.
+   */
+  canHold(k: number): boolean;
+  /** Height of the ground a box stands on: a gallery bay's plinth, else 0. */
+  floorHeight(k: number): number;
   /** True when the two tiles share an edge (the reunion-hop trigger). */
   areNeighbors(a: number, b: number): boolean;
   /** Edge neighbors of a tile (never -1). */
@@ -100,6 +109,14 @@ export class GlobeWorld implements World {
     return globeBlocked(k, CHARACTERS[character].fly);
   }
 
+  canHold(k: number) {
+    return !this.isBlockedFor(k, "donkey");
+  }
+
+  floorHeight(_k: number) {
+    return 0;
+  }
+
   areNeighbors(a: number, b: number) {
     return neighborsOf(a).includes(b);
   }
@@ -132,7 +149,9 @@ export type BuildingKind =
   | "barn"
   | "opera"
   | "ger"
-  | "frauenkirche";
+  | "frauenkirche"
+  | "hive"
+  | "hall";
 
 export type RoomSpec = {
   /** grid size in tiles (tile size = 2 units, same feel as the globe) */
@@ -142,7 +161,16 @@ export type RoomSpec = {
   blocked: [number, number][];
   /** cozy background color behind the open-top room */
   bg: string;
+  /** a treasure house hall: its blocked bay tiles hold boxes on plinths (src/gallery.ts) */
+  gallery?: boolean;
+  /** sky color, ground color and intensity of the room's soft fill light (default: warm, 1.0) */
+  fill?: [number, number, number];
 };
+
+const WARM_FILL: [number, number, number] = [0xffe8c8, 0x5a4a3a, 1.0];
+
+/** Both treasure houses share one hall layout: its bays and pillars are the furniture. */
+const GALLERY_BLOCKED: [number, number][] = [...GALLERY.bays.flatMap((b) => b.tiles), ...GALLERY.pillars];
 
 // The flexible part: swap a building's interior by editing its spec here and
 // its geometry in assets/blender/rooms.py (a museum/gallery later = a bigger
@@ -180,6 +208,9 @@ export const ROOM_SPECS: Record<BuildingKind, RoomSpec> = {
     blocked: [[2, 0], [1, 2], [3, 2], [1, 3], [3, 3], [1, 4], [3, 4]],
     bg: "1c2030",
   },
+  hive: { w: GALLERY_W, h: GALLERY_H, blocked: GALLERY_BLOCKED, bg: "2a1c10", gallery: true },
+  // slate and dark brick swallow the warm default light: a cooler, brighter fill
+  hall: { w: GALLERY_W, h: GALLERY_H, blocked: GALLERY_BLOCKED, bg: "16202a", gallery: true, fill: [0xe4ecff, 0x55606a, 1.8] },
 };
 
 export const BUILDING_NAMES: Record<BuildingKind, string> = {
@@ -190,9 +221,13 @@ export const BUILDING_NAMES: Record<BuildingKind, string> = {
   opera: "opera house",
   ger: "ger",
   frauenkirche: "Frauenkirche",
+  hive: "Hive",
+  hall: "Copper Hall",
 };
 
 const T = 2; // tile size
+const ZOOM_MAX_ROOM = 2.2; // interiors stay dollhouse-scale
+const ZOOM_MAX_GALLERY = 6; // a treasure hall: from the door, most of it in view
 const AXES = [
   { di: 1, dj: 0, v: new Vector3(1, 0, 0) },
   { di: -1, dj: 0, v: new Vector3(-1, 0, 0) },
@@ -206,6 +241,10 @@ export class RoomWorld implements World {
   isGlobe = false;
   scene = new Scene();
   exitTile: number;
+  /** How far the camera may zoom out in this room. */
+  zoomMax: number;
+  /** A treasure house hall: bay tiles hold boxes on plinths. */
+  gallery: boolean;
   private w: number;
   private h: number;
   private furniture = new Set<number>(); // from ROOM_SPECS, permanent
@@ -220,9 +259,11 @@ export class RoomWorld implements World {
     for (const [i, j] of spec.blocked) this.furniture.add(this.key(i, j));
     // the door is in the middle of the +Z wall; standing there offers "Leave"
     this.exitTile = this.key(Math.floor(spec.w / 2), spec.h - 1);
+    this.gallery = spec.gallery === true;
+    this.zoomMax = this.gallery ? ZOOM_MAX_GALLERY : ZOOM_MAX_ROOM;
 
     this.scene.background = new Color(`#${spec.bg}`);
-    this.scene.add(new HemisphereLight(0xffe8c8, 0x5a4a3a, 1.0));
+    this.scene.add(new HemisphereLight(...(spec.fill ?? WARM_FILL)));
     const lamp = new DirectionalLight(0xfff0d8, 1.8);
     lamp.position.set(4, 10, 3);
     this.scene.add(lamp);
@@ -233,7 +274,8 @@ export class RoomWorld implements World {
     return j * this.w + i;
   }
 
-  private unkey(k: number): [number, number] {
+  /** The (i, j) of a tile key: i across the width, j toward the door. */
+  unkey(k: number): [number, number] {
     return [k % this.w, Math.floor(k / this.w)];
   }
 
@@ -285,6 +327,21 @@ export class RoomWorld implements World {
 
   isBlockedFor(k: number, _character: CharacterId) {
     return this.furniture.has(k) || this.boxes.has(k);
+  }
+
+  canHold(k: number) {
+    if (this.boxes.has(k)) return false;
+    return !this.furniture.has(k) || this.isBay(k);
+  }
+
+  floorHeight(k: number) {
+    return this.isBay(k) ? PLINTH_H : 0;
+  }
+
+  private isBay(k: number) {
+    if (!this.gallery || !this.hasTile(k)) return false;
+    const [i, j] = this.unkey(k);
+    return bayAt(i, j) !== null;
   }
 
   areNeighbors(a: number, b: number) {

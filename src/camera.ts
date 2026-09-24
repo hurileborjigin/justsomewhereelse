@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Vector3 } from "three";
 import { dampFactor } from "./math.ts";
 import type { Player } from "./player.ts";
+import { RoomWorld } from "./world.ts";
 
 const _up = new Vector3();
 const _fwd = new Vector3();
@@ -11,7 +12,6 @@ const _right = new Vector3();
 
 const ZOOM_MIN = 0.45; // right over the character's shoulder
 const ZOOM_MAX_GLOBE = 11; // the whole planet fits on screen
-const ZOOM_MAX_ROOM = 2.2; // interiors stay dollhouse-scale
 const FAR_LOOK_BLEND = 0.85; // how much the far view centers on the planet
 const TILT_MIN = -0.26; // a little below the usual view
 const TILT_MAX = 1.31; // nearly straight up
@@ -100,7 +100,7 @@ export class FollowCamera {
   }
 
   private clampZoom(player: Player) {
-    const max = player.world.isGlobe ? ZOOM_MAX_GLOBE : ZOOM_MAX_ROOM;
+    const max = player.world instanceof RoomWorld ? player.world.zoomMax : ZOOM_MAX_GLOBE;
     if (this.targetZoom > max) this.targetZoom = max;
   }
 

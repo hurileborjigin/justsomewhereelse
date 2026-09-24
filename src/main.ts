@@ -1,4 +1,4 @@
-import { Clock, Quaternion, Vector3, type Scene } from "three";
+import { Quaternion, Timer, Vector3, type Scene } from "three";
 import { CHARACTER_OF, type PlayerId, type StateData } from "../shared/protocol.ts";
 import { Animals } from "./animals.ts";
 import { CharacterView } from "./animate.ts";
@@ -426,8 +426,8 @@ async function boot() {
     resolveWorld: (loc) => (loc === "globe" ? globeWorld : (rooms.get(loc) ?? null)),
     placeName,
     canPlaceOn: (world, k) => {
-      // the donkey's rule covers trees, buildings, furniture, other boxes AND water
-      if (world.isBlockedFor(k, "donkey")) return false;
+      // terrain: trees, buildings, furniture, pillars, other boxes and water refuse; gallery bays hold
+      if (!world.canHold(k)) return false;
       if (world.isGlobe) {
         if (doorTileMap.has(k) || SPAWN_TILES.includes(k)) return false;
       } else if (k === (world as RoomWorld).exitTile) {
@@ -457,7 +457,8 @@ async function boot() {
 
   // ---- frame loop -----------------------------------------------------------
 
-  const clock = new Clock();
+  const timer = new Timer();
+  timer.connect(document); // a hidden tab resumes without one huge step
   const up = new Vector3();
   const camRight = new Vector3();
   const Y = new Vector3(0, 1, 0);
@@ -465,9 +466,10 @@ async function boot() {
   let wasAdjacent = false;
   let hourOverride: number | null = null; // dev hook for testing sky phases
 
-  renderer.setAnimationLoop(() => {
-    const dt = Math.min(clock.getDelta(), 0.05);
-    const t = clock.elapsedTime;
+  renderer.setAnimationLoop((time) => {
+    timer.update(time);
+    const dt = Math.min(timer.getDelta(), 0.05);
+    const t = timer.getElapsed();
     const world = player.world;
 
     // the partner is visible only when you are in the same world

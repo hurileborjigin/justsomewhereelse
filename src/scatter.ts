@@ -40,6 +40,22 @@ const LANDMARKS: {
   { kind: "frauenkirche", tiles: [[2, 13, 11], [2, 13, 10]], door: [2, 13, 12] },
 ];
 
+// The two treasure houses, placed AFTER all the seeded scatter so every tree,
+// building and grass tuft stays where it was. Their tiles and doorsteps were
+// chosen among tiles that scatter leaves completely empty (no building, tree,
+// grass, lake, spawn, doorstep or landmark plaza; see world.test.ts). gloria's
+// Hive faces the opera house across a small square on face 3; khurlee's Copper
+// Hall stands a few steps from the ger and the Frauenkirche on face 2, its
+// door toward them. Like the landmarks, the first tile touches the door.
+const TREASURE_HOUSES: {
+  kind: BuildingKind;
+  tiles: [number, number, number][];
+  door: [number, number, number];
+}[] = [
+  { kind: "hive", tiles: [[3, 2, 7], [3, 1, 7]], door: [3, 3, 7] },
+  { kind: "hall", tiles: [[2, 7, 13], [2, 6, 13]], door: [2, 8, 13] },
+];
+
 /**
  * Seeded, tile-based world dressing. Both players run this with the same SEED,
  * so they deterministically see the identical planet with zero network cost -
@@ -74,23 +90,13 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
   // landmarks first: fixed positions, stable ids (persisted locations inside
   // them survive any change to the random scatter)
   for (const lm of LANDMARKS) {
-    const tiles = lm.tiles.map(([f, i, j]) => tileKey(f, i, j));
-    const door = tileKey(...lm.door);
-    const anchor =
-      tiles.length === 1
-        ? tileCenter(tiles[0]).clone()
-        : tileCenter(tiles[0]).clone().add(tileCenter(tiles[1])).normalize();
-    const obj = assets[lm.kind].clone(true);
-    obj.position.copy(anchor).multiplyScalar(SURFACE - 0.03);
-    tangentFrameQuat(anchor.clone(), greatCircleDir(anchor, tileCenter(door), new Vector3()), obj.quaternion);
-    scene.add(obj);
-    occupy(tiles, true);
+    const b = placeLandmark(scene, assets, lm);
     // keep a clear little plaza around each landmark
-    for (const t of [...tiles, door]) {
+    for (const t of [...b.tiles, ...b.doorTiles]) {
       protectedTiles.add(t);
       for (const n of neighborsOf(t)) if (n >= 0) protectedTiles.add(n);
     }
-    buildings.push({ id: lm.kind, kind: lm.kind, tiles, doorTiles: [door] });
+    buildings.push(b);
   }
 
   // strange buildings next, while contiguous pairs of tiles are plentiful.
@@ -165,7 +171,30 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
   inst.count = placed;
   scene.add(inst);
 
+  // last, so the random scatter above never sees them
+  for (const house of TREASURE_HOUSES) buildings.push(placeLandmark(scene, assets, house));
+
   return buildings;
+}
+
+/** A building at fixed tiles with a stable id (its kind), facing its door tile. */
+function placeLandmark(
+  scene: Scene,
+  assets: Assets,
+  lm: { kind: BuildingKind; tiles: [number, number, number][]; door: [number, number, number] },
+): Building {
+  const tiles = lm.tiles.map(([f, i, j]) => tileKey(f, i, j));
+  const door = tileKey(...lm.door);
+  const anchor =
+    tiles.length === 1
+      ? tileCenter(tiles[0]).clone()
+      : tileCenter(tiles[0]).clone().add(tileCenter(tiles[1])).normalize();
+  const obj = assets[lm.kind].clone(true);
+  obj.position.copy(anchor).multiplyScalar(SURFACE - 0.03);
+  tangentFrameQuat(anchor.clone(), greatCircleDir(anchor, tileCenter(door), new Vector3()), obj.quaternion);
+  scene.add(obj);
+  occupy(tiles, true);
+  return { id: lm.kind, kind: lm.kind, tiles, doorTiles: [door] };
 }
 
 function placeOnTile(obj: Object3D, k: number, spin: number, scale: number) {
