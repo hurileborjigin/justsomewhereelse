@@ -14,10 +14,11 @@ import {
 } from "../shared/protocol.ts";
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
+import { el } from "./dom.ts";
 import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
-import { Postcard, TAKE_BACK_CONFIRM, chestIcon, el, type Draft, type Postmark } from "./postcard.ts";
+import { Postcard, TAKE_BACK_CONFIRM, chestIcon, type Draft, type Postmark } from "./postcard.ts";
 import type { World } from "./world.ts";
 
 const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sealed
@@ -61,6 +62,8 @@ export type TreasureHooks = {
   onPanelOpen(): void;
   /** Photo mode: a JPEG of the world, or null when the sender came back without a shot. */
   takePicture(): Promise<Blob | null>;
+  /** Ends photo mode without a shot, when the card it was taken for is closed or replaced from outside. */
+  cancelPicture(): void;
   net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
 };
 
@@ -192,6 +195,8 @@ export class Treasures {
   /** The box on the reader's screen changed under them: redraw its buttons, or close it once it left their reach. */
   private refreshReading(box: Box) {
     if (this.reading !== box.id || !this.postcard.isOpen) return;
+    // the card below the viewfinder is about to close or change: the viewfinder goes first
+    if (this.postcard.isAway) this.hooks.cancelPicture();
     const mine = box.creator === this.me;
     if (!mine && box.loc === null && box.owner !== this.me) {
       this.postcard.close();
@@ -220,6 +225,7 @@ export class Treasures {
     this.boxes.delete(id);
     if (this.pendingOpen === id) this.pendingOpen = null;
     if (this.reading === id && this.postcard.isOpen) {
+      if (this.postcard.isAway) this.hooks.cancelPicture();
       this.postcard.close();
       this.toast("That box was taken back.");
     }
@@ -295,7 +301,8 @@ export class Treasures {
     try {
       return await this.hooks.takePicture();
     } finally {
-      this.hooks.onDialog(true);
+      // a cancelled shot may come back to a card that was closed meanwhile
+      this.hooks.onDialog(this.postcard.isOpen);
     }
   }
 

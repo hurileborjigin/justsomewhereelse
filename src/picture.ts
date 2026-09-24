@@ -181,6 +181,28 @@ export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks)
       e.stopPropagation();
     });
 
+    const tools = el("div", "pc-tools");
+    const tool = (svg: string, title: string, id: string, onClick: () => void) => {
+      const b = el("button", "pc-tool");
+      b.type = "button";
+      b.id = id;
+      b.title = title;
+      b.innerHTML = svg;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    if (hooks.takePicture) tools.append(tool(ICON.camera, "Take another picture", "pc-retake", take));
+    tools.append(tool(ICON.frame, "Upload another photo", "pc-replace", pick));
+    tools.append(tool(ICON.cross, "Remove the picture", "pc-remove", () => set(null)));
+
+    const slider = el("input", "pc-zoom");
+    slider.type = "range";
+    slider.min = "1";
+    slider.max = "3";
+    slider.step = "0.01";
+    slider.value = String(d.zoom);
+    slider.title = "Zoom";
+
     const state = { focus: d.focus, zoom: d.zoom };
     let placed: Placement | null = null;
     // every layout (the photo loaded, the frame resized) re-measures the caption too
@@ -204,6 +226,7 @@ export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks)
       slider.value = String(d.zoom);
       settle();
     };
+    slider.addEventListener("input", () => setZoom(Number(slider.value)));
 
     // drag with one pointer, pinch with two
     const pointers = new Map<number, { x: number; y: number }>();
@@ -257,29 +280,6 @@ export function pictureEditor(initial: PictureDraft | null, hooks: PictureHooks)
       },
       { passive: false },
     );
-
-    const tools = el("div", "pc-tools");
-    const tool = (svg: string, title: string, id: string, onClick: () => void) => {
-      const b = el("button", "pc-tool");
-      b.type = "button";
-      b.id = id;
-      b.title = title;
-      b.innerHTML = svg;
-      b.addEventListener("click", onClick);
-      return b;
-    };
-    if (hooks.takePicture) tools.append(tool(ICON.camera, "Take another picture", "pc-retake", take));
-    tools.append(tool(ICON.frame, "Upload another photo", "pc-replace", pick));
-    tools.append(tool(ICON.cross, "Remove the picture", "pc-remove", () => set(null)));
-
-    const slider = el("input", "pc-zoom");
-    slider.type = "range";
-    slider.min = "1";
-    slider.max = "3";
-    slider.step = "0.01";
-    slider.value = String(d.zoom);
-    slider.title = "Zoom";
-    slider.addEventListener("input", () => setZoom(Number(slider.value)));
 
     root.replaceChildren(img, caption, tools, slider, file);
     objectUrl = d.source instanceof Blob ? URL.createObjectURL(d.source) : null;

@@ -1386,12 +1386,14 @@
       #ph-shutter:active::after {
         inset: 9px;
       }
+      /* the flash lives outside #photo: the viewfinder hides the moment the shutter fires, the flash fades after */
       #ph-flash {
-        position: absolute;
+        position: fixed;
         inset: 0;
         background: #fff;
         opacity: 0;
         pointer-events: none;
+        z-index: 12;
       }
       #ph-flash.ph-go {
         animation: ph-flash 0.35s ease-out;
@@ -1657,8 +1659,8 @@
       <button type="button" id="ph-back">← Back to the card</button>
       <div id="ph-hint">Drag to look around · scroll or pinch to zoom · walk as usual</div>
       <button type="button" id="ph-shutter" title="Take the picture"></button>
-      <div id="ph-flash"></div>
     </div>
+    <div id="ph-flash"></div>
     <div id="lightbox" hidden></div>
     <div id="postcard" hidden></div>
     <input id="pc-file" type="file" accept="image/*,video/*" multiple hidden />

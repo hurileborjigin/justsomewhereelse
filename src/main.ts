@@ -49,7 +49,7 @@ async function boot() {
   try {
     assets = await loadAssets();
   } catch (err) {
-    loading.textContent = `Could not load the models — run "npm run models" first. (${err})`;
+    loading.textContent = `Could not load the models. Run "npm run models" first. (${err})`;
     throw err;
   }
   loading.remove();
@@ -169,8 +169,8 @@ async function boot() {
     const waitingForCreator = !openMode && setupMode && pickedId !== 0;
     loginNote.hidden = openMode || !setupMode;
     loginNote.textContent = creating
-      ? `Welcome, ${names[0]}! This planet is brand new — choose the secret word you two will share.`
-      : `This planet is brand new — ${names[0]} chooses the secret word first 💚`;
+      ? `Welcome, ${names[0]}! This planet is brand new: choose the secret word you two will share.`
+      : `This planet is brand new: ${names[0]} chooses the secret word first 💚`;
     loginPass.placeholder = creating ? "Choose a secret word" : "Secret word";
     loginPass.hidden = openMode || waitingForCreator;
     loginPass2.hidden = !creating;
@@ -315,7 +315,7 @@ async function boot() {
             pass: setupMode ? "That word is too short" : "That's not the secret word 🙈",
             taken: "That one is already playing",
             setup: `${names[0]} chooses the secret word first 💚`,
-            exists: "The secret word is already chosen — just enter it",
+            exists: "The secret word is already chosen, just enter it",
           } as const;
           showLogin(reasons[msg.reason]);
           break;
@@ -440,6 +440,7 @@ async function boot() {
       if (innerWidth < 640) chat.setOpen(false);
     },
     takePicture: () => photo.take(PHOTO_AIM[player.character]),
+    cancelPicture: () => photo.cancel(),
     net,
   });
   // on a phone the two panels would overlap: opening one tucks the other away

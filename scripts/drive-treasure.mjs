@@ -510,6 +510,15 @@ await a.evaluate(() => {
     window.__shots++;
     return toBlob.apply(this, args);
   };
+  // the flash must really paint after the viewfinder hides: sample its opacity every frame
+  window.__flashMax = 0;
+  const flash = document.getElementById("ph-flash");
+  const t0 = performance.now();
+  const sample = () => {
+    window.__flashMax = Math.max(window.__flashMax, Number(getComputedStyle(flash).opacity));
+    if (performance.now() - t0 < 8000) requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
   const s = document.getElementById("ph-shutter");
   s.click();
   s.click();
@@ -518,6 +527,9 @@ await a.evaluate(() => {
 await a.waitForSelector("#postcard:not(.pc-away)");
 await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
 check((await a.evaluate(() => window.__shots)) === 1, "a second shutter press does not take a second shot");
+await a.waitForFunction(() => window.__flashMax > 0.3, undefined, { timeout: 3000 }).catch(() => {});
+const flashMax = await a.evaluate(() => window.__flashMax);
+check(flashMax > 0.3, `the shutter flash shows over the card (peak opacity ${flashMax.toFixed(2)})`);
 await a.evaluate(() => window.__restoreToBlob());
 check((await a.locator("#postcard .pc-photo").count()) === 1, "the shot is staged on the picture face");
 check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the card comes back on the picture side");

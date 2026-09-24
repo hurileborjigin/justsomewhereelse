@@ -16,8 +16,6 @@ import {
 import { mediaElement } from "./chat.ts";
 import { el, graphemes } from "./dom.ts";
 import { pictureEditor, pictureView, type PictureDraft } from "./picture.ts";
-export { el, graphemes };
-export type { PictureDraft };
 
 /** The postcard's dressing as it should read: the stamp picture, the names, the place, the date. */
 export type Postmark = { stamp: string; from: string; to: string; place: string; date: Date };
@@ -139,6 +137,11 @@ export class Postcard {
 
   get isOpen() {
     return !this.root.hidden;
+  }
+
+  /** Whether the dialog is stepped aside for photo mode (see setAway). */
+  get isAway() {
+    return this.away;
   }
 
   /** Photo mode: hide the dialog (it stays open, nothing is lost) and bring it back. */

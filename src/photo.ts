@@ -22,6 +22,8 @@ export class PhotoMode {
   private flash: HTMLElement;
   private active = false;
   private taking = false;
+  /** Ends the current take with null; set while the viewfinder is up. */
+  private end: (() => void) | null = null;
 
   constructor(renderer: WebGLRenderer, cam: FollowCamera, renderFrame: () => void) {
     this.renderer = renderer;
@@ -39,6 +41,14 @@ export class PhotoMode {
 
   get isActive() {
     return this.active;
+  }
+
+  /**
+   * Ends photo mode from outside, as Escape does: the take resolves with null.
+   * Unlike Escape it does not wait for a shot in flight; that shot is dropped.
+   */
+  cancel() {
+    this.end?.();
   }
 
   /**
@@ -121,6 +131,7 @@ export class PhotoMode {
         this.taking = true;
         try {
           const blob = await this.capture();
+          if (done) return; // cancelled while the shot was in flight
           this.flash.classList.remove("ph-go");
           void this.flash.offsetWidth; // restart the animation
           this.flash.classList.add("ph-go");
@@ -149,10 +160,12 @@ export class PhotoMode {
         document.body.classList.remove("photo");
         this.active = false;
         this.taking = false;
+        this.end = null;
         if (failure) reject(failure);
         else resolve(blob);
       };
 
+      this.end = () => finish(null);
       this.root.addEventListener("pointerdown", onDown);
       this.root.addEventListener("pointermove", onMove);
       this.root.addEventListener("pointerup", onUp);

@@ -12,7 +12,7 @@ import {
 } from "three";
 
 /**
- * Renderer, lights and sky. No shadow maps — characters get blob shadows
+ * Renderer, lights and sky. No shadow maps: characters get blob shadows
  * instead (see animate.ts), which reads better in this cartoon style anyway.
  * The sun and the sky dome are re-oriented to the player's "up" every frame
  * by main.ts, so lighting looks the same everywhere on the planet.
