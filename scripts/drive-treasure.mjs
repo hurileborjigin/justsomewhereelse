@@ -1,8 +1,9 @@
-// Visual check for treasure boxes: A writes a postcard with a photo and her own
-// dressing and leaves an S box; B walks up, opens it, keeps it with a label,
+// Visual check for treasure boxes: A writes a postcard, dresses it, frames an
+// uploaded photo with a caption on its picture side and leaves an S box; B
+// walks up, sees the picture first, flips to the words, keeps it with a label,
 // carries it into the ger and places it there, relabels it with a long label
-// and picks it up again. Act 2: a plain note, a photo-only box, and A taking a
-// sealed box back.
+// and picks it up again. Act 1b: a postcard whose picture A takes in photo
+// mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
 // Screenshots land in /tmp/tinyplanet-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
@@ -60,12 +61,57 @@ check(
 );
 check((await a.inputValue("#postcard textarea.pc-text")).endsWith("miss me.\n🐝"), "the newline landed in the text");
 const photo = await b.screenshot(); // any real PNG will do as the "photo"
-await a.setInputFiles("#pc-file", { name: "view.png", mimeType: "image/png", buffer: photo });
 // the sender dresses the card herself: stamp, recipient, place, signature
 await a.fill("#postcard .pc-stamp-in", "🌙");
 await a.fill("#postcard .pc-to-in", "my love");
 await a.fill("#postcard .pc-place-in", "Sydney");
 await a.fill("#postcard .pc-from-in", "your bee");
+// both faces are one card: the same box on screen, to the pixel
+const faceBoxes = await a.evaluate(() =>
+  [".pc-face-writing .pc-card", ".pc-face-picture"].map((s) => {
+    const r = document.querySelector(`#postcard ${s}`).getBoundingClientRect();
+    return [r.left, r.top, r.width, r.height];
+  }),
+);
+check(
+  faceBoxes[0].every((v, i) => Math.abs(v - faceBoxes[1][i]) <= 1),
+  `the writing and the picture faces share one size (${faceBoxes.map((f) => f.map(Math.round).join(",")).join(" vs ")})`,
+);
+// the picture side: flip, upload, drag, zoom, caption
+await a.click("#pc-turn");
+await a.waitForTimeout(700); // the 0.6s turn
+check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the pill turns the card to the picture side");
+check((await a.textContent("#pc-turn")) === "writing side ↻", "the pill now names the writing side");
+await a.setInputFiles("#postcard .pc-picture-file", { name: "view.png", mimeType: "image/png", buffer: photo });
+await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
+const before = await a.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
+const face = await a.locator("#postcard .pc-face-picture").boundingBox();
+await a.mouse.move(face.x + face.width / 2, face.y + face.height / 2);
+await a.mouse.down();
+await a.mouse.move(face.x + face.width / 2 - 120, face.y + face.height / 2 - 40, { steps: 8 });
+await a.mouse.up();
+// an interrupted drag leaves the photo where it is and the next drag still works
+await a.evaluate(() => document.querySelector("#postcard .pc-photo").dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1 })));
+await a.mouse.move(face.x + face.width / 2, face.y + face.height / 2);
+await a.mouse.down();
+await a.mouse.move(face.x + face.width / 2 - 40, face.y + face.height / 2, { steps: 4 });
+await a.mouse.up();
+// a range input cannot be filled: set it the way a slider move does
+await a.evaluate(() => {
+  const z = document.querySelector("#postcard .pc-zoom");
+  z.value = "1.6";
+  z.dispatchEvent(new Event("input", { bubbles: true }));
+});
+const after = await a.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
+check(before !== after, `dragging and zooming move the photo inside the card (left ${before} -> ${after})`);
+await a.fill("#postcard .pc-cap-in", "🌙".repeat(70));
+check([...(await a.inputValue("#postcard .pc-cap-in"))].length === 60, "the caption stops at 60 graphemes");
+await a.fill("#postcard .pc-cap-in", "the view from the hill");
+await a.evaluate(() => document.fonts.ready);
+await shot(a, "A0-picture-side");
+await a.click("#pc-turn");
+await a.waitForTimeout(700);
+check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 0, "the pill turns the card back to the writing");
 check(
   (await a.textContent("#postcard .pc-stamp small")) === "Sydney" &&
     (await a.textContent("#postcard .pc-postmark span:nth-child(2)")) === "Sydney",
@@ -100,25 +146,31 @@ await a.waitForSelector("#postcard textarea.pc-text");
 check(
   (await a.inputValue("#postcard textarea.pc-text")).startsWith("Dear khurlee,") &&
     (await a.inputValue("#postcard .pc-to-in")) === "my love" &&
-    (await a.locator("#postcard .pc-print").count()) === 1 &&
+    (await a.locator("#postcard .pc-print").count()) === 0 &&
+    (await a.locator("#postcard .pc-photo").count()) === 1 &&
+    (await a.inputValue("#postcard .pc-cap-in")) === "the view from the hill" &&
     (await a.locator("#postcard .pc-sizes").count()) === 0 &&
     (await a.textContent("#pc-send")) === "Save changes",
-  "edit opens the card prefilled, photo included, no size picker",
+  "edit opens the card prefilled, picture side and caption included, no prints, no size picker",
 );
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "A1b-edit");
 await a.fill("#postcard textarea.pc-text", `${await a.inputValue("#postcard textarea.pc-text")}\nP.S. I moved it a little.`);
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
-await a.waitForFunction(() => window.__tp.treasures.list()[0].text.endsWith("I moved it a little."), { timeout: 5000 });
-check((await b.evaluate(() => window.__tp.treasures.list()[0].text)) === undefined, "B still cannot read the edited sealed box");
+await a.waitForFunction(() => window.__tp.treasures.list()[0].contents.writing.text.endsWith("I moved it a little."), { timeout: 5000 });
+check((await b.evaluate(() => window.__tp.treasures.list()[0].contents)) === undefined, "B still cannot read the edited sealed box");
 await a.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
 await a.keyboard.press("e");
 await a.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
 await a.click("#pc-lift");
 await a.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
 await b.waitForFunction(() => window.__tp.treasures.list()[0].loc === null, { timeout: 5000 });
-check(true, "the lifted chest left both worlds");
+check(
+  (await a.evaluate(() => window.__tp.treasures.list()[0].loc)) === null &&
+    (await b.evaluate(() => window.__tp.treasures.list()[0].loc)) === null,
+  "the lifted chest left both worlds",
+);
 await a.evaluate((front) => {
   const tp = window.__tp;
   const w = tp.player.world;
@@ -137,7 +189,7 @@ box = moved;
 await shot(a, "A2-placed");
 await shot(b, "B2-sees-box");
 const sealedForB = await b.evaluate(() => window.__tp.treasures.list()[0]);
-check(sealedForB && sealedForB.text === undefined, "B cannot read the sealed box");
+check(sealedForB && sealedForB.contents === undefined, "B cannot read the sealed box");
 check((await b.textContent("#treasure-badge")) === "1", "B's chest badge announces one waiting box");
 const badge = await b.evaluate(() => {
   const r = document.getElementById("treasure-badge").getBoundingClientRect();
@@ -167,8 +219,39 @@ check(
     (await b.textContent("#postcard .pc-from")) === "from your bee",
   "the reader sees the dressing the sender chose",
 );
-await shot(b, "B4-postcard");
+check((await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the finder sees the picture side first");
+check((await b.textContent("#postcard .pc-cap")) === "the view from the hill", "the caption is on the picture");
+await b.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
+const savedLeft = await b.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
+check(savedLeft !== "0px", `the finder sees the sender's crop, not the default (left ${savedLeft})`);
+await shot(b, "B4a-picture-side");
 await shot(a, "A4-lid-open");
+await b.click("#postcard .pc-face-picture");
+await b.waitForTimeout(700);
+check((await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 0, "a click on the card turns it to the writing");
+await shot(b, "B4-postcard");
+// a picture whose file is gone drops the picture side rather than showing a broken image
+await b.evaluate(() => {
+  const img = document.querySelector("#postcard .pc-photo");
+  img.src = "/media/gone-" + Date.now() + ".jpg";
+});
+await b.waitForFunction(() => document.querySelector("#pc-turn")?.hidden === true);
+check(
+  await b.evaluate(
+    () => document.querySelector("#pc-turn")?.hidden === true && document.querySelector("#postcard .pc-flipper.pc-flipped") === null,
+  ),
+  "a missing picture file hides the pill and keeps the writing face",
+);
+// the broken-image check destroyed the picture face: leave the box and open it again
+await b.click("#pc-leave");
+await b.waitForFunction(() => document.getElementById("postcard").hidden);
+await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
+await b.click("#box-btn");
+await b.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
+check(
+  (await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1 && !(await b.evaluate(() => document.querySelector("#pc-turn").hidden)),
+  "reopened, the box shows its picture side again",
+);
 // Enter inside the card is a newline for the writer, never a jump to chat:
 await b.focus("#postcard input.pc-label");
 await b.keyboard.type("the softest grass");
@@ -193,7 +276,7 @@ await a.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) 
 await a.waitForTimeout(600);
 await shot(a, "A6-visits-the-ger");
 const finalA = await a.evaluate(() => window.__tp.treasures.list()[0]);
-check(finalA.loc === "ger" && finalA.text !== undefined, "A sees the placed box and still reads her own words");
+check(finalA.loc === "ger" && finalA.contents !== undefined, "A sees the placed box and still reads her own words");
 
 // ---- B relabels it with a long label, then picks it up again ----------------
 const LONG = "the softest grass on the whole planet!!!"; // BOX_LABEL_MAX_LEN characters
@@ -268,6 +351,138 @@ await home(a, SPAWN_A, SPAWN_B);
 await home(b, SPAWN_B, SPAWN_A);
 await a.waitForTimeout(500);
 
+// ---- Act 1b: a postcard with a picture taken inside the world --------------
+// on the globe, for the sky; A turns her back on B so she walks away from the spawns
+await a.evaluate(([from, away]) => {
+  const tp = window.__tp;
+  const w = tp.player.world;
+  const far = w.tilePos(away, 0, tp.player.pos.clone());
+  const dist = (n) => w.tilePos(n, 0, tp.player.pos.clone()).distanceTo(far);
+  const back = w.neighbors(from).filter((n) => !w.isBlockedFor(n, "bee")).sort((x, y) => dist(y) - dist(x))[0];
+  tp.lookAt(back);
+}, [SPAWN_A, SPAWN_B]);
+const tapOrClick = (p, sel) => (MOBILE ? p.tap(sel) : p.click(sel));
+await a.click("#treasure-open");
+await a.click("#treasure-leave");
+await a.waitForSelector("#postcard textarea.pc-text");
+await a.fill("#postcard textarea.pc-text", "Look at our sky tonight.");
+await tapOrClick(a, "#pc-turn");
+await tapOrClick(a, "#pc-snap");
+await a.waitForSelector("body.photo #photo:not([hidden])");
+check((await a.locator("#postcard.pc-away").count()) === 1, "the card steps aside while the viewfinder is up");
+check((await a.isHidden("#chat-panel")) && (await a.isHidden("#treasure-open")), "the HUD hides in photo mode");
+const rect = (p, sel) =>
+  p.evaluate((s) => {
+    const r = document.querySelector(s).getBoundingClientRect();
+    return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height };
+  }, sel);
+const apart = (x, y) => x.r <= y.l || y.r <= x.l || x.b <= y.t || y.b <= x.t;
+const win = await rect(a, "#ph-window");
+const shutterBox = await rect(a, "#ph-shutter");
+const vw = MOBILE ? 390 : 1280;
+check(Math.abs(win.w / win.h - 1.5) < 0.01, `the viewfinder window is 3:2 (${Math.round(win.w)}x${Math.round(win.h)})`);
+check(
+  (await a.locator("#ph-window .ph-corner").count()) === 4 && (await a.isVisible("#ph-hint")) && (await rect(a, "#ph-hint")).t > win.b,
+  "four corner marks, and the hint sits under the window",
+);
+check(Math.abs(shutterBox.l + shutterBox.w / 2 - vw / 2) <= 1 && shutterBox.t > win.b, "the shutter is centred below the window");
+if (MOBILE) {
+  check(await a.isVisible("#dpad"), "the d-pad stays up in photo mode");
+  // the buttons, not the grid's box: the shutter sits in the d-pad's empty bottom-right cell
+  const pads = await a.evaluate(() =>
+    [...document.querySelectorAll("#dpad button")].map((e) => {
+      const r = e.getBoundingClientRect();
+      return { l: r.left, t: r.top, r: r.right, b: r.bottom };
+    }),
+  );
+  const zoom = await rect(a, "#zoom-slider");
+  check(
+    pads.length === 5 &&
+      pads.every((p) => apart(shutterBox, p) && apart(win, p)) &&
+      apart(shutterBox, zoom) &&
+      apart(win, zoom),
+    "the shutter and the window clear the d-pad and the zoom slider",
+  );
+}
+await shot(a, "D1-viewfinder");
+const mid = { x: win.l + win.w / 2, y: win.t + win.h / 2 };
+// drags scale with the window: the same finger travel is a far bigger turn inside a phone's small window
+await a.mouse.move(mid.x, mid.y);
+await a.mouse.down();
+await a.mouse.move(mid.x, mid.y + Math.round(win.h * 0.3), { steps: 10 }); // a drag down: the tilt stops at its lower limit
+await a.mouse.up();
+await a.mouse.move(mid.x, mid.y);
+await a.mouse.down();
+await a.mouse.move(mid.x, mid.y - Math.round(win.h * 0.38), { steps: 10 });
+await a.mouse.up();
+// walking works as usual while the viewfinder is up
+const startTile = await a.evaluate(() => window.__tp.player.tile);
+await a.keyboard.down("KeyW");
+await a.waitForTimeout(700);
+await a.keyboard.up("KeyW");
+await a.waitForFunction(() => !window.__tp.player.moving, { timeout: 5000 });
+await a.waitForTimeout(300);
+const standTile = await a.evaluate(() => window.__tp.player.tile);
+check(standTile !== startTile, "W walks the character in photo mode");
+await shot(a, "D2-aimed-at-the-sky");
+// two presses in one go must take a single shot
+await a.evaluate(() => {
+  window.__shots = 0;
+  const toBlob = HTMLCanvasElement.prototype.toBlob;
+  HTMLCanvasElement.prototype.toBlob = function (...args) {
+    window.__shots++;
+    return toBlob.apply(this, args);
+  };
+  const s = document.getElementById("ph-shutter");
+  s.click();
+  s.click();
+});
+await a.waitForSelector("#postcard:not(.pc-away)");
+await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
+check((await a.evaluate(() => window.__shots)) === 1, "a second shutter press does not take a second shot");
+check((await a.locator("#postcard .pc-photo").count()) === 1, "the shot is staged on the picture face");
+check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the card comes back on the picture side");
+check((await a.locator("body.photo").count()) === 0, "photo mode is over");
+await a.evaluate(() => document.fonts.ready);
+await shot(a, "D3-shot-staged");
+const shotSrc = await a.evaluate(() => document.querySelector("#postcard .pc-photo").src);
+await tapOrClick(a, "#pc-retake");
+await a.waitForSelector("body.photo");
+await a.keyboard.press("Escape");
+await a.waitForSelector("#postcard:not(.pc-away)");
+check(
+  (await a.locator("#postcard .pc-photo").count()) === 1 &&
+    (await a.evaluate(() => document.querySelector("#postcard .pc-photo").src)) === shotSrc &&
+    !(await a.isHidden("#postcard")),
+  "Escape leaves photo mode with the card open and the old shot untouched",
+);
+await tapOrClick(a, '#postcard [data-size="s"]');
+await tapOrClick(a, "#pc-send");
+await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
+await a.waitForFunction(
+  () => window.__tp.treasures.list().some((x) => x.contents?.writing?.text === "Look at our sky tonight." && x.loc !== null),
+  { timeout: 5000 },
+);
+const skyBox = (await a.evaluate(() => window.__tp.treasures.list())).find((x) => x.contents?.writing?.text === "Look at our sky tonight.");
+check(skyBox.contents.picture?.image.url.startsWith("/media/") === true, "the shot was uploaded and the box carries it");
+check(
+  await a.evaluate(([stand, tile]) => window.__tp.player.world.neighbors(stand).includes(tile), [standTile, skyBox.tiles[0]]),
+  "the box stands in front of where A was when she pressed Leave it here",
+);
+// B finds it: the shot is the picture side
+await approach(b, skyBox.tiles[0], standTile);
+await readOpen(b);
+await b.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
+check(
+  (await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1 &&
+    (await b.evaluate(() => document.querySelector("#postcard .pc-photo").src.includes("/media/"))),
+  "the finder sees the shot on the picture side",
+);
+await shot(b, "D4-shot-read");
+await keep(b);
+await home(a, SPAWN_A, SPAWN_B);
+await a.waitForTimeout(400);
+
 // a plain note
 await a.click("#treasure-open");
 await a.click("#treasure-leave");
@@ -278,7 +493,7 @@ await shot(a, "C1-note-compose");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 await a.waitForTimeout(400);
-const note = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.style === "note"));
+const note = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "note"));
 check(note && note.loc === "globe", "A's note stands on the globe");
 await approach(b, note.tiles[0], SPAWN_A);
 await readOpen(b);
@@ -302,7 +517,7 @@ await shot(a, "C3-photos-compose");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 20000 });
 await a.waitForTimeout(400);
-const photos = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.style === "media"));
+const photos = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "media"));
 check(photos && photos.loc === "globe", "A's photo box stands on the globe");
 await approach(b, photos.tiles[0], SPAWN_A);
 await readOpen(b);
@@ -323,7 +538,7 @@ await a.fill("#postcard textarea.pc-text", "Oops, wrong spot.");
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 await a.waitForTimeout(400);
-const oops = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.opened === null && x.creator === 0));
+const oops = await a.evaluate(() => window.__tp.treasures.list().find((x) => x.contents?.style === "postcard" && x.contents.writing.text === "Oops, wrong spot."));
 check(oops && oops.loc === "globe", "A's third box stands sealed on the globe");
 await a.click("#treasure-open");
 check((await a.locator("#treasure-left .tr-take").count()) === 1, "the panel offers Take back on the sealed box only");
@@ -336,7 +551,11 @@ await a.click("#pc-take");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 await a.waitForFunction((id) => !window.__tp.treasures.list().some((x) => x.id === id), oops.id, { timeout: 5000 });
 await b.waitForFunction((id) => !window.__tp.treasures.list().some((x) => x.id === id), oops.id, { timeout: 5000 });
-check(true, "the taken-back box vanished for both players");
+check(
+  !(await a.evaluate((id) => window.__tp.treasures.list().some((x) => x.id === id), oops.id)) &&
+    !(await b.evaluate((id) => window.__tp.treasures.list().some((x) => x.id === id), oops.id)),
+  "the taken-back box vanished for both players",
+);
 await shot(a, "C6-taken-back");
 
 await browser.close();

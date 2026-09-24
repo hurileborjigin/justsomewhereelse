@@ -875,8 +875,12 @@
         color: white;
         font-size: 14px;
       }
+      /* the sizes keep a row of their own, so the announce line and the send button pair up below
+         whether or not the "greyed out" hint shows */
       .pc-sizes {
         display: flex;
+        flex-basis: 100%;
+        justify-content: center;
         gap: 6px;
       }
       .pc-sizes button {
@@ -1460,8 +1464,10 @@
         .pc-count {
           left: 22px;
         }
+        /* stacked, the signature sits in the bottom row: lift it above the flip pill */
         .pc-side {
           padding-top: 22px;
+          padding-bottom: 38px;
         }
         .pc-postmark {
           top: 36px;
