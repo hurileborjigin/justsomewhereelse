@@ -84,26 +84,60 @@ check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the 
 check((await a.textContent("#pc-turn")) === "writing side ↻", "the pill now names the writing side");
 await a.setInputFiles("#postcard .pc-picture-file", { name: "view.png", mimeType: "image/png", buffer: photo });
 await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
-const before = await a.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
+const placed = () =>
+  a.evaluate(() => {
+    const s = document.querySelector("#postcard .pc-photo").style;
+    const f = document.querySelector("#postcard .pc-picture");
+    const [left, top, width, height] = [s.left, s.top, s.width, s.height].map(parseFloat);
+    // the point of the photo under the frame's centre: the crop, whatever the frame's size
+    const focus = [(f.clientWidth / 2 - left) / width, (f.clientHeight / 2 - top) / height];
+    return { left, top, width, frame: [f.clientWidth, f.clientHeight], focus };
+  });
 const face = await a.locator("#postcard .pc-face-picture").boundingBox();
-await a.mouse.move(face.x + face.width / 2, face.y + face.height / 2);
+const cx = face.x + face.width / 2;
+const cy = face.y + face.height / 2;
+// at zoom 1 the photo only overhangs the card along one axis (x for a landscape
+// shot on the desktop card, y for a portrait one on the phone card): drag along it
+const start = await placed();
+const alongX = start.width > face.width + 1;
+const axis = alongX ? "left" : "top";
+const at = (d) => (alongX ? [cx + d, cy] : [cx, cy + d]);
+await a.mouse.move(cx, cy);
 await a.mouse.down();
-await a.mouse.move(face.x + face.width / 2 - 120, face.y + face.height / 2 - 40, { steps: 8 });
+await a.mouse.move(...at(15), { steps: 3 });
 await a.mouse.up();
-// an interrupted drag leaves the photo where it is and the next drag still works
-await a.evaluate(() => document.querySelector("#postcard .pc-photo").dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1 })));
-await a.mouse.move(face.x + face.width / 2, face.y + face.height / 2);
+const afterDrag = await placed();
+check(afterDrag[axis] !== start[axis], `a drag moves the photo (${axis} ${start[axis]} -> ${afterDrag[axis]})`);
+// an interrupted drag stops following the pointer
+await a.mouse.move(cx, cy);
 await a.mouse.down();
-await a.mouse.move(face.x + face.width / 2 - 40, face.y + face.height / 2, { steps: 4 });
+await a.mouse.move(...at(-5), { steps: 2 });
+const atCancel = await placed();
+await a.evaluate(() =>
+  document.querySelector("#postcard .pc-photo").dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1, bubbles: true })),
+);
+await a.mouse.move(...at(-40), { steps: 4 });
 await a.mouse.up();
+const afterCancel = await placed();
+check(
+  atCancel[axis] !== afterDrag[axis] && afterCancel[axis] === atCancel[axis],
+  `a cancelled drag leaves the photo where the cancel found it (${axis} ${afterDrag[axis]} -> ${atCancel[axis]}, then stays ${afterCancel[axis]})`,
+);
+// and the next drag works again
+await a.mouse.move(cx, cy);
+await a.mouse.down();
+await a.mouse.move(...at(-20), { steps: 4 });
+await a.mouse.up();
+const afterThird = await placed();
+check(afterThird[axis] !== afterCancel[axis], `the next drag moves the photo again (${axis} ${afterCancel[axis]} -> ${afterThird[axis]})`);
 // a range input cannot be filled: set it the way a slider move does
 await a.evaluate(() => {
   const z = document.querySelector("#postcard .pc-zoom");
   z.value = "1.6";
   z.dispatchEvent(new Event("input", { bubbles: true }));
 });
-const after = await a.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
-check(before !== after, `dragging and zooming move the photo inside the card (left ${before} -> ${after})`);
+const zoomed = await placed();
+check(zoomed.width > afterThird.width, `the zoom slider enlarges the photo (width ${afterThird.width} -> ${zoomed.width})`);
 await a.fill("#postcard .pc-cap-in", "🌙".repeat(70));
 check([...(await a.inputValue("#postcard .pc-cap-in"))].length === 60, "the caption stops at 60 graphemes");
 await a.fill("#postcard .pc-cap-in", "the view from the hill");
@@ -125,6 +159,7 @@ check(
 await a.click('#postcard [data-size="s"]');
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "A1-compose");
+const senderPlaced = await placed();
 await a.click("#pc-send");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 15000 });
 await a.waitForTimeout(500);
@@ -222,8 +257,22 @@ check(
 check((await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the finder sees the picture side first");
 check((await b.textContent("#postcard .pc-cap")) === "the view from the hill", "the caption is on the picture");
 await b.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
-const savedLeft = await b.evaluate(() => document.querySelector("#postcard .pc-photo").style.left);
-check(savedLeft !== "0px", `the finder sees the sender's crop, not the default (left ${savedLeft})`);
+const finderPlaced = await b.evaluate(() => {
+  const s = document.querySelector("#postcard .pc-photo").style;
+  const f = document.querySelector("#postcard .pc-picture");
+    const [left, top, width, height] = [s.left, s.top, s.width, s.height].map(parseFloat);
+    // the point of the photo under the frame's centre: the crop, whatever the frame's size
+    const focus = [(f.clientWidth / 2 - left) / width, (f.clientHeight / 2 - top) / height];
+    return { left, top, width, frame: [f.clientWidth, f.clientHeight], focus };
+});
+// same zoom and the same point of the photo under the centre of the card; the phone's read card
+// can be a pixel or two shorter than the compose card, so pixel offsets are compared through the focus
+check(
+  Math.abs(finderPlaced.width - senderPlaced.width) < 0.5 &&
+    finderPlaced.focus.every((v, i) => Math.abs(v - senderPlaced.focus[i]) < 0.002) &&
+    Math.abs(finderPlaced.focus[0] - 0.5) + Math.abs(finderPlaced.focus[1] - 0.5) > 0.005,
+  `the finder sees the sender's crop, not the centred default (${JSON.stringify(finderPlaced)} vs ${JSON.stringify(senderPlaced)})`,
+);
 await shot(b, "B4a-picture-side");
 await shot(a, "A4-lid-open");
 await b.click("#postcard .pc-face-picture");
@@ -379,13 +428,13 @@ const rect = (p, sel) =>
 const apart = (x, y) => x.r <= y.l || y.r <= x.l || x.b <= y.t || y.b <= x.t;
 const win = await rect(a, "#ph-window");
 const shutterBox = await rect(a, "#ph-shutter");
-const vw = MOBILE ? 390 : 1280;
+const vw = await a.evaluate(() => innerWidth);
 check(Math.abs(win.w / win.h - 1.5) < 0.01, `the viewfinder window is 3:2 (${Math.round(win.w)}x${Math.round(win.h)})`);
 check(
   (await a.locator("#ph-window .ph-corner").count()) === 4 && (await a.isVisible("#ph-hint")) && (await rect(a, "#ph-hint")).t > win.b,
   "four corner marks, and the hint sits under the window",
 );
-check(Math.abs(shutterBox.l + shutterBox.w / 2 - vw / 2) <= 1 && shutterBox.t > win.b, "the shutter is centred below the window");
+check(Math.abs(shutterBox.l + shutterBox.w / 2 - vw / 2) <= 1 && shutterBox.t > win.b, "the shutter sits centred at the bottom of the screen");
 if (MOBILE) {
   check(await a.isVisible("#dpad"), "the d-pad stays up in photo mode");
   // the buttons, not the grid's box: the shutter sits in the d-pad's empty bottom-right cell
@@ -406,15 +455,21 @@ if (MOBILE) {
 }
 await shot(a, "D1-viewfinder");
 const mid = { x: win.l + win.w / 2, y: win.t + win.h / 2 };
-// drags scale with the window: the same finger travel is a far bigger turn inside a phone's small window
 await a.mouse.move(mid.x, mid.y);
 await a.mouse.down();
-await a.mouse.move(mid.x, mid.y + Math.round(win.h * 0.3), { steps: 10 }); // a drag down: the tilt stops at its lower limit
+await a.mouse.move(mid.x, mid.y + 160, { steps: 10 }); // a drag down: the tilt stops at its lower limit (-0.26)
 await a.mouse.up();
+const lowTilt = await a.evaluate(() => window.__tp.look().tilt);
+// at TILT_PER_PX 0.002, 205px turns 0.41 up (from the lower limit to 0.15 above level) and 145px
+// turns 0.29 (to 0.03): the phone's window spans far fewer degrees, so a smaller tilt keeps the
+// character inside it
+const up = MOBILE ? 145 : 205;
 await a.mouse.move(mid.x, mid.y);
 await a.mouse.down();
-await a.mouse.move(mid.x, mid.y - Math.round(win.h * 0.38), { steps: 10 });
+await a.mouse.move(mid.x, mid.y - up, { steps: 10 });
 await a.mouse.up();
+const upTilt = await a.evaluate(() => window.__tp.look().tilt);
+check(lowTilt < 0 && upTilt > 0, `dragging up tilts the view up (tilt ${lowTilt.toFixed(2)} -> ${upTilt.toFixed(2)})`);
 // walking works as usual while the viewfinder is up
 const startTile = await a.evaluate(() => window.__tp.player.tile);
 await a.keyboard.down("KeyW");
@@ -436,10 +491,12 @@ await a.evaluate(() => {
   const s = document.getElementById("ph-shutter");
   s.click();
   s.click();
+  window.__restoreToBlob = () => (HTMLCanvasElement.prototype.toBlob = toBlob);
 });
 await a.waitForSelector("#postcard:not(.pc-away)");
 await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
 check((await a.evaluate(() => window.__shots)) === 1, "a second shutter press does not take a second shot");
+await a.evaluate(() => window.__restoreToBlob());
 check((await a.locator("#postcard .pc-photo").count()) === 1, "the shot is staged on the picture face");
 check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the card comes back on the picture side");
 check((await a.locator("body.photo").count()) === 0, "photo mode is over");
@@ -453,7 +510,8 @@ await a.waitForSelector("#postcard:not(.pc-away)");
 check(
   (await a.locator("#postcard .pc-photo").count()) === 1 &&
     (await a.evaluate(() => document.querySelector("#postcard .pc-photo").src)) === shotSrc &&
-    !(await a.isHidden("#postcard")),
+    !(await a.isHidden("#postcard")) &&
+    (await a.locator("body.photo").count()) === 0,
   "Escape leaves photo mode with the card open and the old shot untouched",
 );
 await tapOrClick(a, '#postcard [data-size="s"]');

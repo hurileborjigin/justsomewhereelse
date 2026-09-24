@@ -531,6 +531,7 @@ async function boot() {
       joined: () => net.joined,
       treasures: { list: () => treasures.list() },
       photo: () => photo.take(PHOTO_AIM[player.character]),
+      look: () => cam.look,
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,
