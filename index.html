@@ -273,6 +273,39 @@
         background: #d9962f;
         box-shadow: 0 2px 12px rgba(90, 60, 10, 0.3);
       }
+      /* on a touch phone the stack stands in the column beside the d-pad instead of over its arrows */
+      @media (max-width: 640px) {
+        body.touch #actions {
+          left: auto;
+          right: 12px;
+          bottom: 88px;
+          transform: none;
+          width: calc(100vw - 212px);
+          align-items: stretch;
+        }
+        body.touch #actions button {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          padding: 9px 12px;
+          font-size: 14px;
+          line-height: 1.3;
+        }
+        body.touch #actions #sign-btn {
+          align-self: center;
+        }
+        body.touch #toast {
+          /* up top, clear of the character, the d-pad and the stack */
+          top: 70px;
+          bottom: auto;
+        }
+      }
+      #actions #sign-btn {
+        padding: 5px 14px;
+        font-size: 13px;
+        background: rgba(255, 255, 253, 0.8);
+        color: var(--ink);
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.18);
+      }
       #chat-input {
         width: min(46vw, 380px);
         border: none;
@@ -593,6 +626,64 @@
       .tr-actions button:hover {
         background: rgba(43, 58, 42, 0.16);
       }
+      /* the sign at a doorstep: a small card in the Treasures panel's glass */
+      #sign[hidden] {
+        display: none;
+      }
+      #sign {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        width: min(290px, calc(100vw - 32px));
+        /* frostier than the corner panel: this card sits over the busy middle of the scene */
+        background: rgba(255, 255, 253, 0.72);
+        backdrop-filter: blur(7px);
+        -webkit-backdrop-filter: blur(7px);
+        border-radius: 14px;
+        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
+        font-size: 13.5px;
+        color: rgba(43, 58, 42, 0.9);
+      }
+      #sign header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 8px 4px 14px;
+        font-weight: 600;
+      }
+      #sign-close {
+        border: none;
+        background: none;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 6px;
+        color: var(--ink);
+      }
+      #sign-body {
+        padding: 0 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      #sign-action[hidden] {
+        display: none;
+      }
+      #sign-action {
+        align-self: flex-start;
+        border: none;
+        border-radius: 12px;
+        padding: 9px 14px;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        background: #58b368;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(30, 60, 30, 0.25);
+      }
       #toast[hidden] {
         display: none;
       }
@@ -609,6 +700,7 @@
         z-index: 11;
         max-width: min(90vw, 360px);
         text-align: center;
+        pointer-events: none; /* never swallows a tap on the buttons or the d-pad beneath */
       }
       /* --- postcard ----------------------------------------------------- */
       #postcard[hidden] {
@@ -1410,6 +1502,7 @@
       body.photo #treasure-open,
       body.photo #treasure-panel,
       body.photo #actions,
+      body.photo #sign,
       body.photo #bubbles,
       body.photo #status,
       body.photo #toast {
@@ -1617,8 +1710,20 @@
       <div id="zoom-handle">🔍</div>
     </div>
     <div id="actions">
+      <button id="let-in" hidden>Let in</button>
       <button id="enter" hidden>Enter</button>
+      <button id="sign-btn" hidden>Sign</button>
       <button id="box-btn" hidden>Open the treasure box (E)</button>
+    </div>
+    <div id="sign" hidden role="dialog" aria-labelledby="sign-title">
+      <header>
+        <span id="sign-title"></span>
+        <button id="sign-close" title="Close">✕</button>
+      </header>
+      <div id="sign-body">
+        <p id="sign-text"></p>
+        <button id="sign-action" hidden></button>
+      </div>
     </div>
     <div id="bubbles"></div>
     <button id="treasure-open" title="Treasures"><svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg><span id="treasure-badge" hidden></span></button>

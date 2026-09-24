@@ -14,7 +14,7 @@ import {
 } from "../shared/protocol.ts";
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
-import { el } from "./dom.ts";
+import { el, toast } from "./dom.ts";
 import { footprintFor } from "./footprint.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
@@ -98,7 +98,6 @@ export class Treasures {
   private pendingOpen: number | null = null; // box we asked the server to open
   private reading: number | null = null; // box shown in the read view, redrawn or closed when it changes
   private pending: Pending | null = null; // a place / put waiting for its answer
-  private toastTimer = 0;
   private ui: {
     openBtn: HTMLElement;
     badge: HTMLElement;
@@ -106,7 +105,6 @@ export class Treasures {
     waiting: HTMLElement;
     mine: HTMLElement;
     left: HTMLElement;
-    toast: HTMLElement;
   };
 
   constructor(assets: Assets, hooks: TreasureHooks) {
@@ -128,7 +126,6 @@ export class Treasures {
       waiting: $("treasure-waiting"),
       mine: $("treasure-mine"),
       left: $("treasure-left"),
-      toast: $("toast"),
     };
     this.ui.openBtn.addEventListener("click", () => this.setPanelOpen(true));
     $("treasure-min").addEventListener("click", () => this.setPanelOpen(false));
@@ -594,11 +591,6 @@ export class Treasures {
   }
 
   private toast(text: string) {
-    this.ui.toast.textContent = text;
-    this.ui.toast.hidden = false;
-    clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => {
-      this.ui.toast.hidden = true;
-    }, 3200);
+    toast(text);
   }
 }

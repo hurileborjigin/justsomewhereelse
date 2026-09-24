@@ -1,13 +1,16 @@
 import { Quaternion, Timer, Vector3, type Scene } from "three";
-import { CHARACTER_OF, type PlayerId, type StateData } from "../shared/protocol.ts";
+import { CHARACTER_OF, FIXED_OWNERS, type BuildingDenyReason, type PlayerId, type StateData } from "../shared/protocol.ts";
 import { Animals } from "./animals.ts";
 import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
 import { Chat } from "./chat.ts";
-import { SPAWN_TILES, greatCircleDir, tileCenter } from "./grid.ts";
+import { toast } from "./dom.ts";
+import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { Net } from "./net.ts";
+import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
+import { Pennants } from "./pennant.ts";
 import { PHOTO_AIM, PhotoMode } from "./photo.ts";
 import { Player } from "./player.ts";
 import { RemotePlayer } from "./remote.ts";
@@ -60,6 +63,10 @@ async function boot() {
   const animals = new Animals(scene, assets, buildings);
   const doorTileMap = new Map<number, Building>();
   for (const b of buildings) for (const d of b.doorTiles) doorTileMap.set(d, b);
+  // who owns what, mirrored from the server; the fixed houses fly their pennants from the start
+  const ownership = new Ownership();
+  const pennants = new Pennants(scene, buildings);
+  pennants.sync((id) => ownership.ownerOf(id));
 
   // building interiors, created lazily per instance and cached
   const rooms = new Map<string, RoomWorld>();
@@ -94,6 +101,8 @@ async function boot() {
   const statusText = $("status-text");
   const enterBtn = $("enter") as HTMLButtonElement;
   const boxBtn = $("box-btn") as HTMLButtonElement;
+  const letInBtn = $("let-in") as HTMLButtonElement;
+  const signBtn = $("sign-btn") as HTMLButtonElement;
 
   /** Characters are fixed: identity 0 is the bee, identity 1 the donkey. */
   function applyCharacters() {
@@ -198,19 +207,27 @@ async function boot() {
     switchWorld(s.tile, s.forward, room);
   }
 
-  function leaveBuilding() {
-    const b = currentBuilding;
-    if (!b) return;
+  /** Out onto the building's first doorstep, facing away from it. */
+  function stepOutOf(b: Building) {
     currentBuilding = null;
     const door = b.doorTiles[0];
     const away = greatCircleDir(tileCenter(b.tiles[0]), tileCenter(door), new Vector3());
     switchWorld(door, away, globeWorld);
   }
 
+  function leaveBuilding() {
+    if (currentBuilding) stepOutOf(currentBuilding);
+  }
+
   /** Resume from a persisted position (or spawn fresh if it can't be applied). */
   function restore(state: StateData | null) {
     if (state) {
       const building = state.loc === "globe" ? null : buildings.find((b) => b.id === state.loc);
+      // saved inside a building this player may no longer enter: back on its doorstep
+      if (building && !ownership.mayEnter(myId, building.id)) {
+        stepOutOf(building);
+        return;
+      }
       const world = state.loc === "globe" ? globeWorld : building ? getRoom(building) : null;
       if (world) {
         currentBuilding = building ?? null;
@@ -227,31 +244,112 @@ async function boot() {
     cam.snap(player);
   }
 
+  // ---- doors: owners, knocking, letting in, the sign ------------------------
+
+  const nameOf = (id: string) => {
+    const b = buildings.find((x) => x.id === id);
+    return b ? BUILDING_NAMES[b.kind] : "building";
+  };
+  /** "the crooked house", "your crooked house" or "gloria's crooked house". */
+  const phrase = (b: Building) => buildingPhrase(BUILDING_NAMES[b.kind], ownership.ownerOf(b.id), myId, names);
+
+  function knockAt(b: Building) {
+    const owner = ownership.ownerOf(b.id);
+    if (owner === null || owner === myId) return;
+    net.knock(b.id);
+    ownership.knockSent(b.id);
+    // an absent owner is answered by the server's refusal instead
+    if (remote.present) toast(`You knocked. ${names[owner]} will come to the door.`);
+  }
+
+  const DENY_TEXT: Record<BuildingDenyReason, (id: string) => string> = {
+    away: (id) => `${names[ownership.ownerOf(id) ?? 1 - myId]} is not on the planet right now`,
+    owner: () => "That is not yours to change",
+    fixed: (id) => `The ${nameOf(id)} always belongs to ${names[FIXED_OWNERS[id] ?? 0]}`,
+    noknock: () => "Nobody is knocking right now",
+    open: () => "You can walk right in",
+    invalid: () => "That door does not open",
+  };
+
+  const signEl = $("sign");
+  const signTitle = $("sign-title");
+  const signTextEl = $("sign-text");
+  const signAction = $("sign-action") as HTMLButtonElement;
+  let signAt: Building | null = null;
+  const renderSign = () => {
+    const b = signAt;
+    if (!b) return;
+    const name = BUILDING_NAMES[b.kind];
+    const s = signText(b.id, name, ownership.ownerOf(b.id), myId, names);
+    setText(signTitle, name[0].toUpperCase() + name.slice(1));
+    setText(signTextEl, s.text);
+    signAction.hidden = s.action === null;
+    setText(signAction, s.action === "open" ? "Open it to both" : "Make it mine");
+  };
+  function setSign(b: Building | null) {
+    signAt = b;
+    signEl.hidden = !b;
+    input.setMuted(!!b || treasures.dialogOpen);
+    renderSign();
+  }
+  signBtn.addEventListener("click", () => {
+    const b = doorTileMap.get(player.tile);
+    if (player.world.isGlobe && b) setSign(b);
+    signBtn.blur();
+  });
+  $("sign-close").addEventListener("click", () => setSign(null));
+  signAction.addEventListener("click", () => {
+    if (!signAt) return;
+    const owner = ownership.ownerOf(signAt.id);
+    net.claimBuilding(signAt.id, owner === null ? myId : null);
+    signAction.blur();
+  });
+  addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && signAt) setSign(null);
+  });
+
+  let letInAction: (() => void) | null = null;
   let doorAction: (() => void) | null = null;
   let boxAction: (() => void) | null = null;
   // runs every frame: touch the DOM only when the label actually changes
-  const setText = (e: HTMLElement, text: string) => {
+  function setText(e: HTMLElement, text: string) {
     if (e.textContent !== text) e.textContent = text;
-  };
+  }
   const refreshActions = () => {
+    letInAction = null;
     doorAction = null;
     boxAction = null;
-    if (!player.moving && !treasures.dialogOpen) {
-      if (player.world.isGlobe) {
-        const b = doorTileMap.get(player.tile);
-        if (b) {
-          setText(enterBtn, `Enter the ${BUILDING_NAMES[b.kind]} 🚪 (E)`);
+    let doorstep: Building | null = null;
+    if (!player.moving && !treasures.dialogOpen && !signAt) {
+      // the building whose door this player stands at, outside on its doorstep or inside on the exit tile
+      const outside = player.world.isGlobe;
+      doorstep = outside ? (doorTileMap.get(player.tile) ?? null) : null;
+      const inside = !outside && player.tile === (player.world as RoomWorld).exitTile ? currentBuilding : null;
+      const at = doorstep ?? inside;
+      const guest = at ? letIn(myId, at.id, ownership) : null;
+      if (at && guest !== null) {
+        setText(letInBtn, `Let ${names[guest]} in (E)`);
+        letInAction = () => net.openDoor(at.id);
+      }
+      // E fires the first visible button, so only that one shows (E)
+      const e = letInAction ? "" : " (E)";
+      if (doorstep) {
+        const b = doorstep;
+        if (doorChoice(myId, b.id, ownership) === "enter") {
+          setText(enterBtn, `Enter ${phrase(b)} 🚪${e}`);
           doorAction = () => enterBuilding(b);
+        } else {
+          setText(enterBtn, `Knock at ${phrase(b)} 🚪${e}`);
+          doorAction = () => knockAt(b);
         }
-      } else if (player.tile === (player.world as RoomWorld).exitTile) {
-        setText(enterBtn, "Go back outside 🚪 (E)");
+      } else if (inside) {
+        setText(enterBtn, `Go back outside 🚪${e}`);
         doorAction = leaveBuilding;
       }
       const box = treasures.actionAt(player.world, player.tile, player.forward);
       if (box) {
-        // E fires the first visible button, so the box only claims it when alone
         const before = box.label ? `Open “${box.label}” ` : "Open the treasure box ";
-        const after = doorAction ? "" : " (E)";
+        const after = letInAction || doorAction ? "" : " (E)";
         if (boxBtn.dataset.label !== before + after) {
           boxBtn.dataset.label = before + after;
           boxBtn.replaceChildren(before, chestIcon(), ...(after ? [after] : []));
@@ -259,9 +357,15 @@ async function boot() {
         boxAction = () => treasures.open(box);
       }
     }
+    letInBtn.hidden = !letInAction;
     enterBtn.hidden = !doorAction;
+    signBtn.hidden = !doorstep;
     boxBtn.hidden = !boxAction;
   };
+  letInBtn.addEventListener("click", () => {
+    letInAction?.();
+    letInBtn.blur();
+  });
   enterBtn.addEventListener("click", () => {
     doorAction?.();
     enterBtn.blur();
@@ -271,11 +375,11 @@ async function boot() {
     boxBtn.blur();
   });
   addEventListener("keydown", (e) => {
-    if (e.code !== "KeyE") return;
+    if (e.code !== "KeyE" || e.repeat) return;
     const active = document.activeElement;
     if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
-    if (treasures.dialogOpen) return;
-    (doorAction ?? boxAction)?.();
+    if (treasures.dialogOpen || signAt) return;
+    (letInAction ?? doorAction ?? boxAction)?.();
   });
 
   // ---- networking ----------------------------------------------------------
@@ -333,6 +437,9 @@ async function boot() {
           applyCharacters();
           treasures.setIdentity(myId, names);
           treasures.setAll(msg.boxes); // before restore(): blocked tiles must exist for the nudge
+          ownership.reset(msg); // before restore(): a building this player may not enter puts them outside
+          pennants.sync((id) => ownership.ownerOf(id));
+          renderSign();
           if (!spawned) {
             restore(msg.state);
             spawned = true;
@@ -399,6 +506,33 @@ async function boot() {
           treasures.remove(msg.id);
           break;
         }
+        case "building": {
+          const before = ownership.ownerOf(msg.id);
+          const waited = ownership.waiting(myId, msg.id);
+          ownership.setOwner(msg.id, msg.owner);
+          pennants.set(msg.id, msg.owner);
+          renderSign();
+          if (msg.owner === null && before !== null && before !== myId && waited) {
+            toast(`The ${nameOf(msg.id)} is open to both now`);
+          }
+          break;
+        }
+        case "knock": {
+          ownership.knocked(msg.id, msg.from);
+          toast(`${names[msg.from]} is knocking at your ${nameOf(msg.id)}`);
+          break;
+        }
+        case "door": {
+          ownership.door(msg.id, msg.guest, msg.open);
+          const owner = ownership.ownerOf(msg.id);
+          if (msg.open && msg.guest === myId && owner !== null) toast(`${names[owner]} opened the door`);
+          break;
+        }
+        case "building-deny": {
+          if (msg.op === "knock") ownership.knockDenied(msg.id);
+          toast(DENY_TEXT[msg.reason](msg.id));
+          break;
+        }
       }
     },
   });
@@ -435,7 +569,7 @@ async function boot() {
       }
       return !(remote.present && remote.loc === world.id && remote.tile === k);
     },
-    onDialog: (open) => input.setMuted(open),
+    onDialog: (open) => input.setMuted(open || signAt !== null),
     onPanelOpen: () => {
       if (innerWidth < 640) chat.setOpen(false);
     },
@@ -532,6 +666,10 @@ async function boot() {
       setHour: (h: number | null) => (hourOverride = h),
       animals: () => animals.debug(),
       joined: () => net.joined,
+      ownership: () => ownership.snapshot(),
+      pennants: () => pennants.debug(),
+      neighbors: (tile: number) => neighborsOf(tile),
+      walkable: (tile: number) => !isBlockedFor(tile, false) && !doorTileMap.has(tile),
       treasures: { list: () => treasures.list() },
       photo: () => photo.take(PHOTO_AIM[player.character]),
       look: () => cam.look,

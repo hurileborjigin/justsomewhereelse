@@ -112,6 +112,20 @@ export class Net {
     this.send({ t: "box-lift", id });
   }
 
+  /** `owner` is your own id to claim the building, or null to open it to both. */
+  claimBuilding(id: string, owner: PlayerId | null) {
+    this.send({ t: "building-claim", id, owner });
+  }
+
+  knock(id: string) {
+    this.send({ t: "knock", id });
+  }
+
+  /** The owner lets the pending knocker in. */
+  openDoor(id: string) {
+    this.send({ t: "door-open", id });
+  }
+
   /** Called every frame; sends the local state at SEND_HZ once joined. */
   tick(dt: number, player: Player) {
     if (!this.joined) return;
