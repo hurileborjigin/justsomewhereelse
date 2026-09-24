@@ -1,6 +1,6 @@
 # Two-sided postcards
 
-Design spec for the picture side of the postcard in Tiny Planet's treasure boxes.
+Design spec for the picture side of the postcard in Haven's treasure boxes.
 Status: approved in conversation on 2026-09-23, written up for review.
 It extends the treasure boxes spec in `2026-09-23-treasure-boxes-design.md`, which stays the reference for everything it does not change here.
 
@@ -8,7 +8,7 @@ It extends the treasure boxes spec in `2026-09-23-treasure-boxes-design.md`, whi
 
 A real postcard has a picture on one side and the writing on the other.
 The postcard style in a treasure box gets the same: the writing side stays exactly as it is today, and a picture side is added behind it.
-The sender puts a photo there, either a snapshot taken inside Tiny Planet with a viewfinder over the world, or a photo uploaded from the device, and adjusts how it is cropped and captioned.
+The sender puts a photo there, either a snapshot taken inside Haven with a viewfinder over the world, or a photo uploaded from the device, and adjusts how it is cropped and captioned.
 Clicking the card flips it.
 The finder opens the box, sees the picture first, and flips the card to read the message.
 

@@ -1,4 +1,4 @@
-# Tiny Planet 🌍🐝🫏
+# Haven 🌍🐝🫏
 
 A cozy little 3D world for two: a cartoon planet split into square tiles, a bee
 and a donkey that walk it square by square, and a tiny WebSocket server so you
@@ -14,7 +14,7 @@ npm run dev      # game server on :3001 + Vite dev server on :5173
 ```
 
 Open http://localhost:5173. You'll be asked **who you are** (the two
-identities live in the database — rename yourself anytime with the ✏️ next to
+identities live in the database - rename yourself anytime with the ✏️ next to
 your name) and for the **secret word** (`PLANET_PASS` env var; defaults to
 `planet` in dev). Each browser remembers you after the first login.
 
@@ -22,12 +22,12 @@ your name) and for the **secret word** (`PLANET_PASS` env var; defaults to
 doesn't). The **Swap** button trades characters at any time.
 
 **Everything important persists** in SQLite (`DB_PATH`, default
-`data/planet.db`): your last position — including inside buildings, so you can
-live in a room and wake up there tomorrow — the chat history (replayed on
+`data/planet.db`): your last position - including inside buildings, so you can
+live in a room and wake up there tomorrow - the chat history (replayed on
 login, last 1000 messages kept), your names and the character assignment.
 
 **Chat:** press Enter (or click the box at the bottom), type, Enter again to
-send — the message pops up as a speech bubble over your character's head. The
+send - the message pops up as a speech bubble over your character's head. The
 panel in the top-right keeps the history; minimize it and a badge counts
 unread messages. Esc leaves the chat box. Walking keys are ignored while
 typing.
@@ -53,14 +53,14 @@ fly deploy
 ```
 
 After that, every update is just `fly deploy`. The app stays always-on
-(`min_machines_running = 1`) so nobody waits at the door — a shared-cpu
+(`min_machines_running = 1`) so nobody waits at the door - a shared-cpu
 256 MB machine plus the volume costs a few euros per month.
 
 ## The world is a grid
 
 The globe is a spherified cube: 6 faces x 16 x 16 = **1536 square tiles**
 (`src/grid.ts` is the same math as `assets/blender/globe.py`). Objects occupy
-tiles — trees and buildings block their squares (the barn takes two,
+tiles - trees and buildings block their squares (the barn takes two,
 `grid.occupy([keys], blocks)` takes any footprint). The scatter is seeded, so
 both players always see the identical planet without sending it over the
 network.
@@ -70,10 +70,10 @@ sunken blue tiles with a sand beach. Water blocks walkers: the donkey can't
 step in, the bee flies right over (the `fly` flag in `CHARACTERS`).
 
 **Buildings**: a crooked house, a mushroom house, a wizard tower (one square
-each) and a long barn (two squares) — all in `assets/blender/buildings.py`.
+each) and a long barn (two squares) - all in `assets/blender/buildings.py`.
 
 **Landmarks** (`assets/blender/landmarks.py`, fixed tiles in `src/scatter.ts`):
-Gloria's **Sydney Opera House** stands on the far side of the planet — the
+Gloria's **Sydney Opera House** stands on the far side of the planet - the
 exact antipode of khurlee's corner, where his **Mongolian ger** and Munich's
 **Frauenkirche** stand side by side. All three are enterable: a velvet
 concert hall, a round ger with a stove and beds, and the church nave.
@@ -81,21 +81,21 @@ concert hall, a round ger with a stove and beds, and the church nave.
 ## Going inside
 
 Every building is **enterable**: walk onto its doorstep square and press
-**E** (or the green button) — you switch into that building's own interior, a
+**E** (or the green button) - you switch into that building's own interior, a
 separate little room world. Stand on the door square inside to go back out.
 
 While someone is inside a building they disappear from the globe; to find
 them, enter the same building. Chat still works across worlds (the history
 always arrives; speech bubbles only show when you're in the same place).
 
-Interiors are designed to be flexible — today's prototypes become museums or
+Interiors are designed to be flexible - today's prototypes become museums or
 galleries later:
 
 - geometry lives in `assets/blender/rooms.py` (one function per type; walls
   are inward-facing so the camera outside sees in, dollhouse-style),
 - the walkable grid + furniture tiles live in `ROOM_SPECS` in `src/world.ts`
   (keep the `blocked` lists in sync with the props you model),
-- every room has named `Frame1`/`Frame2` nodes on the walls — the future hook
+- every room has named `Frame1`/`Frame2` nodes on the walls - the future hook
   for hanging photos and posting text, and rooms are per-instance, so each
   house can hold its own stuff (food, gifts, ...) down the road.
 
@@ -140,16 +140,16 @@ history.
 
 Two ways, both end up in `public/models/` via `npm run models`:
 
-1. **Scripted** — copy any script in `assets/blender/` (e.g. `tree.py`) and
+1. **Scripted** - copy any script in `assets/blender/` (e.g. `tree.py`) and
    build with the `Build` helper from `_common.py`.
-2. **Hand-made in Blender** — save a `.blend` into `assets/blender/blends/`;
+2. **Hand-made in Blender** - save a `.blend` into `assets/blender/blends/`;
    it gets exported automatically as `<name>.glb`.
 
 Then register it in the client: one line in the manifest in `src/assets.ts`,
 and place it in `src/scatter.ts` (or wherever you like). Conventions: models
 face **-Y** in Blender, base at Z=0, real-world size ~1 tile ≈ 2 units.
 Parts you want to animate from code must be separate, named objects (like the
-bee's `WingL`/`WingR`) — see `src/animate.ts`.
+bee's `WingL`/`WingR`) - see `src/animate.ts`.
 
 ## Scripts
 
@@ -162,8 +162,8 @@ bee's `WingL`/`WingR`) — see `src/animate.ts`.
 | `npm run typecheck` | TypeScript over client, shared and server (erasable syntax only, so Node can run the tests) |
 | `npm test` | unit tests (store, footprints, worlds) with the Node test runner |
 | `npm run smoke` | end-to-end test of the multiplayer server |
-| `node scripts/drive.mjs` | two headless browsers walk around and screenshot to `/tmp/tinyplanet-*.png` |
-| `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/tinyplanet-treasure-*.png` |
+| `node scripts/drive.mjs` | two headless browsers walk around and screenshot to `/tmp/haven-*.png` |
+| `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/haven-treasure-*.png` |
 
 Roadmap ideas: hide-and-seek mode (the tile occupancy is already in place),
 buildings with multi-tile footprints, day/night, more animals.

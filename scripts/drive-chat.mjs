@@ -37,8 +37,8 @@ await a.keyboard.type("hi my love! wwww should not move me 🐝");
 await a.keyboard.press("Enter");
 await a.waitForTimeout(700);
 
-await a.screenshot({ path: "/tmp/tinyplanet-chat-A1.png" });
-await b.screenshot({ path: "/tmp/tinyplanet-chat-B1.png" });
+await a.screenshot({ path: "/tmp/haven-chat-A1.png" });
+await b.screenshot({ path: "/tmp/haven-chat-B1.png" });
 
 const badge = await b.evaluate(() => ({
   badgeHidden: document.getElementById("chat-badge")?.hidden,
@@ -54,8 +54,8 @@ await b.keyboard.type("found you already 🫏");
 await b.keyboard.press("Enter");
 await b.waitForTimeout(700);
 
-await a.screenshot({ path: "/tmp/tinyplanet-chat-A2.png" });
-await b.screenshot({ path: "/tmp/tinyplanet-chat-B2.png" });
+await a.screenshot({ path: "/tmp/haven-chat-A2.png" });
+await b.screenshot({ path: "/tmp/haven-chat-B2.png" });
 
 const logA = await a.evaluate(() =>
   [...document.querySelectorAll("#chat-log .msg")].map((m) => m.className + ": " + m.textContent),
@@ -67,4 +67,4 @@ console.log("A history:", logA);
 console.log("B history:", logB);
 
 await browser.close();
-console.log("done - screenshots in /tmp/tinyplanet-chat-*.png");
+console.log("done - screenshots in /tmp/haven-chat-*.png");

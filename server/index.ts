@@ -1,4 +1,4 @@
-// Tiny Planet game server: two named identities (renameable), a shared
+// Haven game server: two named identities (renameable), a shared
 // passphrase, and persistence - last position, character assignment and chat
 // history live in SQLite so the world survives restarts and you resume where
 // you left off. It relays state between the two players and never simulates.
@@ -147,7 +147,7 @@ const server = createServer((req, res) => {
   } else {
     res.statusCode = 200;
     res.setHeader("content-type", "text/plain; charset=utf-8");
-    res.end("Tiny Planet game server is running. In dev, open the Vite URL instead.");
+    res.end("Haven game server is running. In dev, open the Vite URL instead.");
   }
 });
 

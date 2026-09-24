@@ -1,4 +1,4 @@
-"""Shared helpers for the Tiny Planet Blender asset scripts.
+"""Shared helpers for the Haven Blender asset scripts.
 
 Every script in this folder builds one asset with bmesh primitives and exports
 it as .glb (run them all with `npm run models`). Conventions - this is the

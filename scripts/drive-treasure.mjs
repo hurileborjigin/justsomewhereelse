@@ -4,7 +4,7 @@
 // carries it into the ger and places it there, relabels it with a long label
 // and picks it up again. Act 1b: a postcard whose picture A takes in photo
 // mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
-// Screenshots land in /tmp/tinyplanet-treasure-*.png.
+// Screenshots land in /tmp/haven-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
 //   node scripts/drive-treasure.mjs
@@ -14,7 +14,7 @@ import { headlessShell } from "./_browser.mjs";
 
 const URL = process.argv[2] ?? "http://localhost:5173";
 const MOBILE = process.env.MOBILE === "1";
-const shot = (page, name) => page.screenshot({ path: `/tmp/tinyplanet-treasure-${name}.png` });
+const shot = (page, name) => page.screenshot({ path: `/tmp/haven-treasure-${name}.png` });
 const check = (cond, what) => {
   if (!cond) {
     console.error(`FAIL: ${what}`);
@@ -617,4 +617,4 @@ check(
 await shot(a, "C6-taken-back");
 
 await browser.close();
-console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/tinyplanet-treasure-*.png");
+console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/haven-treasure-*.png");

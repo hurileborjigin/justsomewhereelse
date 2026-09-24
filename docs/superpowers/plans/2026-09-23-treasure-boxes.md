@@ -2477,7 +2477,7 @@ export class Postcard {
 
     const side = el("div", "pc-side");
     const stamp = el("div", "pc-stamp");
-    stamp.append(el("span", undefined, EMOJI[mark.fromChar]), el("small", undefined, "TINY PLANET"));
+    stamp.append(el("span", undefined, EMOJI[mark.fromChar]), el("small", undefined, "HAVEN"));
     const postmark = el("div", "pc-postmark");
     postmark.append(el("span", undefined, fmtDate(mark.date)), el("span", undefined, mark.place));
     const to = el("div", "pc-to");
@@ -2557,7 +2557,7 @@ export type TreasureHooks = {
   player(): PlayerSpot;
   /** The globe, or a room that has already been created; null otherwise. */
   resolveWorld(loc: string): World | null;
-  /** "Tiny Planet" or "the crooked house": for postmarks and panel rows. */
+  /** "Haven" or "the crooked house": for postmarks and panel rows. */
   placeName(loc: string): string;
   /** Per-tile placement rule for `world`: terrain, doors, spawns, the partner. */
   canPlaceOn(world: World, tile: number): boolean;
@@ -3164,7 +3164,7 @@ After the `const chat = new Chat(...)` statement add:
 
 ```ts
   const placeName = (loc: string) => {
-    if (loc === "globe") return "Tiny Planet";
+    if (loc === "globe") return "Haven";
     const b = buildings.find((x) => x.id === loc);
     return b ? `the ${BUILDING_NAMES[b.kind]}` : "somewhere";
   };
@@ -3244,7 +3244,7 @@ git commit -m "Treasure boxes: leave, find, open, keep, label and place them in 
 
 **Interfaces:**
 - Consumes: `window.__tp.joined()`, `window.__tp.treasures.list()`, `__tp.teleport`, `__tp.lookAt`, `__tp.enterBuilding`, `__tp.buildings`, `__tp.player` (Task 10); DOM ids from Tasks 7 to 9.
-- Produces: `headlessShell()` in `scripts/_browser.mjs`; screenshots `/tmp/tinyplanet-treasure-*.png`.
+- Produces: `headlessShell()` in `scripts/_browser.mjs`; screenshots `/tmp/haven-treasure-*.png`.
 
 - [ ] **Step 1: The shared browser lookup**
 
@@ -3279,7 +3279,7 @@ Create `scripts/drive-treasure.mjs`:
 ```js
 // Visual check for treasure boxes: A writes a postcard with a photo and leaves
 // an S box; B walks up, opens it, keeps it with a label, carries it into the
-// ger and places it there. Screenshots land in /tmp/tinyplanet-treasure-*.png.
+// ger and places it there. Screenshots land in /tmp/haven-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
 //   node scripts/drive-treasure.mjs
@@ -3287,7 +3287,7 @@ import { chromium } from "playwright-core";
 import { headlessShell } from "./_browser.mjs";
 
 const URL = process.argv[2] ?? "http://localhost:5173";
-const shot = (page, name) => page.screenshot({ path: `/tmp/tinyplanet-treasure-${name}.png` });
+const shot = (page, name) => page.screenshot({ path: `/tmp/haven-treasure-${name}.png` });
 const check = (cond, what) => {
   if (!cond) {
     console.error(`FAIL: ${what}`);
@@ -3389,7 +3389,7 @@ const finalA = await a.evaluate(() => window.__tp.treasures.list()[0]);
 check(finalA.loc === "ger" && finalA.text !== undefined, "A sees the placed box and still reads her own words");
 
 await browser.close();
-console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/tinyplanet-treasure-*.png");
+console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/haven-treasure-*.png");
 ```
 
 - [ ] **Step 3: Run it against a fresh world**
@@ -3402,7 +3402,7 @@ Expected: every `ok:` line, no `pageerror`, final line `done - screenshots in ..
 
 Open the eight PNGs (the Read tool renders images). Be picky; fix and rerun until all of these hold:
 
-- `A1-compose`: cream 3:2 card, handwriting (Caveat) in blue ink on the left, dashed divider, stamp with 🐝 and "TINY PLANET", rotated postmark, "To: khurlee", dotted lines, "from gloria"; the staged print tilted below; S picked, M and L enabled; the announce checkbox checked.
+- `A1-compose`: cream 3:2 card, handwriting (Caveat) in blue ink on the left, dashed divider, stamp with 🐝 and "HAVEN", rotated postmark, "To: khurlee", dotted lines, "from gloria"; the staged print tilted below; S picked, M and L enabled; the announce checkbox checked.
 - `A2-placed` and `B2-sees-box`: a small wooden chest with gold bands on the tile in front of the bee, lid closed, lock facing the bee.
 - `B3-adjacent`: the amber "Open the treasure box 🎁 (E)" button above the chat box, donkey facing the chest.
 - `B4-postcard`: reading mode with the message, the print, the label field, "Keep it 🎁" and "Leave it here".
@@ -3508,7 +3508,7 @@ In the Scripts table add two rows:
 
 ```markdown
 | `npm test` | unit tests (store, footprints, worlds) with the Node test runner |
-| `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/tinyplanet-treasure-*.png` |
+| `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/haven-treasure-*.png` |
 ```
 
 and change the `npm run typecheck` row's description to `TypeScript over client, shared and server (erasable syntax only, so Node can run the tests)`.

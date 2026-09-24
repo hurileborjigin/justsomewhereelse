@@ -416,7 +416,7 @@ async function boot() {
   );
 
   const placeName = (loc: string) => {
-    if (loc === "globe") return "Tiny Planet";
+    if (loc === "globe") return "Haven";
     const b = buildings.find((x) => x.id === loc);
     return b ? `the ${BUILDING_NAMES[b.kind]}` : "somewhere";
   };

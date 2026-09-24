@@ -13,7 +13,7 @@ import WebSocket from "ws";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 3111;
 const PASS = "smoketest";
-const DB = join(tmpdir(), `tinyplanet-smoke-${Date.now()}.db`);
+const DB = join(tmpdir(), `haven-smoke-${Date.now()}.db`);
 
 // no PLANET_PASS: the smoke test exercises the in-game "create the secret
 // word" setup flow that production uses

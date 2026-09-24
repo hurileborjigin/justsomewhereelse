@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the postcard a picture side (a snapshot taken inside Tiny Planet or an uploaded photo, cropped and captioned), a flip between the two sides, and a typed `contents` model for what a box holds.
+**Goal:** Give the postcard a picture side (a snapshot taken inside Haven or an uploaded photo, cropped and captioned), a flip between the two sides, and a typed `contents` model for what a box holds.
 
 **Architecture:** The shared protocol replaces the flat `style/text/media/card` fields with one `BoxContents` union per style; the server parses it in a new `server/contents.ts`, stores it as one JSON column after a one-time table rebuild, and strips it for the partner. On the client, `src/crop.ts` holds the pure crop math, `src/picture.ts` builds the picture face, `src/photo.ts` runs the in-world viewfinder, and `postcard.ts` wraps the card in a flip container. A build id baked into the bundle and written next to it lets a stale tab reload.
 
@@ -2840,7 +2840,7 @@ Start a fresh server: `DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev` 
 
 - [ ] **Step 5: Look at every screenshot**
 
-Open `/tmp/tinyplanet-treasure-A0-picture-side.png`, `B4a-picture-side.png`, `D1-viewfinder.png`, `D2-aimed-at-the-sky.png`, `D3-shot-staged.png` and the phone versions. Check: the pill is centred and readable on both faces; the caption sits bottom left with a legible shadow; the three tool buttons do not overlap the pill or the caption; the zoom slider sits bottom right; the viewfinder window is 3:2 with four corner marks, the hint under it, the shutter centred; the shot shows sky and the character; on the phone the two faces are the same size and the shutter clears the d-pad. Fix anything that looks off in `index.html` and re-run.
+Open `/tmp/haven-treasure-A0-picture-side.png`, `B4a-picture-side.png`, `D1-viewfinder.png`, `D2-aimed-at-the-sky.png`, `D3-shot-staged.png` and the phone versions. Check: the pill is centred and readable on both faces; the caption sits bottom left with a legible shadow; the three tool buttons do not overlap the pill or the caption; the zoom slider sits bottom right; the viewfinder window is 3:2 with four corner marks, the hint under it, the shutter centred; the shot shows sky and the character; on the phone the two faces are the same size and the shutter clears the d-pad. Fix anything that looks off in `index.html` and re-run.
 
 - [ ] **Step 6: README**
 
@@ -2869,7 +2869,7 @@ git commit -m "Drive and README: the picture side, the flip and photo mode"
 
 ### Task 11: Name the planet Haven
 
-The planet is officially called Haven from now on. The name "Tiny Planet" (in any casing, and the `tinyplanet` prefix) disappears from copy, code, tests, scripts and docs. Infrastructure identifiers stay: the Fly app id in `fly.toml` and its URL cannot be renamed in place, the `tp-auth` and `tp-reloaded-for` storage keys stay so nobody is logged out, the `__tp` dev hook and the `[planet]` log prefix are not the name.
+The planet is officially called Haven from now on. The name "Haven" (in any casing, and the `haven` prefix) disappears from copy, code, tests, scripts and docs. Infrastructure identifiers stay: the Fly app id in `fly.toml` and its URL cannot be renamed in place, the `tp-auth` and `tp-reloaded-for` storage keys stay so nobody is logged out, the `__tp` dev hook and the `[planet]` log prefix are not the name.
 
 **Files:**
 - Modify: `index.html` (the `<title>` and the loading line), `src/main.ts` (`placeName`), `src/treasures.ts` (a doc comment), `server/index.ts` (the header comment and the HTTP root message), `package.json` and `package-lock.json` (the `name` fields), `Dockerfile` (comment), `README.md` (title and the script table), `scripts/smoke.mjs`, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs`, `scripts/fit_room.py`, `assets/blender/_common.py`, `docs/superpowers/specs/2026-09-23-treasure-boxes-design.md`, `docs/superpowers/specs/2026-09-23-two-sided-postcard-design.md`, `docs/superpowers/plans/2026-09-23-treasure-boxes.md`, `docs/superpowers/plans/2026-09-23-two-sided-postcard.md`.
@@ -2890,9 +2890,9 @@ Paste the hit list into the report. Every hit is handled in the next step.
 - `server/index.ts`: the header comment starts `// Haven game server: ...`; the root response reads `Haven game server is running. In dev, open the Vite URL instead.`.
 - `package.json` `"name": "haven"`; in `package-lock.json` change both top-level `"name": "tiny-planet"` fields (the root and `packages[""]`) to `"haven"` by hand; do not regenerate the lock file.
 - `Dockerfile` comment: `# Haven - single Node process serving the built client + WebSocket.`
-- `README.md`: title `# Haven 🌍🐝🫏`; every `/tmp/tinyplanet-` becomes `/tmp/haven-`; read the whole file and reword any sentence that says "tiny planet" in prose.
-- Scripts: every `tinyplanet-` file prefix becomes `haven-` (`scripts/smoke.mjs` temp database, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs` screenshot paths and console lines); `scripts/fit_room.py` and `assets/blender/_common.py` docstrings say Haven.
-- Docs: in both specs and both plans replace "Tiny Planet" with "Haven" and `tinyplanet-` with `haven-` (the older plan quotes code that said `"Tiny Planet"`; it becomes `"Haven"` too, so the docs read as the current product). One sentence per line stays as it is.
+- `README.md`: title `# Haven 🌍🐝🫏`; every `/tmp/haven-` becomes `/tmp/haven-`; read the whole file and reword any sentence that says "Haven" in prose.
+- Scripts: every `haven-` file prefix becomes `haven-` (`scripts/smoke.mjs` temp database, `scripts/drive.mjs`, `scripts/drive-chat.mjs`, `scripts/drive-treasure.mjs` screenshot paths and console lines); `scripts/fit_room.py` and `assets/blender/_common.py` docstrings say Haven.
+- Docs: in both specs and both plans replace "Haven" with "Haven" and `haven-` with `haven-` (the older plan quotes code that said `"Haven"`; it becomes `"Haven"` too, so the docs read as the current product). One sentence per line stays as it is.
 
 - [ ] **Step 3: Verify**
 
@@ -2908,7 +2908,7 @@ With `PLANET_PASS=planet npm run dev` running against a fresh database, compose 
 
 ```bash
 git add -A
-git commit -m "Haven: the planet has its name; Tiny Planet is gone from copy, code, scripts and docs"
+git commit -m "Haven: the planet has its name; Haven is gone from copy, code, scripts and docs"
 ```
 
 `git add -A` is acceptable here because the change is a rename across many files; check `git status` first so nothing untracked (screenshots, databases) is inside the worktree.

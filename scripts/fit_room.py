@@ -1,4 +1,4 @@
-"""Fit a downloaded Blender room scene to a Tiny Planet interior and export it.
+"""Fit a downloaded Blender room scene to a Haven interior and export it.
 
 Usage:
   BLENDER --background "<file>.blend" --python scripts/fit_room.py -- \

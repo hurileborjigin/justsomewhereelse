@@ -1,6 +1,6 @@
 # Treasure boxes
 
-Design spec for the treasure-hunting feature of Tiny Planet.
+Design spec for the treasure-hunting feature of Haven.
 Status: approved in conversation on 2026-09-23, written up for review.
 Amended the same day by `2026-09-23-two-sided-postcard-design.md`, which gives the postcard a picture side and the box a typed `contents` value; where the two disagree, that spec wins.
 
@@ -189,7 +189,7 @@ The right side holds the postal dressing.
 
 - A stamp in the top-right corner: a small perforated rectangle with a pastel background, the sender's chosen picture inside (their character emoji unless they typed another) and the place in small capitals along its bottom edge.
 - A postmark: a thin ink circle with the date and the place, slightly rotated, overlapping the stamp corner in translucent ink.
-  The place is "Tiny Planet" for the globe or the building name for a room.
+  The place is "Haven" for the globe or the building name for a room.
 - Address lines: "To: khurlee" followed by three dotted lines, the second of which carries the place in handwriting.
 - The sign-off "from gloria" in handwriting at the bottom right.
 

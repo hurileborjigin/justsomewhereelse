@@ -51,7 +51,7 @@ export type TreasureHooks = {
   player(): PlayerSpot;
   /** The globe, or a room that has already been created; null otherwise. */
   resolveWorld(loc: string): World | null;
-  /** "Tiny Planet" or "the crooked house": for postmarks and panel rows. */
+  /** "Haven" or "the crooked house": for postmarks and panel rows. */
   placeName(loc: string): string;
   /** Per-tile placement rule for `world`: terrain, doors, spawns, the partner. */
   canPlaceOn(world: World, tile: number): boolean;

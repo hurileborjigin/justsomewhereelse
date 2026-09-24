@@ -1,4 +1,4 @@
-# Tiny Planet - single Node process serving the built client + WebSocket.
+# Haven - single Node process serving the built client + WebSocket.
 FROM node:24-slim
 
 WORKDIR /app
