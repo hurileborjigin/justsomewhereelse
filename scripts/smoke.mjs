@@ -50,6 +50,7 @@ function client(name) {
   const waiters = [];
   ws.on("message", (data) => {
     const msg = JSON.parse(String(data));
+    if (msg.t === "music") return; // ambient; the scripted checks read the messages around it
     const w = waiters.shift();
     if (w) w(msg);
     else queue.push(msg);
