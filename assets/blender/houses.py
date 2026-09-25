@@ -11,6 +11,9 @@ at x=(i-(W-1)/2)*2, y=-(j-(H-1)/2)*2. Every bay gets a plinth PLINTH_H high
 over its tiles and a blank plaque on its open side; every pillar tile gets a
 pillar. Wall decoration protrudes little and has no back faces, so from
 outside the camera still looks straight through the walls (dollhouse view).
+Each wall and its decoration is its own object, `<Room>_wall_<far|near|left|right>`:
+the client hides a whole wall while the camera stands outside it, so lamps,
+reliefs and pilasters never hang in the air over a wall that is not drawn.
 """
 
 import json
@@ -143,17 +146,22 @@ def s_of(wall, x, y):
     return {"far": x, "near": -x, "left": y, "right": -y}[wall]
 
 
-def shell(b, floor_mat, wall_mat):
+def wall_builds(room):
+    """One Build per wall, for the wall panel and everything hung on it."""
+    return {wall: C.Build(f"{room}_wall_{wall}") for wall in WALLS}
+
+
+def shell(b, walls, floor_mat, wall_mat):
     b.box(floor_mat, (2 * HX + 0.7, 2 * HY + 0.7, 0.35), loc=(0, 0, -0.175))
     for wall, (_, _, length) in WALLS.items():
-        poly(b, wall_mat, rect(length, WALL_H, 0, WALL_H / 2), wall_m(wall))
+        poly(walls[wall], wall_mat, rect(length, WALL_H, 0, WALL_H / 2), wall_m(wall))
 
 
-def band(b, material, z0, z1, d, walls=WALLS):
+def band(walls, material, z0, z1, d):
     """A flat horizontal strip around the walls (wainscot, rail, cornice)."""
-    for wall in walls:
+    for wall, wb in walls.items():
         length = WALLS[wall][2]
-        poly(b, material, rect(length, z1 - z0, 0, (z0 + z1) / 2), wall_m(wall, d=d))
+        poly(wb, material, rect(length, z1 - z0, 0, (z0 + z1) / 2), wall_m(wall, d=d))
 
 
 def door(b, frame_mat, leaf_mat, knob_mat, w=1.7, h=2.7):
@@ -216,6 +224,7 @@ def honeycomb(b, wall, s, z, cols, rows, cell, mats, glow_cells=(), skip=(), dep
 
 def hive_room():
     b = C.Build("RoomHive")
+    walls = wall_builds("RoomHive")
     honey = C.mat("honey", 0.6)
     light = C.mat("honey_light", 0.6)
     dark = C.mat("honey_dark", 0.7)
@@ -223,12 +232,12 @@ def hive_room():
     stone_dark = C.mat("honey_stone_dark", 0.85)
     gold = C.mat("gold", 0.35)
     amber = glow("amber", 1.6)
-    shell(b, C.mat("honey_floor", 0.8), C.mat("honey_wall", 0.9))
+    shell(b, walls, C.mat("honey_floor", 0.8), C.mat("honey_wall", 0.9))
     # wainscot, a gold rail and a honey cornice
-    band(b, dark, 0, 1.4, 0.01)
-    band(b, gold, 1.4, 1.52, 0.015)
-    band(b, dark, WALL_H - 0.5, WALL_H, 0.01)
-    band(b, gold, WALL_H - 0.62, WALL_H - 0.5, 0.015)
+    band(walls, dark, 0, 1.4, 0.01)
+    band(walls, gold, 1.4, 1.52, 0.015)
+    band(walls, dark, WALL_H - 0.5, WALL_H, 0.01)
+    band(walls, gold, WALL_H - 0.62, WALL_H - 0.5, 0.015)
     # a honey runner up the middle aisle from the door
     ex, _ = tile_xy(*LAYOUT["exit"])
     runner_x = ex + 1  # the aisle is the exit column and the one to its right
@@ -243,26 +252,26 @@ def hive_room():
         wall = "left" if cx < 0 else "right"
         seed = bay["id"]
         glowing = {((seed * 3) % 5, (seed * 2) % 3), ((seed + 2) % 5, (seed + 1) % 3)}
-        honeycomb(b, wall, s_of(wall, cx, cy), 3.6, 5, 3, 0.42, cells, (glowing, amber), skip={(0, 2), (4, 2)})
+        honeycomb(walls[wall], wall, s_of(wall, cx, cy), 3.6, 5, 3, 0.42, cells, (glowing, amber), skip={(0, 2), (4, 2)})
     # lamps on the pillar rows along both long walls, and at the entrance hall
     lamp_ys = sorted({tile_xy(i, j)[1] for i, j in LAYOUT["pillars"] if i == 0})
     lamp_ys += [tile_xy(0, 38)[1], tile_xy(0, 1)[1]]
     for wall in ("left", "right"):
         for y in lamp_ys:
-            sconce(b, wall, s_of(wall, 0, y), 3.3, gold, amber, dark)
+            sconce(walls[wall], wall, s_of(wall, 0, y), 3.3, gold, amber, dark)
     # the far wall: a great honeycomb crest in the middle, lamps and smaller
     # combs across the rest
-    honeycomb(b, "far", 0, 3.6, 9, 4, 0.5, cells, ({(4, 1), (3, 2), (5, 1), (4, 2)}, amber),
+    honeycomb(walls["far"], "far", 0, 3.6, 9, 4, 0.5, cells, ({(4, 1), (3, 2), (5, 1), (4, 2)}, amber),
               skip={(0, 3), (8, 3), (0, 0), (8, 0)})
     for s in (-14, 14):
-        honeycomb(b, "far", s, 3.6, 5, 3, 0.42, cells, ({(2, 1)}, amber), skip={(0, 2), (4, 2)})
+        honeycomb(walls["far"], "far", s, 3.6, 5, 3, 0.42, cells, ({(2, 1)}, amber), skip={(0, 2), (4, 2)})
     for s in (-19, -8, 8, 19):
-        sconce(b, "far", s, 3.3, gold, amber, dark)
+        sconce(walls["far"], "far", s, 3.3, gold, amber, dark)
     # near wall: flat honeycomb either side of the door (no relief and no
     # lamps, so nothing shows when the camera looks in through this wall)
     for s in (-10, 10):
-        honeycomb(b, "near", s, 3.6, 5, 3, 0.42, cells, (set(), amber), skip={(0, 2), (4, 2)}, depth=0)
-    door(b, gold, C.mat("honey_dark", 0.8), gold)
+        honeycomb(walls["near"], "near", s, 3.6, 5, 3, 0.42, cells, (set(), amber), skip={(0, 2), (4, 2)}, depth=0)
+    door(walls["near"], gold, C.mat("honey_dark", 0.8), gold)
 
     plinths(b, stone, stone_dark, gold, C.mat("honey_light", 0.5))
     for run in pillar_runs():
@@ -285,6 +294,8 @@ def hive_room():
                 b.cylinder(amber, 0.2, 0.34, segments=6, loc=(x, y, 1.33))
                 b.cone(gold, 0.27, 0.04, 0.2, segments=6, loc=(x, y, 1.6))
     b.obj()
+    for wb in walls.values():
+        wb.obj()
 
 
 def pillar_runs():
@@ -333,6 +344,7 @@ def round_window(b, wall, s, z, rad, copper, glass, dark):
 
 def hall_room():
     b = C.Build("RoomHall")
+    walls = wall_builds("RoomHall")
     brick = C.mat("dark_brick", 0.95)
     brick2 = C.mat("dark_brick_2", 0.95)
     slate = C.mat("slate", 0.8)
@@ -340,14 +352,14 @@ def hall_room():
     copper = C.mat("copper", 0.45)
     copper_d = C.mat("copper_dark", 0.5)
     glass = glow("window_glow", 1.2)
-    shell(b, C.mat("slate_dark", 0.8), brick)
+    shell(b, walls, C.mat("slate_dark", 0.8), brick)
     # darker brick wainscot, copper rail, copper cornice; brick courses between
-    band(b, brick2, 0, 1.3, 0.01)
-    band(b, copper, 1.3, 1.42, 0.015)
+    band(walls, brick2, 0, 1.3, 0.01)
+    band(walls, copper, 1.3, 1.42, 0.015)
     for z in (2.2, 3.0, 4.7):
-        band(b, brick2, z, z + 0.06, 0.012)
-    band(b, copper_d, WALL_H - 0.45, WALL_H, 0.01)
-    band(b, copper, WALL_H - 0.57, WALL_H - 0.45, 0.015)
+        band(walls, brick2, z, z + 0.06, 0.012)
+    band(walls, copper_d, WALL_H - 0.45, WALL_H, 0.01)
+    band(walls, copper, WALL_H - 0.57, WALL_H - 0.45, 0.015)
     # a lighter slate runner up the middle aisle, edged in copper
     ex, _ = tile_xy(*LAYOUT["exit"])
     runner_x = ex + 1
@@ -358,26 +370,26 @@ def hall_room():
     for wall in ("left", "right"):
         for y in pil_ys + [tile_xy(0, 38)[1], tile_xy(0, 1)[1]]:
             s = s_of(wall, 0, y)
-            poly(b, brick2, rect(1.0, WALL_H - 0.6, 0, (WALL_H - 0.6) / 2), wall_m(wall, s, 0, 0.01), depth=0.2)
-            poly(b, copper, rect(1.2, 0.18, 0, WALL_H - 0.7), wall_m(wall, s, 0, 0.01), depth=0.26)
+            poly(walls[wall], brick2, rect(1.0, WALL_H - 0.6, 0, (WALL_H - 0.6) / 2), wall_m(wall, s, 0, 0.01), depth=0.2)
+            poly(walls[wall], copper, rect(1.2, 0.18, 0, WALL_H - 0.7), wall_m(wall, s, 0, 0.01), depth=0.26)
         for bay in LAYOUT["bays"]:
             if bay["size"] != "l":
                 continue
             cx, cy, _, _ = bay_rect(bay)
             if (cx < 0) != (wall == "left"):
                 continue
-            round_window(b, wall, s_of(wall, cx, cy), 3.7, 1.0, copper, glass, brick2)
+            round_window(walls[wall], wall, s_of(wall, cx, cy), 3.7, 1.0, copper, glass, brick2)
     # the far wall: a great round window in the middle, smaller ones beside
-    round_window(b, "far", 0, 3.5, 1.7, copper, glass, brick2)
+    round_window(walls["far"], "far", 0, 3.5, 1.7, copper, glass, brick2)
     for s in (-12, -6, 6, 12):
-        round_window(b, "far", s, 3.7, 0.9, copper, glass, brick2)
+        round_window(walls["far"], "far", s, 3.7, 0.9, copper, glass, brick2)
     for s in (-17.4, -3, 3, 17.4):
-        poly(b, brick2, rect(1.0, WALL_H - 0.6, 0, (WALL_H - 0.6) / 2), wall_m("far", s, 0, 0.01), depth=0.2)
-        poly(b, copper, rect(1.2, 0.18, 0, WALL_H - 0.7), wall_m("far", s, 0, 0.01), depth=0.26)
+        poly(walls["far"], brick2, rect(1.0, WALL_H - 0.6, 0, (WALL_H - 0.6) / 2), wall_m("far", s, 0, 0.01), depth=0.2)
+        poly(walls["far"], copper, rect(1.2, 0.18, 0, WALL_H - 0.7), wall_m("far", s, 0, 0.01), depth=0.26)
     # near wall: flat round windows either side of the door
     for s in (-10, 10):
-        round_window(b, "near", s, 3.7, 0.9, copper, glass, brick2)
-    door(b, copper_d, C.mat("timber", 0.85), copper)
+        round_window(walls["near"], "near", s, 3.7, 0.9, copper, glass, brick2)
+    door(walls["near"], copper_d, C.mat("timber", 0.85), copper)
 
     plinths(b, slate, copper, copper_d, slate_l)
     for run in pillar_runs():
@@ -399,6 +411,8 @@ def hall_room():
                 b.box(copper, (0.66, 0.66, 0.1), loc=(x, y, 1.25))
                 b.uvsphere(copper, 0.18, loc=(x, y, 1.42), u=8, v=6)
     b.obj()
+    for wb in walls.values():
+        wb.obj()
 
 
 # --- outsides -----------------------------------------------------------------

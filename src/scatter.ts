@@ -154,6 +154,7 @@ export function scatterWorld(scene: Scene, assets: Assets): Building[] {
     if (k < 0) break;
     const tree = variants[Math.floor(rng() * variants.length)].clone(true);
     placeOnTile(tree, k, rng() * Math.PI * 2, 0.8 + rng() * 0.45);
+    tree.userData.tree = k; // a tree between the camera and the character fades like a building (src/fade.ts)
     scene.add(tree);
     occupy([k], true);
   }

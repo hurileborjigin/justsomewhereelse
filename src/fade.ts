@@ -55,20 +55,20 @@ function screenSize(item: Faded, camera: PerspectiveCamera): number {
 }
 
 /**
- * Fades any globe building or treasure chest standing between the camera and
- * the character, so a tall house behind a player who just stepped out of it,
- * any wall the camera swings behind, or a chest right in front of the camera
- * never hides them. Each object gets its own copies of its materials, so
+ * Fades any globe building, tree or treasure chest standing between the
+ * camera and the character, so a tall house behind a player who just stepped
+ * out of it, a tree the player just walked away from, any wall the camera
+ * swings behind, or a chest right in front of the camera never hides them. Each object gets its own copies of its materials, so
  * fading one never fades its siblings (every chest of a size shares one
  * model's materials).
  */
 export class CameraFade {
   private items = new Map<Object3D, Faded>();
 
-  /** Every object the scatter tagged with `userData.building`; chests come and go through track(). */
+  /** Every object the scatter tagged with `userData.building` or `userData.tree`; chests come and go through track(). */
   constructor(scene: Scene) {
     scene.updateMatrixWorld(true);
-    for (const obj of scene.children) if (obj.userData.building) this.track(obj);
+    for (const obj of scene.children) if (obj.userData.building || obj.userData.tree !== undefined) this.track(obj);
   }
 
   /** Fades `obj` (already in its scene, standing still from now on) when it hides the character; `from` carries a faded state over. */
@@ -155,12 +155,12 @@ export class CameraFade {
     }
   }
 
-  /** Dev hook: the buildings (by id) and chests (by "box" and id) currently fading or faded, with their opacity. */
+  /** Dev hook: the buildings (by id), trees (by "tree" and tile) and chests (by "box" and id) currently fading or faded, with their opacity. */
   debug(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const item of this.items.values()) {
-      const { building, box } = item.obj.userData;
-      if (item.opacity < 1) out[building ?? `box${box}`] = Math.round(item.opacity * 100) / 100;
+      const { building, tree, box } = item.obj.userData;
+      if (item.opacity < 1) out[building ?? (tree !== undefined ? `tree${tree}` : `box${box}`)] = Math.round(item.opacity * 100) / 100;
     }
     return out;
   }

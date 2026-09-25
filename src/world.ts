@@ -1,9 +1,11 @@
 import {
+  Box3,
   Color,
   DirectionalLight,
   HemisphereLight,
   Scene,
   Vector3,
+  type Object3D,
 } from "three";
 import { CHARACTERS, R, SURFACE, type CharacterId } from "../shared/protocol.ts";
 import type { Assets } from "./assets.ts";
@@ -264,6 +266,14 @@ const AXES = [
   { di: 0, dj: -1, v: new Vector3(0, 0, -1) },
 ];
 
+/** Each room wall's inward normal (the door is on the near, +Z wall). */
+const WALL_NORMALS: Record<string, Vector3> = {
+  far: new Vector3(0, 0, 1),
+  near: new Vector3(0, 0, -1),
+  left: new Vector3(1, 0, 0),
+  right: new Vector3(-1, 0, 0),
+};
+
 export class RoomWorld implements World {
   id: string;
   kind: BuildingKind;
@@ -279,6 +289,13 @@ export class RoomWorld implements World {
   private h: number;
   private furniture = new Set<number>(); // from ROOM_SPECS, permanent
   private boxes = new Set<number>(); // treasure boxes, runtime
+  /**
+   * Walls modelled as their own objects (`<Room>_wall_<side>`, the treasure
+   * halls): each with its inward normal and where its outer face lies along
+   * it. The camera outside a wall sees through its single-sided panel; the
+   * lamps and reliefs hung on it hide with it rather than hang in the air.
+   */
+  private walls: { obj: Object3D; normal: Vector3; outer: number }[] = [];
 
   constructor(id: string, kind: BuildingKind, assets: Assets) {
     this.id = id;
@@ -298,7 +315,26 @@ export class RoomWorld implements World {
     const lamp = new DirectionalLight(0xfff0d8, 1.8);
     lamp.position.set(4, 10, 3);
     this.scene.add(lamp);
-    this.scene.add(assets[`room_${kind}`].clone(true));
+    const room = assets[`room_${kind}`].clone(true);
+    this.scene.add(room);
+    room.updateMatrixWorld(true);
+    room.traverse((obj) => {
+      const side = /_wall_(far|near|left|right)$/.exec(obj.name)?.[1];
+      if (!side) return;
+      const normal = WALL_NORMALS[side].clone();
+      const box = new Box3().setFromObject(obj);
+      this.walls.push({ obj, normal, outer: Math.min(normal.dot(box.min), normal.dot(box.max)) });
+    });
+  }
+
+  /** Every frame, before drawing: a wall the camera stands outside hides with everything hung on it. */
+  faceCamera(eye: Vector3) {
+    for (const w of this.walls) w.obj.visible = w.normal.dot(eye) > w.outer;
+  }
+
+  /** For the scripted drives: which modelled walls are drawn right now, by side. */
+  wallsShown(): Record<string, boolean> {
+    return Object.fromEntries(this.walls.map((w) => [w.obj.name.replace(/^.*_wall_/, ""), w.obj.visible]));
   }
 
   key(i: number, j: number) {

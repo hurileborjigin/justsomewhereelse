@@ -702,6 +702,7 @@ async function boot() {
     }
 
     net.tick(dt, player);
+    if (world instanceof RoomWorld) world.faceCamera(cam.camera.position);
     renderer.render(world.scene, cam.camera);
   });
 
@@ -726,6 +727,7 @@ async function boot() {
       treasures: { list: () => treasures.list() },
       photo: takePhoto,
       placing: () => placing.debug(),
+      walls: () => (player.world instanceof RoomWorld ? player.world.wallsShown() : null),
       look: () => cam.look,
       lookAt: (tile: number) =>
         switchWorld(
