@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Scene } from "three";
-import { LAKE } from "../shared/protocol.ts";
+import { LAKE, TREASURE_HOUSE_TILES } from "../shared/protocol.ts";
 import type { Assets } from "./assets.ts";
 import { SPAWN_TILES, TILE_COUNT, isBlockedFor, isFree, isWater, key, neighborsOf } from "./grid.ts";
 import { scatterWorld } from "./scatter.ts";
@@ -72,6 +72,8 @@ test("the treasure houses join the planet without moving anything the seeded sca
   assert.deepEqual(houses[0].doorTiles, [key(3, 3, 7)]);
   assert.deepEqual(houses[1].tiles, [key(2, 7, 13), key(2, 6, 13)]);
   assert.deepEqual(houses[1].doorTiles, [key(2, 8, 13)]);
+  // the server lifts boxes off exactly these tiles at startup (shared/protocol.ts)
+  assert.deepEqual([...TREASURE_HOUSE_TILES], houses.flatMap((b) => [...b.tiles, ...b.doorTiles]));
 
   // grass is untouched; the only newly blocked tiles are the houses' own
   assert.deepEqual(grass, BEFORE_GRASS);

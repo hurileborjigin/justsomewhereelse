@@ -54,6 +54,7 @@ export class Access {
     if (!this.validBuildingId(id)) return "invalid";
     const owner = this.ownerOf(id);
     if (owner === null || owner === me) return "open";
+    if (this.grantsById.get(id)?.guest === me) return "open"; // already let in: no second knock
     if (!ownerOnline) return "away";
     this.knocks.set(id, { from: me, at: this.now() });
     return null;

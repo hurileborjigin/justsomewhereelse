@@ -72,6 +72,17 @@ test("a knock then an open grants entry and mayEnter answers true", () => {
   assert.equal(access.mayEnter(1, "house1"), true);
 });
 
+test("knocking again while holding a grant answers open and leaves no new knock", () => {
+  const { access, setOwner } = make();
+  setOwner("house1", 0);
+  access.knock(1, "house1", true);
+  access.open(0, "house1");
+  assert.equal(access.knock(1, "house1", true), "open");
+  assert.equal(access.knock(1, "house1", false), "open", "even with the owner away");
+  assert.deepEqual(access.knocksFor(0), [], "the owner is not asked twice");
+  assert.equal(access.mayEnter(1, "house1"), true);
+});
+
 test("only the owner may open the door", () => {
   const { access, setOwner } = make();
   setOwner("house1", 0);

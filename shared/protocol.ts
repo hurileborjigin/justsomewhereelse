@@ -125,6 +125,13 @@ export type Box = {
 // The two treasure houses: nobody can change who they belong to.
 export const FIXED_OWNERS: Record<string, PlayerId> = { hive: 0, hall: 1 };
 
+// The globe tiles the two treasure houses stand on, and their doorsteps:
+// Hive 882 and 881 with its door on 883, Copper Hall 727 and 726 with its
+// door on 728 (TREASURE_HOUSES in src/scatter.ts; scatter.test.ts keeps the
+// two in step). The server cannot see terrain, so at startup it lifts any box
+// standing on one of these into its holder's pocket.
+export const TREASURE_HOUSE_TILES: readonly number[] = [882, 881, 883, 727, 726, 728];
+
 export const KNOCK_TTL_MS = 10 * 60 * 1000; // a pending knock, or an unentered grant, expires after this long
 
 export type BuildingOp = "claim" | "knock" | "open";

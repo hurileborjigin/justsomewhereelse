@@ -372,6 +372,18 @@ export class Store {
     this.db.prepare("UPDATE boxes SET loc = NULL, tiles = '[]' WHERE id = ?").run(id);
   }
 
+  /**
+   * Lifts every box standing in `loc` on any of `tiles` (loc null, no tiles),
+   * so it lands in its holder's pocket like any lifted or kept box; returns
+   * the ids lifted, in order. Idempotent: a second call finds nothing.
+   */
+  liftBoxesOff(loc: string, tiles: readonly number[]): number[] {
+    const off = new Set(tiles);
+    const lifted = this.boxesIn(loc).filter((b) => b.tiles.some((t) => off.has(t))).map((b) => b.id);
+    for (const id of lifted) this.liftBox(id);
+    return lifted;
+  }
+
   // --- building ownership ----------------------------------------------------
 
   /** null means open to both. The fixed houses are answered from code, never from the table. */

@@ -241,6 +241,27 @@ test("lifting takes the box out of the world but gives it no owner", () => {
   assert.equal(s.getBox(id)?.loc, "ger");
 });
 
+test("liftBoxesOff clears boxes standing on the given tiles, keeps the rest, and is idempotent", () => {
+  const s = fresh();
+  const onHouse = s.addBox({ ...draft, loc: "globe", tiles: [880, 881] }).id; // one tile under the Hive
+  const kept = s.addBox({ ...draft, loc: "globe", tiles: [728] }).id; // on the Copper Hall doorstep
+  s.keepBox(kept, 1, "mine");
+  s.putBox(kept, "globe", [728], [1, 0, 0]);
+  const beside = s.addBox({ ...draft, loc: "globe", tiles: [500, 501] }).id;
+  const inRoom = s.addBox({ ...draft, loc: "hive", tiles: [881] }).id; // tile 881 of a room is not the globe's
+  assert.deepEqual(s.liftBoxesOff("globe", [882, 881, 883, 727, 726, 728]), [onHouse, kept]);
+  for (const id of [onHouse, kept]) {
+    const box = s.getBox(id)!;
+    assert.equal(box.loc, null);
+    assert.deepEqual(box.tiles, []);
+  }
+  assert.equal(s.getBox(onHouse)!.owner, null, "an unkept box goes back to its creator's pocket");
+  assert.equal(s.getBox(kept)!.owner, 1, "a kept box stays its owner's");
+  assert.deepEqual(s.getBox(beside)!.tiles, [500, 501]);
+  assert.equal(s.getBox(inRoom)!.loc, "hive");
+  assert.deepEqual(s.liftBoxesOff("globe", [882, 881, 883, 727, 726, 728]), [], "a second run finds nothing");
+});
+
 // --- building ownership ------------------------------------------------
 
 test("owners round-trip through setOwner and ownerOf", () => {

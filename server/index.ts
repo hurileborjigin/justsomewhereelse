@@ -22,6 +22,7 @@ import {
   PASS_MIN_LEN,
   RECALL_WINDOW_MS,
   SETUP_CREATOR,
+  TREASURE_HOUSE_TILES,
   boxTileCount,
   mediaOf,
 } from "../shared/protocol.ts";
@@ -51,6 +52,12 @@ const ENV_PASS = process.env.PLANET_PASS ?? null;
 const DB_PATH = process.env.DB_PATH ?? "data/planet.db";
 
 const store = new Store(DB_PATH);
+// The treasure houses joined the planet after boxes were already standing on
+// it: one on a house's tiles would render inside it or block its door. Before
+// any connection, lift those into their holders' pockets (a no-op once done).
+for (const id of store.liftBoxesOff("globe", TREASURE_HOUSE_TILES)) {
+  console.log(`[planet] moved treasure box #${id} off the new treasure house tiles`);
+}
 const access = new Access((id) => store.ownerOf(id), Date.now);
 
 const distDir = fileURLToPath(new URL("../dist", import.meta.url));

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { GALLERY, GALLERY_H, GALLERY_W, PLINTH_H, bayAt, footprintVerdict, isPillar } from "./gallery.ts";
 
 test("dimensions, plinth height and exit", () => {
@@ -134,4 +136,11 @@ test("footprintVerdict: all-floor tiles are all true", () => {
     "l",
   );
   assert.deepEqual(verdict, [true, true, true]);
+});
+
+test("assets/blender/gallery.json is exactly the layout computed here (npm run models rewrites it)", () => {
+  const path = fileURLToPath(new URL("../assets/blender/gallery.json", import.meta.url));
+  const onDisk = JSON.parse(readFileSync(path, "utf8"));
+  const layout = { w: GALLERY.w, h: GALLERY.h, exit: GALLERY.exit, plinth: PLINTH_H, bays: GALLERY.bays, pillars: GALLERY.pillars };
+  assert.deepEqual(onDisk, JSON.parse(JSON.stringify(layout)));
 });
