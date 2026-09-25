@@ -38,8 +38,11 @@ import type {
   StateData,
   Vec3,
 } from "../shared/protocol.ts";
+import { homeSpot } from "../src/home.ts";
 import { Access } from "./access.ts";
 import { parseContents } from "./contents.ts";
+import { Radio } from "./radio.ts";
+import { Spotify } from "./spotify.ts";
 import { Store, type FullBox } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -52,6 +55,16 @@ const ENV_PASS = process.env.PLANET_PASS ?? null;
 const DB_PATH = process.env.DB_PATH ?? "data/planet.db";
 
 const store = new Store(DB_PATH);
+const spotify =
+  process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
+    ? new Spotify(
+        process.env.SPOTIFY_CLIENT_ID,
+        process.env.SPOTIFY_CLIENT_SECRET,
+        process.env.SPOTIFY_REDIRECT_URI ?? "http://127.0.0.1:5173/spotify/callback",
+        fetch,
+      )
+    : null;
+const radio = new Radio(store, spotify, (player, msg) => sendTo(player, msg));
 // The treasure houses joined the planet after boxes were already standing on
 // it: one on a house's tiles would render inside it or block its door. Before
 // any connection, lift those into their holders' pockets (a no-op once done).
@@ -150,6 +163,15 @@ function serveMedia(req: IncomingMessage, res: ServerResponse) {
 }
 
 const server = createServer((req, res) => {
+  if (req.url?.startsWith("/spotify/callback") && req.method === "GET") {
+    const url = new URL(req.url, "http://localhost");
+    void radio.callback(url.searchParams.get("code") ?? "", url.searchParams.get("state") ?? "").then((ok) => {
+      res.statusCode = 302;
+      res.setHeader("location", ok ? "/?music=connected" : "/?music=failed");
+      res.end();
+    });
+    return;
+  }
   if (req.url === "/media" && req.method === "POST") return handleUpload(req, res);
   if (req.url?.startsWith("/media/") && req.method === "GET") return serveMedia(req, res);
   if (serveStatic) {
@@ -325,7 +347,9 @@ wss.on("connection", (ws) => {
         doors: access.grants(),
         knocks: access.knocksFor(id),
         build: BUILD_ID,
+        music: radio.view(id),
       });
+      radio.joined(id);
       sendTo(peerId, { t: "peer-joined", id });
       refreshLobbies();
       console.log(`[planet] ${store.names()[id]} (${id}) joined`);
@@ -438,6 +462,33 @@ wss.on("connection", (ws) => {
       store.keepBox(box.id, id, cleanLabel(msg.label) ?? box.label);
       broadcastBox(store.getBox(box.id)!);
       console.log(`[planet] ${store.names()[id]} kept treasure box #${box.id}`);
+    } else if (msg.t === "box-home") {
+      const boxId = Number(msg.id);
+      const box = store.getBox(boxId);
+      if (!box) {
+        deny(ws, "home", "missing", boxId);
+        return;
+      }
+      if (box.creator === id) {
+        deny(ws, "home", "creator", boxId);
+        return;
+      }
+      const inPocket = box.loc === null && box.owner === id;
+      if (!inPocket && box.loc === null) {
+        deny(ws, "home", "missing", boxId);
+        return;
+      }
+      const loc = id === 0 ? "hive" : "hall";
+      const taken = new Set(store.boxesIn(loc).flatMap((b) => b.tiles));
+      const spot = homeSpot(box.size, taken);
+      if (!spot) {
+        deny(ws, "home", "full", boxId);
+        return;
+      }
+      if (!inPocket) store.keepBox(box.id, id, cleanLabel(msg.label) ?? box.label);
+      store.putBox(box.id, loc, spot.tiles, spot.fwd);
+      broadcastBox(store.getBox(box.id)!);
+      console.log(`[planet] ${store.names()[id]} put treasure box #${box.id} in ${loc}`);
     } else if (msg.t === "box-label") {
       const boxId = Number(msg.id);
       const box = store.getBox(boxId);
@@ -579,6 +630,38 @@ wss.on("connection", (ws) => {
       }
       broadcast({ t: "door", id: msg.id, guest: result.guest, open: true });
       console.log(`[planet] ${store.names()[id]} let ${store.names()[result.guest]} into ${msg.id}`);
+    } else if (msg.t === "music-hear") {
+      radio.hear(id);
+    } else if (msg.t === "music-play" || msg.t === "music-pause" || msg.t === "music-next") {
+      radio.command(id, msg.t === "music-play" ? "play" : msg.t === "music-pause" ? "pause" : "next");
+    } else if (msg.t === "music-seek") {
+      radio.seek(id, Number(msg.positionMs) || 0);
+    } else if (msg.t === "music-add") {
+      radio.add(id, msg.track);
+    } else if (msg.t === "music-now") {
+      radio.now(id, msg.track);
+    } else if (msg.t === "music-device") {
+      radio.setDevice(id, msg.deviceId, msg.haven === true);
+    } else if (msg.t === "music-report") {
+      void radio.report(id, msg);
+    } else if (msg.t === "music-connect") {
+      const url = radio.connectUrl(id);
+      if (url) send(ws, { t: "music-auth", url });
+      else send(ws, { t: "music-deny", reason: "spotify" });
+    } else if (msg.t === "music-token") {
+      void radio.token(id).then((access) => {
+        if (access) send(ws, { t: "music-token", access });
+      });
+    } else if (msg.t === "music-search") {
+      void radio.search(id, String(msg.q ?? ""));
+    } else if (msg.t === "music-playlists") {
+      void radio.playlists(id);
+    } else if (msg.t === "music-playlist") {
+      void radio.playlist(id, String(msg.id ?? ""));
+    } else if (msg.t === "music-liked") {
+      void radio.liked(id);
+    } else if (msg.t === "music-devices") {
+      void radio.devices(id);
     }
   };
 
@@ -610,6 +693,7 @@ wss.on("connection", (ws) => {
     if (c?.ws !== ws) return;
     if (c.live) store.saveState(id, c.live);
     conns.delete(id);
+    radio.disconnected(id);
     sendTo((1 - id) as PlayerId, { t: "peer-left", id });
     for (const g of access.left(id)) {
       broadcast({ t: "door", id: g.id, guest: g.guest, open: false });

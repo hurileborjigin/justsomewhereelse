@@ -154,23 +154,16 @@ const _anchor = new Vector3();
 const _toAnchor = new Vector3();
 const _camDir = new Vector3();
 
-/** Small floating label above a character's head; yours carries the ✏️. */
+/** Small floating label above a character's head. */
 class NameTag {
   private el: HTMLDivElement;
   private text: HTMLSpanElement;
 
-  constructor(container: HTMLElement, onEdit?: () => void) {
+  constructor(container: HTMLElement) {
     this.el = document.createElement("div");
     this.el.className = "name-tag";
     this.text = document.createElement("span");
     this.el.append(this.text);
-    if (onEdit) {
-      const btn = document.createElement("button");
-      btn.textContent = "✏️";
-      btn.title = "Change your name";
-      btn.addEventListener("click", onEdit);
-      this.el.append(btn);
-    }
     this.el.style.opacity = "0";
     container.append(this.el);
   }
@@ -206,11 +199,7 @@ export class Chat {
   private pendingUrl: string | null = null;
   private onRecall: (id: number) => void;
 
-  constructor(
-    onSend: (text: string, media?: MediaRef) => void,
-    onRename: () => void,
-    onRecall: (id: number) => void,
-  ) {
+  constructor(onSend: (text: string, media?: MediaRef) => void, onRecall: (id: number) => void) {
     this.onRecall = onRecall;
     const $ = (id: string) => {
       const el = document.getElementById(id);
@@ -226,7 +215,7 @@ export class Chat {
     const bubbles = $("bubbles");
     this.bubbleMe = new Bubble(bubbles);
     this.bubblePeer = new Bubble(bubbles);
-    this.tagMe = new NameTag(bubbles, onRename);
+    this.tagMe = new NameTag(bubbles);
     this.tagPeer = new NameTag(bubbles);
 
     const sendBtn = $("chat-send") as HTMLButtonElement;
@@ -353,15 +342,20 @@ export class Chat {
     if (entry.media) row.append(mediaElement(entry.media));
     if (who === "me" && Date.now() - entry.ts < RECALL_WINDOW_MS) {
       const btn = document.createElement("button");
+      btn.type = "button";
       btn.className = "recall";
-      btn.textContent = "↩";
-      btn.title = "Recall this message";
-      btn.addEventListener("click", () => {
-        if (confirm("Recall this message? It will disappear for both of you.")) {
-          this.onRecall(entry.id);
-        }
-      });
+      btn.textContent = "Take back";
+      btn.addEventListener("click", () => this.askRecall(row, entry.id));
       row.append(btn);
+      let hold = 0;
+      row.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse") return;
+        hold = window.setTimeout(() => this.askRecall(row, entry.id), 480);
+      });
+      const cancel = () => window.clearTimeout(hold);
+      row.addEventListener("pointerup", cancel);
+      row.addEventListener("pointercancel", cancel);
+      row.addEventListener("pointerleave", cancel);
     }
     this.rows.set(entry.id, row);
     this.log.append(row);
@@ -374,6 +368,24 @@ export class Chat {
       this.badge.textContent = String(this.unread);
       this.badge.hidden = false;
     }
+  }
+
+  private askRecall(row: HTMLElement, id: number) {
+    if (row.querySelector(".recall-ask")) return;
+    const ask = document.createElement("div");
+    ask.className = "recall-ask";
+    const q = document.createElement("span");
+    q.textContent = "Take this back?";
+    const yes = document.createElement("button");
+    yes.type = "button";
+    yes.textContent = "Yes";
+    yes.addEventListener("click", () => this.onRecall(id));
+    const no = document.createElement("button");
+    no.type = "button";
+    no.textContent = "No";
+    no.addEventListener("click", () => ask.remove());
+    ask.append(q, yes, no);
+    row.append(ask);
   }
 
   /** A message was recalled: remove it everywhere. */

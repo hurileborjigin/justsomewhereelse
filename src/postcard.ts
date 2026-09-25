@@ -13,7 +13,7 @@ import {
   type MediaRef,
 } from "../shared/protocol.ts";
 import { mediaElement } from "./chat.ts";
-import { el, graphemes } from "./dom.ts";
+import { ask, el, graphemes } from "./dom.ts";
 import { pictureEditor, pictureView, type PictureDraft } from "./picture.ts";
 
 /** The postcard's dressing as it should read: the stamp picture, the names, the place, the date. */
@@ -59,6 +59,8 @@ export type ReadOptions = {
   /** The reader already owns it (it stands where they put it): "Pick it up" rather than "Keep it". */
   isOwner: boolean;
   onKeep: (label: string) => void;
+  /** Present when this is someone else's box: keep it and stand it in your treasure house. */
+  onHome?: (label: string) => void;
   /** Present only when the reader owns the box: rename it where it stands, without picking it up. */
   onLabel?: (label: string) => void;
   /** Present only when the reader may take the box back: their own box, still sealed. */
@@ -113,6 +115,7 @@ export class Postcard {
   private onToggle: (open: boolean) => void;
   /** Returns false to keep the dialog open (a half-written card). */
   private guard: (() => boolean) | null = null;
+  private leavePrompt = "Throw this away?";
   private cleanup: (() => void) | null = null;
   private away = false;
 
@@ -151,7 +154,16 @@ export class Postcard {
 
   close() {
     if (this.root.hidden) return;
-    if (this.guard && !this.guard()) return;
+    if (this.guard?.()) {
+      if (document.querySelector(".pc-ask")) return;
+      const prompt = this.leavePrompt;
+      void ask(prompt, "Leave", "Stay").then((ok) => {
+        if (!ok || this.root.hidden) return;
+        this.guard = null;
+        this.close();
+      });
+      return;
+    }
     this.teardown();
     this.root.hidden = true;
     this.root.replaceChildren();
@@ -421,10 +433,8 @@ export class Postcard {
       fields.to.value.trim() !== start.to ||
       fields.from.value.trim() !== start.from ||
       editor.dirty();
-    this.guard = () => {
-      if (busy) return false;
-      return !changed() || confirm(editing ? "Drop these changes?" : "Throw this away?");
-    };
+    this.leavePrompt = editing ? "Leave these changes?" : "Throw this away?";
+    this.guard = () => !busy && changed();
     this.cleanup = () => {
       this.fileInput.removeEventListener("change", onFiles);
       for (const u of urls) URL.revokeObjectURL(u);
@@ -515,11 +525,20 @@ export class Postcard {
           if (!save.disabled) save.click();
         } else keep.click();
       });
+      const home = opts.onHome && !opts.isOwner ? el("button", "pc-secondary", "Put it in my treasure room") : null;
+      if (home && opts.onHome) {
+        home.id = "pc-home";
+        home.type = "button";
+        home.addEventListener("click", () => {
+          opts.onHome!(label.value.trim());
+          this.close();
+        });
+      }
       const leave = el("button", "pc-secondary", "Leave it here");
       leave.id = "pc-leave";
       leave.type = "button";
       leave.addEventListener("click", () => this.close());
-      controls.append(label, ...(save ? [save] : []), keep, leave);
+      controls.append(label, ...(save ? [save] : []), keep, ...(home ? [home] : []), leave);
     } else {
       if (role === "creator") {
         controls.append(
@@ -529,6 +548,16 @@ export class Postcard {
             box.opened === null ? "Still sealed 🤫" : `Opened by ${opts.openedBy} on ${fmtDate(new Date(box.opened))}`,
           ),
         );
+      }
+      if (opts.onHome) {
+        const home = el("button", "pc-secondary", "Put it in my treasure room");
+        home.id = "pc-home";
+        home.type = "button";
+        home.addEventListener("click", () => {
+          opts.onHome?.("");
+          this.close();
+        });
+        controls.append(home);
       }
       if (opts.onLift) {
         const lift = el("button", "pc-primary");
@@ -553,9 +582,11 @@ export class Postcard {
         take.id = "pc-take";
         take.type = "button";
         take.addEventListener("click", () => {
-          if (!confirm(TAKE_BACK_CONFIRM)) return;
-          opts.onDelete?.();
-          this.close();
+          void ask(TAKE_BACK_CONFIRM, "Take it back", "Keep it", true).then((ok) => {
+            if (!ok) return;
+            opts.onDelete?.();
+            this.close();
+          });
         });
         controls.append(take);
       }
@@ -587,9 +618,8 @@ export class Postcard {
   }
 
   /**
-   * The two faces of a postcard on one flip card, plus the pill that names the
-   * other face. `picture` null means "no picture side": the pill stays hidden
-   * and the card never turns.
+   * The two faces of a postcard on one flip card. A tap on the paper turns it.
+   * `picture` null means there is no picture side, and the card never turns.
    */
   private flipCard(
     writing: HTMLElement,
@@ -603,28 +633,19 @@ export class Postcard {
     const back = el("div", "pc-face pc-face-picture");
     front.append(writing);
     if (picture) back.append(picture);
-    const pill = el("button", "pc-turn");
-    pill.type = "button";
-    pill.id = "pc-turn";
     flipper.append(front, back);
-    root.append(flipper, pill);
+    root.append(flipper);
     let showing: "writing" | "picture" = "writing";
     const apply = () => {
       flipper.classList.toggle("pc-flipped", showing === "picture");
       front.inert = showing === "picture";
       back.inert = showing === "writing";
-      pill.textContent = showing === "writing" ? "picture side ↻" : "writing side ↻";
-      pill.hidden = back.childElementCount === 0;
     };
     const flip = (to?: "writing" | "picture") => {
       if (back.childElementCount === 0) return;
       showing = to ?? (showing === "writing" ? "picture" : "writing");
       apply();
     };
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
-      flip();
-    });
     // a click or tap flips; a drag (selecting text) does not, and neither does
     // a press that starts or ends on one of the `skip` elements
     const onTap = (target: HTMLElement, skip: string, onFlip: () => void) => {
@@ -639,9 +660,12 @@ export class Postcard {
         if (start && !skipped(e) && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) onFlip();
       });
     };
-    if (mode === "read") onTap(root, ".pc-turn", () => flip());
-    // the paper of the writing face flips, its inputs do not; the picture face only flips by the pill
-    else onTap(front, "input, textarea, button", () => flip("picture"));
+    const skip = "input, textarea, button, a";
+    if (mode === "read") onTap(root, skip, () => flip());
+    else {
+      onTap(front, skip, () => flip("picture"));
+      onTap(back, skip, () => flip("writing"));
+    }
     showing = startOnPicture && picture ? "picture" : "writing";
     apply();
     return {

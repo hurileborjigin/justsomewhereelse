@@ -14,8 +14,7 @@ npm run dev      # game server on :3001 + Vite dev server on :5173
 ```
 
 Open http://localhost:5173. You'll be asked **who you are** (the two
-identities live in the database - rename yourself anytime with the ✏️ next to
-your name) and for the **secret word**. On the very first visit gloria
+identities live in the database) and for the **secret word**. On the very first visit gloria
 (identity 0) chooses the word in-game; set the `PLANET_PASS` env var to use a
 fixed word instead (the drive scripts and tests use `planet`). Each browser
 remembers you after the first login.
@@ -35,6 +34,16 @@ send - the message pops up as a speech bubble over your character's head. The
 panel in the top-right keeps the history; minimize it and a badge counts
 unread messages. Esc leaves the chat box. Walking keys are ignored while
 typing.
+
+**Music:** the ♫ button beside Treasures opens a panel.
+Both of you hear the same Spotify song while you are logged in, and each of you goes back to your own song when the other leaves.
+Connect Spotify once per person. Both accounts need Premium.
+Create a Spotify app in development mode, add both accounts to its user list, and set the redirect URL to `http://127.0.0.1:5173/spotify/callback` (or the public site URL plus `/spotify/callback`).
+Spotify rejects `localhost`. The loopback address is the one it accepts.
+
+```bash
+SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... SPOTIFY_REDIRECT_URI=http://127.0.0.1:5173/spotify/callback npm run dev
+```
 
 ### Playing from two computers (same Wi-Fi)
 

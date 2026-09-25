@@ -117,10 +117,9 @@ check(
   `the writing and the picture faces share one size (${faceBoxes.map((f) => f.map(Math.round).join(",")).join(" vs ")})`,
 );
 // the picture side: flip, upload, drag, zoom, caption
-await a.click("#pc-turn");
+await a.click("#postcard .pc-stamp");
 await a.waitForTimeout(700); // the 0.6s turn
-check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "the pill turns the card to the picture side");
-check((await a.textContent("#pc-turn")) === "writing side ↻", "the pill now names the writing side");
+check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 1, "a tap on the card turns it to the picture side");
 await a.setInputFiles("#postcard .pc-picture-file", { name: "view.png", mimeType: "image/png", buffer: photo });
 await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
 const placed = () =>
@@ -182,9 +181,9 @@ check([...(await a.inputValue("#postcard .pc-cap-in"))].length === 60, "the capt
 await a.fill("#postcard .pc-cap-in", "the view from the hill");
 await a.evaluate(() => document.fonts.ready);
 await shot(a, "A0-picture-side");
-await a.click("#pc-turn");
+await a.click("#postcard .pc-photo");
 await a.waitForTimeout(700);
-check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 0, "the pill turns the card back to the writing");
+check((await a.locator("#postcard .pc-flipper.pc-flipped").count()) === 0, "a tap on the picture turns the card back to the writing");
 check(
   (await a.textContent("#postcard .pc-stamp small")) === "Sydney" &&
     (await a.textContent("#postcard .pc-postmark span:nth-child(2)")) === "Sydney",
@@ -334,12 +333,10 @@ await b.evaluate(() => {
   const img = document.querySelector("#postcard .pc-photo");
   img.src = "/media/gone-" + Date.now() + ".jpg";
 });
-await b.waitForFunction(() => document.querySelector("#pc-turn")?.hidden === true);
+await b.waitForFunction(() => document.querySelector("#postcard .pc-flipper.pc-flipped") === null);
 check(
-  await b.evaluate(
-    () => document.querySelector("#pc-turn")?.hidden === true && document.querySelector("#postcard .pc-flipper.pc-flipped") === null,
-  ),
-  "a missing picture file hides the pill and keeps the writing face",
+  await b.evaluate(() => document.querySelector("#postcard .pc-flipper.pc-flipped") === null),
+  "a missing picture file keeps the writing face",
 );
 // the broken-image check destroyed the picture face: leave the box and open it again
 await b.click("#pc-leave");
@@ -348,7 +345,7 @@ await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { time
 await b.click("#box-btn");
 await b.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
 check(
-  (await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1 && !(await b.evaluate(() => document.querySelector("#pc-turn").hidden)),
+  (await b.locator("#postcard .pc-flipper.pc-flipped").count()) === 1,
   "reopened, the box shows its picture side again",
 );
 // Enter inside the card is a newline for the writer, never a jump to chat:
@@ -484,7 +481,7 @@ await a.click("#treasure-open");
 await a.click("#treasure-leave");
 await a.waitForSelector("#postcard textarea.pc-text");
 await a.fill("#postcard textarea.pc-text", "Look at our sky tonight.");
-await tapOrClick(a, "#pc-turn");
+await tapOrClick(a, "#postcard .pc-stamp");
 await tapOrClick(a, "#pc-snap");
 await a.waitForSelector("body.photo #photo:not([hidden])");
 check((await a.locator("#postcard.pc-away").count()) === 1, "the card steps aside while the viewfinder is up");
@@ -693,8 +690,8 @@ await a.click("#treasure-min");
 await readOpen(a); // A opens her own sealed box: the creator's view
 check((await a.locator("#pc-take").count()) === 1 && (await a.textContent("#postcard .pc-footer")).startsWith("Still sealed"), "the creator sees Still sealed and Take it back");
 await shot(a, "C5-own-sealed");
-a.once("dialog", (d) => d.accept());
 await a.click("#pc-take");
+await a.click(".pc-ask-yes");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 await a.waitForFunction((id) => !window.__tp.treasures.list().some((x) => x.id === id), oops.id, { timeout: 5000 });
 await b.waitForFunction((id) => !window.__tp.treasures.list().some((x) => x.id === id), oops.id, { timeout: 5000 });
@@ -739,8 +736,8 @@ check(
 );
 check((await a.inputValue("#postcard textarea.pc-text")) === "Only a small one fits here.", "with its text");
 check((await a.textContent("#pc-send")).startsWith("Leave it here"), "and Leave it here ready again");
-a.once("dialog", (d) => d.accept()); // throw the draft away
 await a.click("#pc-close");
+await a.click(".pc-ask-yes");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 
 // a refusal, a cancel and a retry: the picture goes up once and exactly one box comes down.
@@ -762,7 +759,7 @@ await a.click("#treasure-open");
 await a.click("#treasure-leave");
 await a.waitForSelector("#postcard textarea.pc-text");
 await a.fill("#postcard textarea.pc-text", "Third time lucky.");
-await a.click("#pc-turn");
+await a.click("#postcard .pc-stamp");
 await a.waitForTimeout(700);
 await a.setInputFiles("#postcard .pc-picture-file", { name: "lucky.png", mimeType: "image/png", buffer: photo });
 await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
@@ -853,8 +850,8 @@ check(
 );
 await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
 await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
-a.once("dialog", (d) => d.accept()); // throw that draft away
 await a.click("#pc-close");
+await a.click(".pc-ask-yes");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 await leaveCard("A newer card.");
 check(await a.evaluate(() => document.getElementById("pl-put").disabled), "the newer card cannot send while the old place is unanswered");
@@ -872,8 +869,8 @@ await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
 await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
 check((await cardText()) === "A newer card.", "Cancel brings the newer card back with its text");
 check((await boxesWith("A newer card.")) === 0, "and nothing was placed for it");
-a.once("dialog", (d) => d.accept());
 await a.click("#pc-close");
+await a.click(".pc-ask-yes");
 await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 
 // the late box of a card that is back on screen closes that card

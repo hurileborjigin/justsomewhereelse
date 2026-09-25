@@ -153,27 +153,19 @@
         transform: translate(-50%, calc(-100% - 4px));
         display: flex;
         align-items: center;
-        gap: 3px;
+        gap: 4px;
         font-size: 11px;
+        letter-spacing: 0.01em;
         color: #2b3a2a;
-        background: rgba(255, 255, 253, 0.55);
-        border-radius: 8px;
-        padding: 1px 7px;
+        background: rgba(255, 255, 253, 0.78);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 999px;
+        padding: 2px 9px;
         white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(30, 60, 30, 0.12);
         transition: opacity 0.15s;
         user-select: none;
-      }
-      .name-tag button {
-        border: none;
-        background: none;
-        cursor: pointer;
-        font-size: 9px;
-        padding: 0;
-        opacity: 0.6;
-        pointer-events: auto;
-      }
-      .name-tag button:hover {
-        opacity: 1;
       }
       /* --- floating box labels ------------------------------------------ */
       #box-labels {
@@ -184,30 +176,35 @@
       }
       .box-label {
         position: absolute;
-        transform: translate(-50%, -100%);
-        font-size: 10px;
+        transform: translate(-50%, calc(-100% - 6px));
+        font-size: 11px;
+        letter-spacing: 0.01em;
         color: #2b3a2a;
-        background: rgba(255, 255, 253, 0.65);
-        border-radius: 7px;
-        padding: 1px 6px;
+        background: rgba(255, 255, 253, 0.82);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 999px;
+        padding: 3px 9px;
         white-space: nowrap;
-        max-width: 160px;
+        max-width: 180px;
         overflow: hidden;
         text-overflow: ellipsis;
+        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.14);
         transition: opacity 0.15s;
         user-select: none;
       }
       .bubble {
         position: absolute;
         transform: translate(-50%, calc(-100% - 34px));
-        background: var(--paper);
-        border-radius: 12px;
-        padding: 7px 11px;
-        font-size: 14px;
-        max-width: 230px;
+        background: rgba(255, 255, 253, 0.92);
+        border-radius: 14px;
+        padding: 8px 12px;
+        font-size: 13.5px;
+        line-height: 1.35;
+        max-width: 220px;
         width: max-content;
         overflow-wrap: break-word;
-        box-shadow: 0 2px 10px rgba(30, 60, 30, 0.2);
+        box-shadow: 0 6px 18px rgba(30, 60, 30, 0.16);
         transition: opacity 0.15s;
       }
       .bubble::after {
@@ -217,7 +214,7 @@
         bottom: -7px;
         transform: translateX(-50%);
         border: 8px solid transparent;
-        border-top-color: var(--paper);
+        border-top-color: rgba(255, 255, 253, 0.92);
         border-bottom: none;
       }
       #chat-form {
@@ -273,15 +270,16 @@
       }
       #actions button {
         border: none;
-        border-radius: 14px;
-        padding: 10px 18px;
+        border-radius: 999px;
+        padding: 9px 16px;
         font: inherit;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 600;
+        letter-spacing: 0.01em;
         background: #58b368;
         color: white;
         cursor: pointer;
-        box-shadow: 0 2px 12px rgba(30, 60, 30, 0.3);
+        box-shadow: 0 4px 14px rgba(30, 60, 30, 0.18);
         white-space: nowrap;
         /* a long box label shortens with an ellipsis instead of spilling off a phone */
         max-width: calc(100vw - 32px);
@@ -330,35 +328,41 @@
       }
       #actions #sign-btn {
         padding: 5px 14px;
-        font-size: 13px;
-        background: rgba(255, 255, 253, 0.8);
+        font-size: 12.5px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(255, 255, 253, 0.82);
         color: var(--ink);
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.18);
+        box-shadow: 0 4px 14px rgba(30, 60, 30, 0.12);
       }
       #chat-input {
         width: min(46vw, 380px);
         border: none;
-        border-radius: 14px;
-        padding: 10px 14px;
+        border-radius: 999px;
+        padding: 10px 16px;
         font: inherit;
         font-size: 14px;
-        background: rgba(255, 255, 253, 0.6);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
+        background: rgba(255, 255, 253, 0.72);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         color: var(--ink);
-        box-shadow: 0 1px 8px rgba(30, 60, 30, 0.14);
-        outline-color: #58b368;
+        box-shadow: 0 4px 16px rgba(30, 60, 30, 0.12);
+        outline: none;
       }
+      #chat-input::placeholder { color: rgba(43, 58, 42, 0.4); }
       #chat-form button {
         border: none;
-        border-radius: 14px;
+        border-radius: 999px;
         padding: 10px 14px;
         font: inherit;
         font-size: 14px;
-        background: rgba(255, 255, 253, 0.6);
+        background: rgba(255, 255, 253, 0.72);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         color: var(--ink);
         cursor: pointer;
-        box-shadow: 0 1px 8px rgba(30, 60, 30, 0.14);
+        box-shadow: 0 4px 16px rgba(30, 60, 30, 0.12);
       }
       #chat-form button:disabled {
         opacity: 0.5;
@@ -403,86 +407,117 @@
         position: fixed;
         top: 14px;
         right: 14px;
-        width: 230px;
-        background: rgba(255, 255, 253, 0.42);
-        backdrop-filter: blur(7px);
-        -webkit-backdrop-filter: blur(7px);
-        border-radius: 14px;
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
+        width: 240px;
+        background: rgba(255, 255, 253, 0.55);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(30, 60, 30, 0.12);
         overflow: hidden;
         font-size: 12.5px;
-        color: rgba(43, 58, 42, 0.85);
+        color: rgba(43, 58, 42, 0.9);
       }
       #chat-panel header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 8px 8px 12px;
+        padding: 10px 8px 6px 14px;
         font-weight: 600;
+        letter-spacing: 0.01em;
       }
       #chat-min {
         border: none;
         background: none;
         font: inherit;
         cursor: pointer;
-        padding: 0 6px;
+        padding: 0 8px;
         color: var(--ink);
+        opacity: 0.55;
       }
       #chat-log {
         max-height: 38vh;
         overflow-y: auto;
-        padding: 0 10px 10px;
+        padding: 0 12px 12px;
         display: flex;
         flex-direction: column;
         gap: 6px;
       }
       #chat-log:empty::before {
-        content: "No messages yet. Say hi!";
-        opacity: 0.55;
+        content: "No messages yet.";
+        opacity: 0.4;
+        font-size: 12px;
       }
       .msg {
-        border-radius: 10px;
-        padding: 5px 9px;
+        border-radius: 12px;
+        padding: 6px 10px;
         overflow-wrap: break-word;
+        line-height: 1.35;
       }
       .msg {
         position: relative;
       }
       .msg .recall {
-        position: absolute;
-        top: 2px;
-        right: 3px;
+        display: none;
+        margin-top: 4px;
         border: none;
         background: none;
-        font-size: 10px;
+        padding: 0;
+        font: inherit;
+        font-size: 11px;
+        color: inherit;
+        opacity: 0.5;
         cursor: pointer;
-        opacity: 0.3;
-        padding: 0 2px;
       }
-      .msg .recall:hover {
-        opacity: 1;
+      @media (hover: hover) and (pointer: fine) {
+        .msg.me:hover .recall { display: inline; }
       }
+      .msg .recall:hover { opacity: 1; }
+      .recall-ask {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 6px;
+        font-size: 11.5px;
+        opacity: 0.8;
+      }
+      .recall-ask button {
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: inherit;
+        cursor: pointer;
+      }
+      .recall-ask button:last-of-type { opacity: 0.5; font-weight: 500; }
+      .recall-ask button:hover { opacity: 1; }
       .msg.me {
-        background: rgba(211, 236, 195, 0.55);
+        background: rgba(88, 179, 104, 0.16);
         align-self: flex-end;
       }
       .msg.peer {
-        background: rgba(230, 233, 240, 0.55);
+        background: rgba(43, 58, 42, 0.06);
         align-self: flex-start;
       }
       #chat-open {
         position: fixed;
         top: 14px;
         right: 14px;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border: none;
         border-radius: 14px;
-        padding: 8px 11px;
-        font-size: 15px;
-        background: rgba(255, 255, 253, 0.45);
+        font-size: 18px;
+        background: rgba(255, 255, 253, 0.55);
+        box-shadow: 0 4px 14px rgba(30, 60, 30, 0.12);
         cursor: pointer;
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
-        opacity: 0.85;
       }
+      #chat-open[hidden] { display: none; }
       #chat-badge {
         position: absolute;
         top: -6px;
@@ -494,18 +529,59 @@
         padding: 2px 6px;
       }
       /* --- treasures ---------------------------------------------------- */
-      #treasure-open {
+      #treasure-open,
+      #music-open {
         position: fixed;
         top: 14px;
-        left: 14px;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border: none;
         border-radius: 14px;
-        padding: 8px 11px;
-        font-size: 15px;
-        background: rgba(255, 255, 253, 0.45);
+        background: rgba(255, 255, 253, 0.55);
+        box-shadow: 0 4px 14px rgba(30, 60, 30, 0.12);
         cursor: pointer;
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
-        opacity: 0.85;
+        line-height: 1;
+      }
+      #treasure-open { left: 14px; }
+      #music-open { left: 64px; font-size: 18px; }
+      #treasure-open.on,
+      #music-open.on {
+        background: rgba(255, 255, 253, 0.92);
+        box-shadow: inset 0 0 0 1.5px rgba(43, 58, 42, 0.22), 0 4px 14px rgba(30, 60, 30, 0.12);
+      }
+      #music-panel.beside {
+        left: calc(14px + min(270px, 100vw - 28px) + 10px);
+      }
+      @media (max-width: 640px) {
+        #treasure-open,
+        #music-open,
+        #chat-open {
+          top: max(14px, env(safe-area-inset-top));
+        }
+        #treasure-open { left: max(14px, env(safe-area-inset-left)); }
+        #music-open { left: calc(max(14px, env(safe-area-inset-left)) + 50px); }
+        #chat-open { right: max(14px, env(safe-area-inset-right)); }
+        #chat-panel {
+          top: max(14px, env(safe-area-inset-top));
+          right: max(14px, env(safe-area-inset-right));
+          width: min(220px, calc(100vw - 128px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        }
+        #music-panel,
+        #treasure-panel {
+          top: calc(max(14px, env(safe-area-inset-top)) + 50px);
+          left: max(12px, env(safe-area-inset-left));
+          width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));
+          max-height: min(52vh, 460px);
+        }
+        #chat-form {
+          bottom: max(12px, env(safe-area-inset-bottom));
+          width: min(520px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        }
+        #chat-input { width: auto; flex: 1; min-width: 0; }
       }
       #treasure-open[hidden],
       #treasure-panel[hidden] {
@@ -522,65 +598,331 @@
         border-radius: 9px;
         padding: 2px 6px;
       }
+      #music-open[hidden],
+      #music-panel[hidden],
+      #music-connect[hidden],
+      #music-controls[hidden],
+      #music-notice[hidden],
+      #music-upnext[hidden],
+      #music-art[hidden] {
+        display: none;
+      }
+      #music-panel {
+        position: fixed;
+        top: 64px;
+        left: 14px;
+        width: min(260px, calc(100vw - 28px));
+        max-height: min(72vh, 560px);
+        overflow: auto;
+        background: rgba(255, 255, 253, 0.55);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(30, 60, 30, 0.12);
+        font-size: 12.5px;
+        color: rgba(43, 58, 42, 0.9);
+      }
+      #music-panel header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 8px 0 14px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      #music-min {
+        border: none;
+        background: none;
+        font: inherit;
+        cursor: pointer;
+        padding: 0 8px;
+        color: var(--ink);
+        opacity: 0.55;
+      }
+      #music-with {
+        margin: 1px 14px 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.45;
+      }
+      #music-notice {
+        margin: 0 14px 8px;
+        font-size: 11.5px;
+        line-height: 1.35;
+        opacity: 0.7;
+      }
+      #music-connect {
+        display: block;
+        margin: 4px 14px 14px;
+        width: calc(100% - 28px);
+        border: none;
+        border-radius: 12px;
+        padding: 9px 12px;
+        background: rgba(43, 58, 42, 0.08);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      #music-controls { padding: 0 14px 12px; }
+      #music-now { display: flex; gap: 10px; align-items: center; }
+      #music-artbox {
+        width: 54px;
+        height: 54px;
+        border-radius: 10px;
+        overflow: hidden;
+        flex: none;
+        background: rgba(43, 58, 42, 0.08);
+      }
+      #music-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+      #music-meta { min-width: 0; }
+      #music-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      #music-title, #music-artist {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #music-title { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; }
+      #music-lyrics {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: none;
+        color: rgba(43, 58, 42, 0.55);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #music-lyrics svg { width: 16px; height: 16px; display: block; }
+      #music-lyrics:hover { color: rgba(43, 58, 42, 0.9); }
+      #music-artist { display: block; margin-top: 2px; font-size: 11.5px; opacity: 0.55; }
+      #music-scrub { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+      #music-bar {
+        flex: 1;
+        appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(43, 58, 42, 0.15);
+        outline: none;
+        cursor: pointer;
+      }
+      #music-bar::-webkit-slider-thumb {
+        appearance: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--ink);
+      }
+      #music-time { font-size: 10px; opacity: 0.45; font-variant-numeric: tabular-nums; min-width: 28px; }
+      #music-transport { display: flex; gap: 2px; margin: 2px 0 8px; }
+      #music-transport button {
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-size: 14px;
+        width: 32px;
+        height: 28px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      #music-transport button:hover { background: rgba(43, 58, 42, 0.06); }
+      #music-upnext {
+        margin: 8px 0 2px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.4;
+      }
+      #music-queue { list-style: none; margin: 0 0 8px; }
+      #music-queue li {
+        padding: 4px 0;
+        font-size: 12px;
+        opacity: 0.75;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #music-search {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-top: 4px;
+        background: rgba(43, 58, 42, 0.06);
+        color: inherit;
+        font: inherit;
+        font-size: 12.5px;
+        outline: none;
+      }
+      #music-search::placeholder { color: rgba(43, 58, 42, 0.4); }
+      #music-links {
+        display: flex;
+        gap: 3px;
+        margin: 10px 0 2px;
+        padding: 3px;
+        background: rgba(43, 58, 42, 0.06);
+        border-radius: 11px;
+      }
+      #music-links button {
+        flex: 1;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        padding: 6px 4px;
+        color: inherit;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.55;
+        cursor: pointer;
+      }
+      #music-links button:hover { opacity: 0.85; }
+      #music-links button.on {
+        background: rgba(255, 255, 253, 0.9);
+        opacity: 1;
+        box-shadow: 0 1px 3px rgba(30, 60, 30, 0.08);
+      }
+      #music-lyrics.on,
+      #music-lyrics.on:hover { color: #1db954; }
+      #sky-lyrics[hidden] { display: none; }
+      #sky-lyrics {
+        position: fixed;
+        top: 72px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(520px, 70vw);
+        text-align: center;
+        pointer-events: none;
+        z-index: 2;
+        color: rgba(255, 255, 253, 0.94);
+        text-shadow: 0 1px 8px rgba(20, 30, 50, 0.4);
+      }
+      #sky-lyrics p { line-height: 1.25; }
+      #sky-lyrics-prev,
+      #sky-lyrics-next {
+        font-size: 15px;
+        opacity: 0.45;
+      }
+      #sky-lyrics-line {
+        margin: 3px 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        opacity: 1;
+      }
+      @media (max-width: 640px) {
+        #sky-lyrics {
+          top: calc(max(14px, env(safe-area-inset-top)) + 52px);
+          width: min(420px, 86vw);
+        }
+      }
+      .music-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        padding: 6px 0;
+        cursor: pointer;
+        border-top: 1px solid rgba(43, 58, 42, 0.06);
+      }
+      .music-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .music-empty {
+        margin: 8px 0 0;
+        font-size: 12px;
+        opacity: 0.5;
+      }
+      .music-add {
+        flex: none;
+        border: none;
+        background: rgba(43, 58, 42, 0.06);
+        color: inherit;
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        cursor: pointer;
+        font: inherit;
+        line-height: 1;
+      }
       #treasure-panel {
         position: fixed;
-        top: 14px;
+        top: 64px;
         left: 14px;
         width: min(270px, calc(100vw - 28px));
-        background: rgba(255, 255, 253, 0.42);
-        backdrop-filter: blur(7px);
-        -webkit-backdrop-filter: blur(7px);
-        border-radius: 14px;
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
+        background: rgba(255, 255, 253, 0.55);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(30, 60, 30, 0.12);
         overflow: hidden;
         font-size: 12.5px;
-        color: rgba(43, 58, 42, 0.85);
+        color: rgba(43, 58, 42, 0.9);
       }
       #treasure-panel header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 8px 8px 12px;
+        padding: 10px 8px 4px 14px;
         font-weight: 600;
+        letter-spacing: 0.01em;
       }
       #treasure-min {
         border: none;
         background: none;
         font: inherit;
         cursor: pointer;
-        padding: 0 6px;
+        padding: 0 8px;
         color: var(--ink);
+        opacity: 0.55;
       }
       #treasure-body {
         max-height: 60vh;
         overflow-y: auto;
-        padding: 0 10px 10px;
+        padding: 0 14px 14px;
         display: flex;
         flex-direction: column;
         gap: 8px;
       }
       #treasure-body h3 {
-        font-size: 10.5px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.7px;
-        opacity: 0.6;
-        margin-top: 6px;
+        letter-spacing: 0.06em;
+        opacity: 0.4;
+        margin-top: 8px;
+        font-weight: 600;
       }
       #treasure-waiting {
         font-size: 12.5px;
+        line-height: 1.4;
+        opacity: 0.75;
       }
       #treasure-leave {
         border: none;
         border-radius: 12px;
         padding: 9px 14px;
         font: inherit;
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 600;
-        background: #58b368;
-        color: white;
+        background: rgba(43, 58, 42, 0.08);
+        color: var(--ink);
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(30, 60, 30, 0.25);
       }
+      #treasure-leave:hover { background: rgba(43, 58, 42, 0.12); }
       .tr-list {
         display: flex;
         flex-direction: column;
@@ -597,11 +939,10 @@
       .tr-row {
         display: grid;
         grid-template-columns: 40px 1fr;
-        gap: 4px 8px;
+        gap: 2px 10px;
         align-items: center;
-        background: rgba(255, 255, 253, 0.5);
-        border-radius: 10px;
-        padding: 6px 8px;
+        padding: 8px 0;
+        border-top: 1px solid rgba(43, 58, 42, 0.06);
       }
       .tr-thumb {
         width: 40px;
@@ -647,11 +988,11 @@
       }
       .tr-actions button {
         border: none;
-        border-radius: 9px;
-        padding: 4px 9px;
+        border-radius: 999px;
+        padding: 4px 10px;
         font: inherit;
-        font-size: 11.5px;
-        background: rgba(43, 58, 42, 0.09);
+        font-size: 11px;
+        background: rgba(43, 58, 42, 0.06);
         color: var(--ink);
         cursor: pointer;
       }
@@ -668,37 +1009,39 @@
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 10;
-        width: min(290px, calc(100vw - 32px));
-        /* frostier than the corner panel: this card sits over the busy middle of the scene */
-        background: rgba(255, 255, 253, 0.72);
-        backdrop-filter: blur(7px);
-        -webkit-backdrop-filter: blur(7px);
-        border-radius: 14px;
-        box-shadow: 0 1px 6px rgba(30, 60, 30, 0.12);
-        font-size: 13.5px;
-        color: rgba(43, 58, 42, 0.9);
+        width: min(300px, calc(100vw - 32px));
+        background: rgba(255, 255, 253, 0.78);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 18px;
+        box-shadow: 0 16px 40px rgba(30, 60, 30, 0.18);
+        font-size: 14px;
+        line-height: 1.45;
+        color: rgba(43, 58, 42, 0.92);
       }
       #sign header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 8px 4px 14px;
+        padding: 14px 10px 2px 18px;
         font-weight: 600;
+        letter-spacing: 0.01em;
       }
       #sign-close {
         border: none;
         background: none;
         font: inherit;
-        font-size: 12px;
+        font-size: 13px;
         cursor: pointer;
-        padding: 2px 6px;
+        padding: 4px 8px;
         color: var(--ink);
+        opacity: 0.45;
       }
       #sign-body {
-        padding: 0 14px 14px;
+        padding: 6px 18px 16px;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
       }
       #sign-action[hidden] {
         display: none;
@@ -706,15 +1049,14 @@
       #sign-action {
         align-self: flex-start;
         border: none;
-        border-radius: 12px;
-        padding: 9px 14px;
+        border-radius: 999px;
+        padding: 8px 14px;
         font: inherit;
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 600;
         background: #58b368;
         color: white;
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(30, 60, 30, 0.25);
       }
       #toast[hidden] {
         display: none;
@@ -759,6 +1101,62 @@
         margin: auto 0;
         position: relative;
       }
+      .pc-ask {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(24, 36, 28, 0.38);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+      }
+      .pc-ask-card {
+        width: min(320px, 100%);
+        background: #fffdf8;
+        border-radius: 18px;
+        box-shadow: 0 18px 48px rgba(20, 36, 24, 0.24);
+        padding: 22px 18px 16px;
+        color: #2b3a2a;
+      }
+      .pc-ask-card p {
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: center;
+      }
+      .pc-ask-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .pc-ask-actions button {
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        padding: 11px 14px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pc-ask-no {
+        background: rgba(43, 58, 42, 0.07);
+        color: #2b3a2a;
+      }
+      .pc-ask-no:hover { background: rgba(43, 58, 42, 0.12); }
+      .pc-ask-yes {
+        background: #3f8f52;
+        color: white;
+      }
+      .pc-ask-yes:hover { background: #357a46; }
+      .pc-ask-yes.away {
+        background: #c46a4a;
+      }
+      .pc-ask-yes.away:hover { background: #b05d40; }
       .pc-close {
         position: absolute;
         top: -12px;
@@ -1067,15 +1465,10 @@
         display: inline-block;
         flex: none;
       }
-      #treasure-open {
-        padding: 7px 9px 5px;
-        line-height: 0;
-      }
       #treasure-open .chest-icon {
-        width: 30px;
-        height: 26px;
+        width: 24px;
+        height: 21px;
         display: block;
-        filter: drop-shadow(0 1px 1px rgba(60, 40, 10, 0.25));
       }
       /* --- what kind of box: postcard, note, just photos ------------------ */
       .pc-styles {
@@ -1131,28 +1524,6 @@
         .pc-flipper {
           transition: none;
         }
-      }
-      .pc-turn {
-        position: absolute;
-        left: 50%;
-        bottom: 8px;
-        transform: translateX(-50%);
-        border: none;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font: inherit;
-        font-size: 11px;
-        background: rgba(47, 58, 90, 0.55);
-        color: #fff;
-        cursor: pointer;
-        z-index: 2;
-        white-space: nowrap;
-      }
-      .pc-turn:hover {
-        background: rgba(47, 58, 90, 0.75);
-      }
-      .pc-turn[hidden] {
-        display: none;
       }
       /* --- the picture face ---------------------------------------------- */
       .pc-picture {
@@ -1501,6 +1872,9 @@
       body.photo #chat-form,
       body.photo #treasure-open,
       body.photo #treasure-panel,
+      body.photo #music-open,
+      body.photo #music-panel,
+      body.photo #sky-lyrics,
       body.photo #actions,
       body.photo #sign,
       body.photo #bubbles,
@@ -1519,6 +1893,9 @@
       body.placing #chat-form,
       body.placing #treasure-open,
       body.placing #treasure-panel,
+      body.placing #music-open,
+      body.placing #music-panel,
+      body.placing #sky-lyrics,
       body.placing #actions,
       body.placing #sign,
       body.placing #box-labels {
@@ -1669,10 +2046,9 @@
         .pc-count {
           left: 22px;
         }
-        /* stacked, the signature sits in the bottom row: lift it above the flip pill */
         .pc-side {
           padding-top: 22px;
-          padding-bottom: 38px;
+          padding-bottom: 22px;
         }
         .pc-postmark {
           top: 36px;
@@ -1839,6 +2215,50 @@
     <div id="box-labels"></div>
     <div id="bubbles"></div>
     <button id="treasure-open" title="Treasures"><svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg><span id="treasure-badge" hidden></span></button>
+    <button id="music-open" title="Music">♫</button>
+    <div id="sky-lyrics" hidden>
+      <p id="sky-lyrics-prev"></p>
+      <p id="sky-lyrics-line"></p>
+      <p id="sky-lyrics-next"></p>
+    </div>
+    <div id="music-panel" hidden>
+      <header>
+        <span>Music</span>
+        <button id="music-min" title="Minimize" type="button">–</button>
+      </header>
+      <p id="music-with">On your own</p>
+      <p id="music-notice" hidden></p>
+      <button id="music-connect" type="button">Connect Spotify</button>
+      <div id="music-controls" hidden>
+        <div id="music-now">
+          <div id="music-artbox"><img id="music-art" alt="" hidden /></div>
+          <div id="music-meta">
+            <div id="music-title-row">
+              <span id="music-title">Nothing playing</span>
+              <button id="music-lyrics" type="button" aria-pressed="false" aria-label="Lyrics" title="Lyrics"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.25a2.25 2.25 0 0 0-2.25 2.25v3.1a2.25 2.25 0 0 0 4.5 0v-3.1A2.25 2.25 0 0 0 8 1.25z"/><path fill="currentColor" d="M4.1 6.15a.7.7 0 0 0-1.4 0 5.3 5.3 0 0 0 4.6 5.25V13H5.9a.7.7 0 0 0 0 1.4h4.2a.7.7 0 0 0 0-1.4H8.7v-1.6a5.3 5.3 0 0 0 4.6-5.25.7.7 0 0 0-1.4 0 3.9 3.9 0 0 1-7.8 0z"/></svg></button>
+            </div>
+            <span id="music-artist"></span>
+          </div>
+        </div>
+        <div id="music-scrub">
+          <input id="music-bar" type="range" min="0" max="0" value="0" />
+          <span id="music-time">0:00</span>
+        </div>
+        <div id="music-transport">
+          <button id="music-play" type="button" aria-label="Play">▶</button>
+          <button id="music-next" type="button" aria-label="Next">⏭</button>
+        </div>
+        <p id="music-upnext" hidden>Up next</p>
+        <ol id="music-queue"></ol>
+        <input id="music-search" placeholder="Search" />
+        <div id="music-links">
+          <button id="music-playlists" type="button">Playlists</button>
+          <button id="music-liked" type="button">Liked</button>
+          <button id="music-handoff" type="button">Speaker</button>
+        </div>
+        <div id="music-results"></div>
+      </div>
+    </div>
     <div id="treasure-panel" hidden>
       <header>
         <span>Treasures <svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg></span>

@@ -323,3 +323,25 @@ test("'constructor' and '__proto__' are never mistaken for fixed houses", () => 
     ],
   );
 });
+
+test("a music session and a Spotify refresh token survive a new store", () => {
+  const dir = mkdtempSync(join(tmpdir(), "haven-music-"));
+  const path = join(dir, "planet.db");
+  try {
+    const first = new Store(path);
+    const session = first.musicSession(0);
+    session.track = { uri: "spotify:track:a", name: "A", artists: "Bee", image: null, durationMs: 1000 };
+    session.paused = false;
+    first.saveMusicSession(0, session);
+    first.setSpotifyRefresh(1, "refresh-1");
+    first.close();
+    const second = new Store(path);
+    assert.equal(second.musicSession(0).track?.uri, "spotify:track:a");
+    assert.equal(second.musicSession(1).track, null);
+    assert.equal(second.spotifyRefresh(1), "refresh-1");
+    assert.equal(second.spotifyRefresh(0), null);
+    second.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

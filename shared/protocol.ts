@@ -149,13 +149,46 @@ export type BoxDenyReason =
   | "missing"
   | "notcreator" // taking back, changing or moving a box someone else left
   | "opened" // taking back or changing a box that has been opened
-  | "kept"; // changing or moving a box your partner has kept
-export type BoxOp = "place" | "open" | "keep" | "label" | "put" | "delete" | "edit" | "lift";
+  | "kept" // changing or moving a box your partner has kept
+  | "full"; // no bay in your treasure house fits this box
+export type BoxOp = "place" | "open" | "keep" | "label" | "put" | "delete" | "edit" | "lift" | "home";
 
 // Identity 0 (gloria by default) chooses the shared secret word on the very
 // first visit; after that everyone joins with it.
 export const SETUP_CREATOR: PlayerId = 0;
 export const PASS_MIN_LEN = 3;
+
+// ---- music ----------------------------------------------------------------
+
+export type Track = {
+  uri: string;
+  name: string;
+  artists: string;
+  image: string | null;
+  durationMs: number;
+};
+
+export type MusicSession = {
+  track: Track | null;
+  paused: boolean;
+  positionMs: number;
+  at: number;
+  queue: Track[];
+};
+
+/** What one player should draw. `waiting` means the track is on the session but not in their Spotify. */
+export type MusicView = {
+  connected: boolean;
+  shared: boolean;
+  session: MusicSession;
+  waiting: boolean;
+  notice: string | null;
+};
+
+export type SpotifyDevice = { id: string; name: string };
+export type Catalog =
+  | { kind: "search" | "liked" | "playlist"; tracks: Track[] }
+  | { kind: "playlists"; playlists: { id: string; name: string; mine: boolean }[] };
 
 export type ClientMessage =
   | { t: "join"; id: PlayerId; pass: string; create?: boolean }
@@ -174,6 +207,7 @@ export type ClientMessage =
     }
   | { t: "box-open"; id: number }
   | { t: "box-keep"; id: number; label?: string }
+  | { t: "box-home"; id: number; label?: string } // keep it and stand it in your own treasure house
   | { t: "box-label"; id: number; label: string }
   | { t: "box-put"; id: number; loc: string; tiles: number[]; fwd: Vec3 }
   | { t: "box-delete"; id: number } // take back your own box while it is still sealed
@@ -181,7 +215,23 @@ export type ClientMessage =
   | { t: "box-lift"; id: number } // pick your own box up to move it, until your partner keeps it
   | { t: "building-claim"; id: string; owner: PlayerId | null } // your own id to claim, or null to open to both
   | { t: "knock"; id: string }
-  | { t: "door-open"; id: string }; // the owner lets the pending knocker in
+  | { t: "door-open"; id: string } // the owner lets the pending knocker in
+  | { t: "music-play" }
+  | { t: "music-hear" }
+  | { t: "music-pause" }
+  | { t: "music-seek"; positionMs: number }
+  | { t: "music-next" }
+  | { t: "music-add"; track: Track }
+  | { t: "music-now"; track: Track }
+  | { t: "music-device"; deviceId: string | null; haven?: boolean }
+  | { t: "music-report"; uri: string | null; paused: boolean; positionMs: number; audible: boolean; track?: Track }
+  | { t: "music-connect" }
+  | { t: "music-search"; q: string }
+  | { t: "music-playlists" }
+  | { t: "music-playlist"; id: string }
+  | { t: "music-liked" }
+  | { t: "music-devices" }
+  | { t: "music-token" };
 
 export type ServerMessage =
   // open = the planet currently requires no secret word (PLANET_OPEN=1)
@@ -206,6 +256,7 @@ export type ServerMessage =
       doors: DoorGrant[]; // open grants
       knocks: { id: string; from: PlayerId; ageMs: number }[]; // pending knocks for the recipient, and how long ago each was made
       build: string; // the server's build id; a tab running another bundle reloads once (see main.ts)
+      music: MusicView;
     }
   | ({ t: "state"; id: PlayerId } & StateData)
   | { t: "names"; names: [string, string] }
@@ -219,4 +270,10 @@ export type ServerMessage =
   | { t: "building"; id: string; owner: PlayerId | null } // to both players after a change
   | { t: "knock"; id: string; from: PlayerId } // to the owner
   | { t: "door"; id: string; guest: PlayerId; open: boolean } // to both players when a grant starts or ends
-  | { t: "building-deny"; op: BuildingOp; id: string; reason: BuildingDenyReason };
+  | { t: "building-deny"; op: BuildingOp; id: string; reason: BuildingDenyReason }
+  | { t: "music"; view: MusicView }
+  | { t: "music-auth"; url: string }
+  | { t: "music-token"; access: string }
+  | { t: "music-catalog"; catalog: Catalog }
+  | { t: "music-devices"; devices: SpotifyDevice[] }
+  | { t: "music-deny"; reason: "spotify" | "premium" | "speaker" };

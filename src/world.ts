@@ -41,6 +41,8 @@ export interface World {
   labelRange: number;
   /** How steeply the follow camera looks down on the character: its elevation above her, in radians. */
   lookDown: number;
+  /** Vertical field of view, in degrees. */
+  fov: number;
   /** True for a tile key that exists in this world (data from the network may not). */
   hasTile(k: number): boolean;
   up(pos: Vector3, out: Vector3): Vector3;
@@ -91,6 +93,7 @@ export class GlobeWorld implements World {
   zoomMax = 11; // the whole planet fits on screen
   labelRange = LABEL_RANGE; // zoomed far out, the planet's tags would only be clutter
   lookDown = LOOK_DOWN;
+  fov = 55;
   scene: Scene;
 
   constructor(scene: Scene) {
@@ -259,10 +262,11 @@ export const BUILDING_NAMES: Record<BuildingKind, string> = {
 
 /** The follow camera's usual elevation: 3.2 up for every 6.5 behind. */
 export const LOOK_DOWN = Math.atan2(3.2, 6.5);
-// A treasure hall looks down more steeply, so the pillar rows between the
-// aisles fall below the line of sight instead of hiding the character (the
-// pillars are part of the one merged hall mesh, so they cannot fade one by one).
-const LOOK_DOWN_GALLERY = 0.92;
+// The treasure halls use that same view. A steeper pitch read as looking at
+// the floor; the pillars may cross the sight line, and that is the trade.
+const LOOK_DOWN_GALLERY = LOOK_DOWN;
+const FOV = 55;
+const FOV_GALLERY = 68; // a little wider than a room, so the hall reads as a hall
 
 const T = 2; // tile size
 const ZOOM_MAX_ROOM = 2.2; // interiors stay dollhouse-scale
@@ -294,6 +298,7 @@ export class RoomWorld implements World {
   zoomMax: number;
   labelRange: number;
   lookDown: number;
+  fov: number;
   /** A treasure house hall: bay tiles hold boxes on plinths. */
   gallery: boolean;
   private w: number;
@@ -321,6 +326,7 @@ export class RoomWorld implements World {
     this.zoomMax = this.gallery ? ZOOM_MAX_GALLERY : ZOOM_MAX_ROOM;
     this.labelRange = this.gallery ? LABEL_RANGE_GALLERY : LABEL_RANGE;
     this.lookDown = this.gallery ? LOOK_DOWN_GALLERY : LOOK_DOWN;
+    this.fov = this.gallery ? FOV_GALLERY : FOV;
 
     this.scene.background = new Color(`#${spec.bg}`);
     this.scene.add(new HemisphereLight(...(spec.fill ?? WARM_FILL)));

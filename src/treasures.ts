@@ -14,7 +14,7 @@ import {
 } from "../shared/protocol.ts";
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
-import { el, toast } from "./dom.ts";
+import { ask, el, placeMusicBeside, toast } from "./dom.ts";
 import type { CameraFade, FadeState } from "./fade.ts";
 import type { LabeledBox } from "./labels.ts";
 import { tangentFrameQuat } from "./math.ts";
@@ -47,6 +47,7 @@ const DENY_TEXT: Record<BoxDenyReason, string> = {
   notcreator: "Only the one who left it can do that.",
   opened: "It has been opened already, so it stays as it is.",
   kept: "Your partner has kept it already, so it stays as it is.",
+  full: "Your treasure room is full.",
 };
 
 export type TreasureHooks = {
@@ -68,7 +69,7 @@ export type TreasureHooks = {
   cancelPicture(): void;
   /** The camera fade: a chest between the camera and the character fades like a building. */
   fade: Pick<CameraFade, "track" | "untrack">;
-  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
+  net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "homeBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
 };
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };
@@ -152,7 +153,7 @@ export class Treasures {
       pocket: $("treasure-pocket"),
       carried: $("treasure-carried"),
     };
-    this.ui.openBtn.addEventListener("click", () => this.setPanelOpen(true));
+    this.ui.openBtn.addEventListener("click", () => this.setPanelOpen(this.ui.panel.hasAttribute("hidden")));
     $("treasure-min").addEventListener("click", () => this.setPanelOpen(false));
     $("treasure-leave").addEventListener("click", () => this.compose());
     // the toast floats above the door/box buttons however many are showing
@@ -174,7 +175,8 @@ export class Treasures {
 
   setPanelOpen(open: boolean) {
     this.ui.panel.hidden = !open;
-    this.ui.openBtn.hidden = open;
+    this.ui.openBtn.classList.toggle("on", open);
+    placeMusicBeside();
     if (open) this.hooks.onPanelOpen();
   }
 
@@ -557,6 +559,9 @@ export class Treasures {
       openedBy: this.names[1 - box.creator],
       isOwner: box.owner === this.me,
       onKeep: (label) => this.hooks.net.keepBox(box.id, label || undefined),
+      ...((box.owner === this.me && box.loc === null) || (box.owner !== this.me && box.creator !== this.me)
+        ? { onHome: (label: string) => this.hooks.net.homeBox(box.id, label || undefined) }
+        : {}),
       ...(box.owner === this.me ? { onLabel: (label: string) => this.saveLabel(box, label) } : {}),
       ...(mine && sealed ? { onDelete: () => this.hooks.net.deleteBox(box.id), onEdit: () => this.edit(box) } : {}),
       ...(mine && unkept && box.loc !== null ? { onLift: () => this.lift(box) } : {}),
@@ -575,8 +580,9 @@ export class Treasures {
   }
 
   private takeBack(box: Box) {
-    if (!confirm(TAKE_BACK_CONFIRM)) return;
-    this.hooks.net.deleteBox(box.id);
+    void ask(TAKE_BACK_CONFIRM, "Take it back", "Keep it", true).then((ok) => {
+      if (ok) this.hooks.net.deleteBox(box.id);
+    });
   }
 
   // ---- 3D ---------------------------------------------------------------------
@@ -674,7 +680,10 @@ export class Treasures {
       return b;
     };
     actions.append(button("Place here", "tr-place", () => this.place(box)), button("Open", "tr-open", () => this.open(box)));
-    if (kept) actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
+    if (kept) {
+      actions.append(button("Put it in my treasure room", "tr-home", () => this.hooks.net.homeBox(box.id)));
+      actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
+    }
     else {
       // your own box, lifted to move it: change it or take it back while it is still sealed
       if (box.opened === null) actions.append(button("Edit", "tr-edit", () => this.edit(box)));

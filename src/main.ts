@@ -5,11 +5,12 @@ import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
 import { Chat } from "./chat.ts";
-import { el, toast } from "./dom.ts";
+import { el, placeMusicBeside, toast } from "./dom.ts";
 import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { BoxLabels } from "./labels.ts";
 import { DragLook } from "./look.ts";
+import { Music } from "./music.ts";
 import { Net } from "./net.ts";
 import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
 import { Pennants } from "./pennant.ts";
@@ -474,6 +475,7 @@ async function boot() {
             remote.spawnAt(myId === 0 ? 1 : 0);
             if (msg.peer.state) remote.setState(msg.peer.state);
           }
+          music.show(msg.music);
           chat.clear();
           for (const entry of msg.history) {
             chat.addMessage(
@@ -558,6 +560,24 @@ async function boot() {
           toast(DENY_TEXT[msg.reason](msg.id));
           break;
         }
+        case "music":
+          music.show(msg.view);
+          break;
+        case "music-auth":
+          music.auth(msg.url);
+          break;
+        case "music-token":
+          music.token(msg.access);
+          break;
+        case "music-catalog":
+          music.catalog(msg.catalog);
+          break;
+        case "music-devices":
+          music.devices(msg.devices);
+          break;
+        case "music-deny":
+          music.deny(msg.reason);
+          break;
       }
     },
   });
@@ -567,10 +587,6 @@ async function boot() {
   // the id that makes the 2h recall work)
   const chat = new Chat(
     (text, media) => net.chat(text, media),
-    () => {
-      const name = prompt("Your name on the planet:", names[myId]);
-      if (name?.trim()) net.rename(name.trim());
-    },
     (id) => net.recall(id),
   );
 
@@ -610,22 +626,36 @@ async function boot() {
     placing,
     onDialog: (open) => input.setMuted((open || signAt !== null) && !placing.active),
     onPanelOpen: () => {
-      if (innerWidth < 640) chat.setOpen(false);
+      if (innerWidth < 640) {
+        chat.setOpen(false);
+        music.setOpen(false);
+      }
     },
     takePicture: takePhoto,
     cancelPicture: () => photo.cancel(),
     fade,
     net,
   });
+  const music = new Music(net);
   const boxLabels = new BoxLabels($("box-labels"));
   // on a phone the two panels would overlap: opening one tucks the other away
   $("chat-open").addEventListener("click", () => {
-    if (innerWidth < 640) treasures.setPanelOpen(false);
+    if (innerWidth < 640) {
+      treasures.setPanelOpen(false);
+      music.setOpen(false);
+    }
+  });
+  $("music-open").addEventListener("click", () => {
+    if (innerWidth < 640) {
+      treasures.setPanelOpen(false);
+      chat.setOpen(false);
+    }
   });
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
     cam.resize();
+    placeMusicBeside();
   };
   addEventListener("resize", resize);
   // a phone floats the toast at the top: it goes below whichever panel is open instead of over it
@@ -706,6 +736,7 @@ async function boot() {
       hemi.position.copy(up).multiplyScalar(50);
     }
 
+    music.tick(dt, world.isGlobe);
     net.tick(dt, player);
     if (world instanceof RoomWorld) world.faceCamera(cam.camera.position);
     renderer.render(world.scene, cam.camera);

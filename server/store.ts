@@ -13,11 +13,13 @@ import {
   type BoxSize,
   type ChatEntry,
   type MediaRef,
+  type MusicSession,
   type PlayerId,
   type StateData,
   type Vec3,
   type Writing,
 } from "../shared/protocol.ts";
+import { emptySession } from "./music.ts";
 
 const DEFAULT_NAMES: [string, string] = ["gloria", "khurlee"];
 const HISTORY_KEEP = 1000;
@@ -172,6 +174,10 @@ export class Store {
       throw err;
     }
     console.log(`[planet] migrated ${rows.length} treasure box(es) to typed contents`);
+  }
+
+  close() {
+    this.db.close();
   }
 
   names(): [string, string] {
@@ -406,6 +412,31 @@ export class Store {
         )
         .run(id, owner);
     }
+  }
+
+  musicSession(id: PlayerId): MusicSession {
+    const raw = this.kvGet(`music:${id}`);
+    if (!raw) return emptySession();
+    try {
+      const s = JSON.parse(raw) as MusicSession;
+      if (!s || !Array.isArray(s.queue)) return emptySession();
+      return s;
+    } catch {
+      return emptySession();
+    }
+  }
+
+  saveMusicSession(id: PlayerId, session: MusicSession) {
+    this.kvSet(`music:${id}`, JSON.stringify(session));
+  }
+
+  spotifyRefresh(id: PlayerId): string | null {
+    return this.kvGet(`spotify:${id}`);
+  }
+
+  setSpotifyRefresh(id: PlayerId, token: string | null) {
+    if (token === null) this.db.prepare("DELETE FROM kv WHERE key = ?").run(`spotify:${id}`);
+    else this.kvSet(`spotify:${id}`, token);
   }
 
   /** Every owned building, the fixed houses included. */

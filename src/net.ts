@@ -6,6 +6,7 @@ import {
   type MediaRef,
   type PlayerId,
   type ServerMessage,
+  type Track,
   type Vec3,
 } from "../shared/protocol.ts";
 import type { Player } from "./player.ts";
@@ -76,10 +77,6 @@ export class Net {
     this.send({ t: "recall", id });
   }
 
-  rename(name: string) {
-    this.send({ t: "rename", name });
-  }
-
   placeBox(msg: { size: BoxSize; contents: BoxContents; announce: boolean; loc: string; tiles: number[]; fwd: Vec3 }) {
     this.send({ t: "box-place", ...msg });
   }
@@ -90,6 +87,10 @@ export class Net {
 
   keepBox(id: number, label?: string) {
     this.send(label ? { t: "box-keep", id, label } : { t: "box-keep", id });
+  }
+
+  homeBox(id: number, label?: string) {
+    this.send(label ? { t: "box-home", id, label } : { t: "box-home", id });
   }
 
   labelBox(id: number, label: string) {
@@ -124,6 +125,71 @@ export class Net {
   /** The owner lets the pending knocker in. */
   openDoor(id: string) {
     this.send({ t: "door-open", id });
+  }
+
+  musicPlay() {
+    this.send({ t: "music-play" });
+  }
+
+  /** Ask Spotify to start the current song again on this speaker. */
+  musicHear() {
+    this.send({ t: "music-hear" });
+  }
+
+  musicPause() {
+    this.send({ t: "music-pause" });
+  }
+
+  musicSeek(positionMs: number) {
+    this.send({ t: "music-seek", positionMs });
+  }
+
+  musicNext() {
+    this.send({ t: "music-next" });
+  }
+
+  musicAdd(track: Track) {
+    this.send({ t: "music-add", track });
+  }
+
+  musicNow(track: Track) {
+    this.send({ t: "music-now", track });
+  }
+
+  musicDevice(deviceId: string | null, haven = false) {
+    this.send(haven ? { t: "music-device", deviceId, haven: true } : { t: "music-device", deviceId });
+  }
+
+  musicReport(report: { uri: string | null; paused: boolean; positionMs: number; audible: boolean; track?: Track }) {
+    this.send({ t: "music-report", ...report });
+  }
+
+  musicConnect() {
+    this.send({ t: "music-connect" });
+  }
+
+  musicSearch(q: string) {
+    this.send({ t: "music-search", q });
+  }
+
+  musicPlaylists() {
+    this.send({ t: "music-playlists" });
+  }
+
+  musicPlaylist(id: string) {
+    this.send({ t: "music-playlist", id });
+  }
+
+  musicLiked() {
+    this.send({ t: "music-liked" });
+  }
+
+  musicDevices() {
+    this.send({ t: "music-devices" });
+  }
+
+  musicToken() {
+    this.send({ t: "music-token" });
   }
 
   /** Called every frame; sends the local state at SEND_HZ once joined. */

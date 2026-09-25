@@ -18,9 +18,13 @@ export default defineConfig({
     },
   ],
   server: {
+    host: "127.0.0.1",
+    port: 5173,
+    strictPort: true,
     proxy: {
       "/ws": { target: "ws://localhost:3001", ws: true },
       "/media": { target: "http://localhost:3001" },
+      "/spotify": { target: "http://localhost:3001" },
     },
   },
 });

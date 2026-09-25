@@ -105,6 +105,10 @@ export class FollowCamera {
   private clampZoom(player: Player) {
     this.zoomMax = player.world.zoomMax;
     if (this.targetZoom > this.zoomMax) this.targetZoom = this.zoomMax;
+    if (this.camera.fov !== player.world.fov) {
+      this.camera.fov = player.world.fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   private finish(player: Player) {
