@@ -56,7 +56,7 @@ export class FollowCamera {
       "wheel",
       (e) => {
         // panels and the open postcard keep their native scrolling; only the world zooms
-        if (e.target instanceof Element && e.target.closest("#chat-panel, #treasure-panel, #postcard")) return;
+        if (e.target instanceof Element && e.target.closest("#chat-panel, #treasure-panel, #music-panel, #postcard")) return;
         e.preventDefault();
         this.zoomBy(Math.exp(e.deltaY * 0.0012));
       },
