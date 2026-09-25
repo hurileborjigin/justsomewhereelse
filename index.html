@@ -172,6 +172,28 @@
       .name-tag button:hover {
         opacity: 1;
       }
+      /* --- floating box labels ------------------------------------------ */
+      #box-labels {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .box-label {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        font-size: 10px;
+        color: #2b3a2a;
+        background: rgba(255, 255, 253, 0.65);
+        border-radius: 7px;
+        padding: 1px 6px;
+        white-space: nowrap;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: opacity 0.15s;
+        user-select: none;
+      }
       .bubble {
         position: absolute;
         transform: translate(-50%, calc(-100% - 34px));
@@ -1472,6 +1494,7 @@
       body.photo #actions,
       body.photo #sign,
       body.photo #bubbles,
+      body.photo #box-labels,
       body.photo #status,
       body.photo #toast {
         display: none !important;
@@ -1487,7 +1510,8 @@
       body.placing #treasure-open,
       body.placing #treasure-panel,
       body.placing #actions,
-      body.placing #sign {
+      body.placing #sign,
+      body.placing #box-labels {
         display: none !important;
       }
       #placing[hidden] {
@@ -1802,6 +1826,7 @@
       </div>
     </div>
     <div id="bubbles"></div>
+    <div id="box-labels"></div>
     <button id="treasure-open" title="Treasures"><svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg><span id="treasure-badge" hidden></span></button>
     <div id="treasure-panel" hidden>
       <header>

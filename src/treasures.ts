@@ -15,6 +15,7 @@ import {
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { el, toast } from "./dom.ts";
+import type { LabeledBox } from "./labels.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
 import type { Placing } from "./placing.ts";
@@ -276,6 +277,11 @@ export class Treasures {
 
   list(): Box[] {
     return [...this.boxes.values()];
+  }
+
+  /** Every box standing somewhere right now, for the floating labels (src/labels.ts). */
+  mountedBoxes(): LabeledBox[] {
+    return [...this.mounted.values()].map((m) => ({ box: m.box, pos: m.group.position, world: m.world }));
   }
 
   // ---- placing ----------------------------------------------------------------

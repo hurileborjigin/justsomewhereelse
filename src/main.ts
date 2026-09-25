@@ -8,6 +8,7 @@ import { Chat } from "./chat.ts";
 import { el, toast } from "./dom.ts";
 import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
+import { BoxLabels } from "./labels.ts";
 import { Net } from "./net.ts";
 import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
 import { Pennants } from "./pennant.ts";
@@ -610,6 +611,7 @@ async function boot() {
     cancelPicture: () => photo.cancel(),
     net,
   });
+  const boxLabels = new BoxLabels($("box-labels"));
   // on a phone the two panels would overlap: opening one tucks the other away
   $("chat-open").addEventListener("click", () => {
     if (innerWidth < 640) treasures.setPanelOpen(false);
@@ -681,6 +683,7 @@ async function boot() {
     remoteView.setVisible(together);
 
     chat.update(cam.camera, world, player.pos, player.character, remote.pos, remote.character, together);
+    boxLabels.update(cam.camera, world, treasures.mountedBoxes());
 
     if (world.isGlobe) {
       animals.update(dt, t);
