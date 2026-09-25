@@ -15,6 +15,7 @@ import {
 import { node, type AssetName, type Assets } from "./assets.ts";
 import { EMOJI, mediaElement, uploadMedia } from "./chat.ts";
 import { el, toast } from "./dom.ts";
+import type { CameraFade, FadeState } from "./fade.ts";
 import type { LabeledBox } from "./labels.ts";
 import { tangentFrameQuat } from "./math.ts";
 import type { Net } from "./net.ts";
@@ -25,6 +26,7 @@ import type { World } from "./world.ts";
 const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sealed
 const LID_SPEED = 4; // rad/s
 const REQUEST_TIMEOUT_MS = 15_000;
+const LANDED_LATE = "Your box went down after all.";
 const CHEST: Record<BoxSize, AssetName> = { s: "chest_s", m: "chest_m", l: "chest_l" };
 const SIZE_NAME: Record<BoxSize, string> = { s: "S", m: "M", l: "L" };
 // How far below the tile tops a chest's center sits on the globe. A flat base
@@ -54,7 +56,7 @@ export type TreasureHooks = {
   /** "Haven" or "the crooked house": for postmarks and panel rows. */
   placeName(loc: string): string;
   /** Placing mode: where a new or kept box goes down. */
-  placing: Pick<Placing, "start" | "active">;
+  placing: Pick<Placing, "start" | "active" | "finish">;
   /** A postcard dialog opened or closed (walking is muted while open). */
   onDialog(open: boolean): void;
   /** The treasures panel was opened (small screens tidy other panels). */
@@ -63,10 +65,14 @@ export type TreasureHooks = {
   takePicture(): Promise<Blob | null>;
   /** Ends photo mode without a shot, when the card it was taken for is closed or replaced from outside. */
   cancelPicture(): void;
+  /** The camera fade: a chest between the camera and the character fades like a building. */
+  fade: Pick<CameraFade, "track" | "untrack">;
   net: Pick<Net, "placeBox" | "openBox" | "keepBox" | "labelBox" | "putBox" | "deleteBox" | "editBox" | "liftBox">;
 };
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };
+/** One compose dialog's uploads, by file: each file goes up once however often the box is sent. */
+type Uploads = Map<Blob, Promise<MediaRef>>;
 type Pending = {
   op: BoxOp;
   id?: number;
@@ -97,6 +103,10 @@ export class Treasures {
   private pendingOpen: number | null = null; // box we asked the server to open
   private reading: number | null = null; // box shown in the read view, redrawn or closed when it changes
   private pending: Pending | null = null; // a place / put waiting for its answer
+  /** A new box's request timed out unanswered: it may still land, so no second one goes out until it is settled. */
+  private latePlace = false;
+  /** While a new box is being placed: ends placing mode and closes the card as if its confirm went through. */
+  private placedLate: (() => void) | null = null;
   private ui: {
     openBtn: HTMLElement;
     badge: HTMLElement;
@@ -141,6 +151,11 @@ export class Treasures {
     return this.postcard.isOpen;
   }
 
+  /** True while a new box's request that timed out is still unsettled (placing mode waits meanwhile). */
+  get unanswered() {
+    return this.latePlace;
+  }
+
   setPanelOpen(open: boolean) {
     this.ui.panel.hidden = !open;
     this.ui.openBtn.hidden = open;
@@ -155,6 +170,7 @@ export class Treasures {
 
   /** Replace everything (welcome, also after a reconnect). */
   setAll(boxes: Box[]) {
+    const known = new Set(this.boxes.keys());
     for (const id of [...this.mounted.keys()]) this.unmount(id);
     this.boxes.clear();
     for (const b of boxes) {
@@ -162,6 +178,27 @@ export class Treasures {
       this.mount(b);
     }
     this.renderPanel();
+    // a request sent before the line dropped: this snapshot shows whether it went through, or it was lost with the line
+    const p = this.pending;
+    if (p) {
+      this.pending = null;
+      clearTimeout(p.timer);
+      const through = (p.op === "place" || p.op === "put") && boxes.some((b) => p.matches(b, !known.has(b.id)));
+      if (through) p.resolve();
+      else p.reject(new Error("The line to the planet dropped. Try again."));
+    }
+    if (this.latePlace) {
+      if (boxes.some((b) => !known.has(b.id) && b.creator === this.me)) this.landedLate();
+      else this.latePlace = false; // lost with the line: placing may try again
+    }
+  }
+
+  /** The box of a request that timed out landed after all: placing mode ends as if it had been answered. */
+  private landedLate() {
+    const waiting = this.latePlace || this.placedLate !== null;
+    this.latePlace = false;
+    this.placedLate?.();
+    if (waiting) this.toast(LANDED_LATE);
   }
 
   /** One box changed, or the server answered our own request. */
@@ -172,14 +209,17 @@ export class Treasures {
     this.boxes.set(box.id, box);
     // re-mount, but let an already-standing lid keep its angle so update() swings it
     const lidNow = this.mounted.get(box.id)?.lid.rotation.x;
-    this.unmount(box.id);
-    this.mount(box, lidNow);
+    const faded = this.unmount(box.id);
+    this.mount(box, lidNow, faded);
     this.renderPanel();
     if (this.pending?.matches(box, !prev)) {
       const p = this.pending;
       this.pending = null;
       clearTimeout(p.timer);
       p.resolve();
+    } else if (!prev && box.creator === this.me) {
+      // nobody is waiting for this new box of ours: the answer to a request that timed out
+      this.landedLate();
     }
     if (this.pendingOpen === box.id && box.contents !== undefined) {
       this.pendingOpen = null;
@@ -212,6 +252,7 @@ export class Treasures {
       return;
     }
     if (msg.op === "open" && this.pendingOpen === msg.id) this.pendingOpen = null;
+    if (msg.op === "place") this.latePlace = false; // the late answer to a new box: refused, so placing may try again
     this.toast(DENY_TEXT[msg.reason]);
   }
 
@@ -300,6 +341,9 @@ export class Treasures {
   private compose() {
     if (this.postcard.isOpen || this.hooks.placing.active) return;
     this.setPanelOpen(false);
+    // every file is uploaded once for the life of the card: a refused or cancelled placement
+    // tried again sends the same prints; only a new picture or print uploads anew
+    const uploads: Uploads = new Map();
     this.postcard.compose({
       mark: this.mark(this.me, this.hooks.currentWorld().id, new Date()),
       takePicture: () => this.photo(),
@@ -307,25 +351,28 @@ export class Treasures {
       onSend: (draft) =>
         new Promise<boolean>((resolve) => {
           this.postcard.setAway(true);
-          // uploaded once: a refused placement tried again elsewhere sends the same files
-          let contents: Promise<BoxContents> | null = null;
+          const placed = () => {
+            this.placedLate = null;
+            resolve(true);
+          };
+          this.placedLate = () => {
+            this.hooks.placing.finish();
+            placed();
+          };
           this.hooks.placing.start({
             size: null,
             onConfirm: async (tiles, size, world, forward) => {
-              contents ??= this.contentsOf(draft).catch((err: unknown) => {
-                contents = null; // a failed upload is tried again on the next confirm
-                throw err;
-              });
-              const packed = await contents;
+              const contents = await this.contentsOf(draft, uploads);
               await this.request(
                 "place",
                 undefined,
                 (b, isNew) => isNew && b.creator === this.me,
-                () => this.hooks.net.placeBox({ size, contents: packed, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
+                () => this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
               );
-              resolve(true);
+              placed();
             },
             onCancel: () => {
+              this.placedLate = null;
               this.postcard.setAway(false);
               resolve(false);
             },
@@ -334,17 +381,26 @@ export class Treasures {
     });
   }
 
-  /** What the box will hold: the kept files plus everything new uploaded, shaped for the style. */
-  private async contentsOf(draft: Draft): Promise<BoxContents> {
+  /** What the box will hold: the kept files plus everything new uploaded (each file once, through `uploads`), shaped for the style. */
+  private async contentsOf(draft: Draft, uploads: Uploads): Promise<BoxContents> {
+    const upload = (file: Blob) => {
+      let sent = uploads.get(file);
+      if (!sent) {
+        sent = uploadMedia(file);
+        uploads.set(file, sent);
+        sent.catch(() => uploads.delete(file)); // a failed upload is tried again next time
+      }
+      return sent;
+    };
     if (draft.style === "postcard") {
       const p = draft.picture;
       const picture: Picture | null = p
-        ? { image: p.source instanceof Blob ? await uploadMedia(p.source) : p.source, focus: p.focus, zoom: p.zoom, caption: p.caption }
+        ? { image: p.source instanceof Blob ? await upload(p.source) : p.source, focus: p.focus, zoom: p.zoom, caption: p.caption }
         : null;
       return { style: "postcard", picture, writing: { text: draft.text, ...draft.dressing } };
     }
     const media: MediaRef[] = [...draft.keep];
-    for (const f of draft.files) media.push(await uploadMedia(f));
+    for (const f of draft.files) media.push(await upload(f));
     return draft.style === "note" ? { style: "note", text: draft.text, media } : { style: "media", caption: draft.text, media };
   }
 
@@ -355,12 +411,13 @@ export class Treasures {
     const contents = box.contents;
     if (!contents) return;
     this.setPanelOpen(false);
+    const uploads: Uploads = new Map(); // a save refused or unanswered and tried again sends the same prints
     this.postcard.compose({
       mark: this.mark(box.creator, box.origin, new Date(box.created)),
       initial: { contents, announce: box.announce },
       takePicture: () => this.photo(),
       onSend: async (draft) => {
-        const contents = await this.contentsOf(draft);
+        const contents = await this.contentsOf(draft, uploads);
         // only a still-sealed, still-unkept update is the answer to a save; an opened
         // box arriving first means the partner beat the edit and the refusal follows
         await this.request(
@@ -412,7 +469,11 @@ export class Treasures {
       const timer = window.setTimeout(() => {
         if (this.pending?.timer !== timer) return;
         this.pending = null;
-        reject(new Error("No answer from the planet. Try again."));
+        if (op === "place") {
+          // it may still land: until it does (or is refused, or the line drops), no second box goes out
+          this.latePlace = true;
+          reject(new Error("No answer from the planet yet…"));
+        } else reject(new Error("No answer from the planet. Try again."));
       }, REQUEST_TIMEOUT_MS);
       this.pending = { op, id, matches, resolve, reject, timer };
       send();
@@ -471,7 +532,7 @@ export class Treasures {
 
   // ---- 3D ---------------------------------------------------------------------
 
-  private mount(box: Box, lidAngle?: number) {
+  private mount(box: Box, lidAngle?: number, faded?: FadeState) {
     if (box.loc === null || box.tiles.length === 0) return;
     const world = this.hooks.resolveWorld(box.loc);
     if (!world) return; // a room not created yet - mountWorld() catches up later
@@ -491,17 +552,22 @@ export class Treasures {
     const up = world.up(center, new Vector3());
     tangentFrameQuat(up, new Vector3(-box.fwd[0], -box.fwd[1], -box.fwd[2]), group.quaternion);
     lid.rotation.x = lidAngle ?? (box.opened !== null ? LID_OPEN : 0);
+    group.userData.box = box.id;
     world.scene.add(group);
+    this.hooks.fade.track(group, faded);
     world.setBlocked(box.tiles, true);
     this.mounted.set(box.id, { box, group, lid, world });
   }
 
-  private unmount(id: number) {
+  /** Takes a chest out of its world; returns how faded it was, for a re-mount to carry over. */
+  private unmount(id: number): FadeState | undefined {
     const m = this.mounted.get(id);
-    if (!m) return;
+    if (!m) return undefined;
+    const faded = this.hooks.fade.untrack(m.group);
     m.group.removeFromParent();
     m.world.setBlocked(m.box.tiles, false);
     this.mounted.delete(id);
+    return faded;
   }
 
   // ---- panel ------------------------------------------------------------------

@@ -14,6 +14,7 @@ const FAR_LOOK_BLEND = 0.85; // how much the far view centers on the planet
 const TILT_MIN = -0.26; // a little below the usual view
 const TILT_MAX = 1.31; // nearly straight up
 const AIM_DEFAULT = 1.2; // the usual view looks a little above the character's head
+const DISTANCE = Math.hypot(3.2, 6.5); // from the character at zoom 1 (World.lookDown sets the angle)
 
 /** Wraps an angle into (-PI, PI]. */
 function wrapAngle(a: number) {
@@ -65,10 +66,11 @@ export class FollowCamera {
     player.world.up(player.pos, _up);
     _fwd.set(0, 0, 1).applyQuaternion(player.quat);
     _fwd.applyAxisAngle(_up, this.yaw);
+    const a = player.world.lookDown;
     return _desired
       .copy(player.pos)
-      .addScaledVector(_up, 3.2 * this.zoom)
-      .addScaledVector(_fwd, -6.5 * this.zoom);
+      .addScaledVector(_up, Math.sin(a) * DISTANCE * this.zoom)
+      .addScaledVector(_fwd, -Math.cos(a) * DISTANCE * this.zoom);
   }
 
   snap(player: Player) {

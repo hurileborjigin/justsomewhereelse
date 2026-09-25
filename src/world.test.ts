@@ -75,6 +75,8 @@ test("gallery: bays hold boxes on plinths but are never walked on; pillars hold 
   assert.equal(hive.gallery, true);
   assert.equal(hive.zoomMax, 6);
   assert.equal(new RoomWorld("b0", "house_a", fakeAssets).zoomMax, 2.2);
+  // the hall camera looks down more steeply than anywhere else, over the pillar rows
+  assert.ok(hive.lookDown > new RoomWorld("b0", "house_a", fakeAssets).lookDown);
   assert.equal(hive.exitTile, hive.key(...GALLERY.exit));
   const bay = hive.key(0, 2); // an L bay against the left wall
   const pillar = hive.key(0, 5);

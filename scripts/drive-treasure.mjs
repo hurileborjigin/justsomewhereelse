@@ -5,6 +5,8 @@
 // and picks it up again. Act 1b: a postcard whose picture A takes in photo
 // mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
 // Every box goes down through placing mode: an all-green shade, then E (or the button).
+// Act 3: placing mode's edges: a size that cannot form is disabled, Cancel brings the
+// card back, and a refusal, a cancel and a retry upload the picture once for one box.
 // Screenshots land in /tmp/haven-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
@@ -673,6 +675,104 @@ check(
   "the taken-back box vanished for both players",
 );
 await shot(a, "C6-taken-back");
+
+// ---- Act 3: placing mode's edges --------------------------------------------
+const pl = (p) => p.evaluate(() => window.__tp.placing());
+const confirmPut = (p) => (MOBILE ? p.tap("#pl-put") : p.keyboard.press("e"));
+const sizeDisabled = (p) =>
+  p.evaluate(() => Object.fromEntries([...document.querySelectorAll("#pl-sizes button")].map((x) => [x.dataset.size, x.disabled])));
+
+// at the Hive's far wall only an S fits in front of her: M and L cannot even form
+await a.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.id === "hive")));
+await a.waitForTimeout(400);
+await a.click("#treasure-open");
+await a.click("#treasure-leave");
+await a.waitForSelector("#postcard textarea.pc-text");
+await a.fill("#postcard textarea.pc-text", "Only a small one fits here.");
+await tapOrClick(a, "#pc-send");
+await a.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
+await a.evaluate((k) => {
+  const p = window.__tp.player;
+  p.enterWorld(p.world, k, p.forward.clone().set(0, 0, -1)); // (5, 1), facing the far wall one row away
+}, 1 * 20 + 5);
+await a.waitForFunction(() => window.__tp.placing().tiles.length === 1, null, { timeout: 5000 });
+const sizes = await sizeDisabled(a);
+check(!sizes.s && sizes.m && sizes.l, `against the far wall M and L are disabled, S is not (${JSON.stringify(sizes)})`);
+check((await pl(a)).size === "s", "the shade stays an S");
+await a.waitForTimeout(1500); // the camera catches up with the step
+await shot(a, "E1-only-s-fits");
+// Cancel brings the card back with its text
+await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
+await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
+check(
+  await a.evaluate(() => !document.getElementById("postcard").hidden && !document.getElementById("postcard").classList.contains("pc-away")),
+  "Cancel brings the card back",
+);
+check((await a.inputValue("#postcard textarea.pc-text")) === "Only a small one fits here.", "with its text");
+check((await a.textContent("#pc-send")).startsWith("Leave it here"), "and Leave it here ready again");
+a.once("dialog", (d) => d.accept()); // throw the draft away
+await a.click("#pc-close");
+await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
+
+// a refusal, a cancel and a retry: the picture goes up once and exactly one box comes down.
+// B waits on a tile and goes offline: the server still counts him standing there, A's client no longer sees him.
+await home(a, SPAWN_A, SPAWN_B);
+const target = await a.evaluate(
+  (t) => window.__tp.neighbors(t).find((n) => n >= 0 && window.__tp.walkable(n) && !window.__tp.treasures.list().some((x) => x.tiles.includes(n))),
+  SPAWN_A,
+);
+await b.evaluate((t) => window.__tp.teleport(t), target);
+await b.waitForTimeout(800);
+await b.context().close();
+await a.waitForFunction(() => !window.__tp.debug().remotePresent, null, { timeout: 5000 });
+const uploaded = [];
+a.on("response", async (r) => {
+  if (r.request().method() === "POST" && r.url().endsWith("/media")) uploaded.push((await r.json()).url);
+});
+await a.click("#treasure-open");
+await a.click("#treasure-leave");
+await a.waitForSelector("#postcard textarea.pc-text");
+await a.fill("#postcard textarea.pc-text", "Third time lucky.");
+await a.click("#pc-turn");
+await a.waitForTimeout(700);
+await a.setInputFiles("#postcard .pc-picture-file", { name: "lucky.png", mimeType: "image/png", buffer: photo });
+await a.waitForFunction(() => document.querySelector("#postcard .pc-photo")?.naturalWidth > 0);
+await tapOrClick(a, "#pc-send");
+await a.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
+await a.evaluate((t) => window.__tp.lookAt(t), target);
+await a.waitForFunction((t) => window.__tp.placing().tiles[0] === t && window.__tp.placing().ok[0], target, { timeout: 5000 });
+const before = (await a.evaluate(() => window.__tp.treasures.list())).length;
+await confirmPut(a);
+await a.waitForFunction(() => document.getElementById("toast").textContent.includes("partner"), null, { timeout: 15000 });
+check((await pl(a)).active && (await a.evaluate(() => window.__tp.treasures.list())).length === before, "the refusal keeps placing mode and places nothing");
+await a.waitForFunction(() => !document.getElementById("pl-put").disabled, null, { timeout: 5000 });
+await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
+await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
+check((await a.inputValue("#postcard textarea.pc-text")) === "Third time lucky.", "Cancel after the refusal brings the card back with its text");
+await tapOrClick(a, "#pc-send");
+await a.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
+let retried = false;
+for (const n of await a.evaluate((t) => window.__tp.neighbors(t).filter((x) => x >= 0), SPAWN_A)) {
+  if (n === target) continue;
+  await a.evaluate((t) => window.__tp.lookAt(t), n);
+  await a.waitForTimeout(200);
+  const st = await pl(a);
+  if (!st.tiles.length || !st.ok.every(Boolean)) continue;
+  await confirmPut(a);
+  await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 15000 });
+  retried = true;
+  break;
+}
+check(retried, "the retry elsewhere puts the box down");
+await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
+await a.waitForTimeout(500);
+const lucky = (await a.evaluate(() => window.__tp.treasures.list())).filter(
+  (x) => x.creator === 0 && x.contents?.style === "postcard" && x.contents.writing.text === "Third time lucky.",
+);
+check(lucky.length === 1, `exactly one box came down (${lucky.length})`);
+check(uploaded.length === 1, `the picture went up once across the refusal, the cancel and the retry (${uploaded.length})`);
+check(lucky[0]?.contents.picture?.image.url === uploaded[0], `the box holds that one upload (${lucky[0]?.contents.picture?.image.url})`);
+await shot(a, "E2-retried");
 
 await browser.close();
 console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/haven-treasure-*.png");

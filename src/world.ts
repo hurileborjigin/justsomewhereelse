@@ -35,6 +35,8 @@ export interface World {
   scene: Scene;
   /** How far the camera may zoom out here. */
   zoomMax: number;
+  /** How steeply the follow camera looks down on the character: its elevation above her, in radians. */
+  lookDown: number;
   /** True for a tile key that exists in this world (data from the network may not). */
   hasTile(k: number): boolean;
   up(pos: Vector3, out: Vector3): Vector3;
@@ -78,6 +80,7 @@ export class GlobeWorld implements World {
   id = "globe";
   isGlobe = true;
   zoomMax = 11; // the whole planet fits on screen
+  lookDown = LOOK_DOWN;
   scene: Scene;
 
   constructor(scene: Scene) {
@@ -244,6 +247,13 @@ export const BUILDING_NAMES: Record<BuildingKind, string> = {
   hall: "Copper Hall",
 };
 
+/** The follow camera's usual elevation: 3.2 up for every 6.5 behind. */
+export const LOOK_DOWN = Math.atan2(3.2, 6.5);
+// A treasure hall looks down more steeply, so the pillar rows between the
+// aisles fall below the line of sight instead of hiding the character (the
+// pillars are part of the one merged hall mesh, so they cannot fade one by one).
+const LOOK_DOWN_GALLERY = 0.92;
+
 const T = 2; // tile size
 const ZOOM_MAX_ROOM = 2.2; // interiors stay dollhouse-scale
 const ZOOM_MAX_GALLERY = 6; // a treasure hall: from the door, most of it in view
@@ -262,6 +272,7 @@ export class RoomWorld implements World {
   exitTile: number;
   /** How far the camera may zoom out in this room. */
   zoomMax: number;
+  lookDown: number;
   /** A treasure house hall: bay tiles hold boxes on plinths. */
   gallery: boolean;
   private w: number;
@@ -280,6 +291,7 @@ export class RoomWorld implements World {
     this.exitTile = this.key(Math.floor(spec.w / 2), spec.h - 1);
     this.gallery = spec.gallery === true;
     this.zoomMax = this.gallery ? ZOOM_MAX_GALLERY : ZOOM_MAX_ROOM;
+    this.lookDown = this.gallery ? LOOK_DOWN_GALLERY : LOOK_DOWN;
 
     this.scene.background = new Color(`#${spec.bg}`);
     this.scene.add(new HemisphereLight(...(spec.fill ?? WARM_FILL)));

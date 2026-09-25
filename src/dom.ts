@@ -19,6 +19,14 @@ export function toast(text: string) {
   }, 3200);
 }
 
+/** Takes the toast away early: what it said no longer applies. */
+export function hideToast() {
+  const t = document.getElementById("toast");
+  if (!t) return;
+  clearTimeout(toastTimer);
+  t.hidden = true;
+}
+
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,

@@ -12,7 +12,7 @@ import { BoxLabels } from "./labels.ts";
 import { Net } from "./net.ts";
 import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
 import { Pennants } from "./pennant.ts";
-import { BuildingFade } from "./fade.ts";
+import { CameraFade } from "./fade.ts";
 import { PHOTO_AIM, PhotoMode } from "./photo.ts";
 import { Placing } from "./placing.ts";
 import { Player } from "./player.ts";
@@ -63,7 +63,7 @@ async function boot() {
   scene.add(assets.globe);
   const globeWorld = new GlobeWorld(scene);
   const buildings = scatterWorld(scene, assets);
-  const fade = new BuildingFade(scene); // buildings between the camera and the character fade out
+  const fade = new CameraFade(scene); // buildings (and chests) between the camera and the character fade out
   const animals = new Animals(scene, assets, buildings);
   const doorTileMap = new Map<number, Building>();
   for (const b of buildings) for (const d of b.doorTiles) doorTileMap.set(d, b);
@@ -452,6 +452,7 @@ async function boot() {
             break;
           }
           if (pendingAuth) localStorage.setItem(AUTH_KEY, JSON.stringify(pendingAuth));
+          triedStored = false; // a dropped line comes back in with the stored word, not the login screen
           loginEl.hidden = true;
           setupMode = false;
           myId = msg.id;
@@ -596,6 +597,8 @@ async function boot() {
       if (on) setSign(null);
       input.setMuted(!on && (treasures.dialogOpen || signAt !== null));
     },
+    // "Put it down" waits while the line is down, or while an earlier box is still unanswered
+    ready: () => net.joined && !treasures.unanswered,
   });
 
   const treasures = new Treasures(assets, {
@@ -609,6 +612,7 @@ async function boot() {
     },
     takePicture: takePhoto,
     cancelPicture: () => photo.cancel(),
+    fade,
     net,
   });
   const boxLabels = new BoxLabels($("box-labels"));
@@ -656,9 +660,8 @@ async function boot() {
     player.update(dt, input, cam.camera);
     cam.update(dt, player);
     placing.update();
-    // any building hiding the character (say the tall Hive right behind a player who just stepped out) fades
-    const chest = world.isGlobe ? _chest.copy(player.pos).setLength(player.pos.length() + 0.5) : null;
-    fade.update(dt, cam.camera, chest);
+    // anything hiding the character (say the tall Hive right behind a player who just stepped out, or a chest) fades
+    fade.update(dt, cam.camera, world.scene, _chest.copy(player.pos).addScaledVector(world.up(player.pos, up), 0.5));
     treasures.update(dt);
     refreshActions();
 

@@ -268,21 +268,22 @@ def hive_room():
     for run in pillar_runs():
         (x0, y), (x1, _) = tile_xy(*run[0]), tile_xy(*run[-1])
         divider(b, x0, x1, y, 1.0 if len(run) > 2 else 0.7, stone, stone_dark, gold)
-        if len(run) > 2:  # a grand column at each end of the row
+        # nothing on a pillar row rises above 1.8: the hall camera (lookDown in src/world.ts) looks over it
+        if len(run) > 2:  # a squat column at each end of the row
             for x in (x0, x1):
                 b.cylinder(stone_dark, 0.62, 0.3, segments=6, loc=(x, y, 0.15))
-                b.cylinder(stone, 0.44, 2.4, segments=6, loc=(x, y, 1.5))
-                b.cylinder(dark, 0.47, 0.1, segments=6, loc=(x, y, 1.0))
-                b.cylinder(gold, 0.6, 0.18, segments=6, loc=(x, y, 2.79))
-                b.cylinder(stone, 0.5, 0.12, segments=6, loc=(x, y, 2.94))
+                b.cylinder(stone, 0.44, 1.2, segments=6, loc=(x, y, 0.9))
+                b.cylinder(dark, 0.47, 0.1, segments=6, loc=(x, y, 0.7))
+                b.cylinder(gold, 0.6, 0.18, segments=6, loc=(x, y, 1.59))
+                b.cylinder(stone, 0.5, 0.12, segments=6, loc=(x, y, 1.74))
         else:  # between the small shelves, lantern posts
             for i, j in run:
                 x, _ = tile_xy(i, j)
                 b.cylinder(stone_dark, 0.42, 0.24, segments=6, loc=(x, y, 0.12))
-                b.cylinder(stone, 0.2, 1.3, segments=6, loc=(x, y, 0.85))
-                b.cylinder(gold, 0.26, 0.08, segments=6, loc=(x, y, 1.52))
-                b.cylinder(amber, 0.2, 0.34, segments=6, loc=(x, y, 1.73))
-                b.cone(gold, 0.27, 0.04, 0.2, segments=6, loc=(x, y, 2.0))
+                b.cylinder(stone, 0.2, 0.9, segments=6, loc=(x, y, 0.65))
+                b.cylinder(gold, 0.26, 0.08, segments=6, loc=(x, y, 1.12))
+                b.cylinder(amber, 0.2, 0.34, segments=6, loc=(x, y, 1.33))
+                b.cone(gold, 0.27, 0.04, 0.2, segments=6, loc=(x, y, 1.6))
     b.obj()
 
 
@@ -382,20 +383,21 @@ def hall_room():
     for run in pillar_runs():
         (x0, y), (x1, _) = tile_xy(*run[0]), tile_xy(*run[-1])
         divider(b, x0, x1, y, 1.0 if len(run) > 2 else 0.7, brick, slate, copper)
-        if len(run) > 2:  # a brick pier at each end of the row
+        # nothing on a pillar row rises above 1.8: the hall camera (lookDown in src/world.ts) looks over it
+        if len(run) > 2:  # a squat brick pier at each end of the row
             for x in (x0, x1):
                 b.box(slate, (1.2, 1.2, 0.25), loc=(x, y, 0.125))
-                b.box(brick, (0.86, 0.86, 2.5), loc=(x, y, 1.5))
-                b.box(brick2, (0.9, 0.9, 0.08), loc=(x, y, 1.1))
-                b.box(copper, (1.1, 1.1, 0.16), loc=(x, y, 2.8))
-                b.box(slate, (1.0, 1.0, 0.1), loc=(x, y, 2.93))
+                b.box(brick, (0.86, 0.86, 1.3), loc=(x, y, 0.9))
+                b.box(brick2, (0.9, 0.9, 0.08), loc=(x, y, 0.7))
+                b.box(copper, (1.1, 1.1, 0.16), loc=(x, y, 1.6))
+                b.box(slate, (1.0, 1.0, 0.1), loc=(x, y, 1.73))
         else:  # between the small shelves, short brick posts with copper caps
             for i, j in run:
                 x, _ = tile_xy(i, j)
                 b.box(slate, (0.8, 0.8, 0.2), loc=(x, y, 0.1))
-                b.box(brick, (0.52, 0.52, 1.4), loc=(x, y, 0.8))
-                b.box(copper, (0.66, 0.66, 0.1), loc=(x, y, 1.55))
-                b.uvsphere(copper, 0.18, loc=(x, y, 1.72), u=8, v=6)
+                b.box(brick, (0.52, 0.52, 1.1), loc=(x, y, 0.65))
+                b.box(copper, (0.66, 0.66, 0.1), loc=(x, y, 1.25))
+                b.uvsphere(copper, 0.18, loc=(x, y, 1.42), u=8, v=6)
     b.obj()
 
 
