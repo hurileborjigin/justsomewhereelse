@@ -324,11 +324,16 @@ wss.on("connection", (ws) => {
           return;
         }
       }
-      if (conns.has(wanted)) {
+      const previous = conns.get(wanted);
+      if (previous && !msg.take) {
         send(ws, { t: "deny", reason: "taken" });
         return;
       }
       id = wanted;
+      if (previous) {
+        if (previous.live) store.saveState(wanted, previous.live);
+        send(previous.ws, { t: "elsewhere" });
+      }
       conns.set(id, { ws, alive: true, live: null, lastSave: 0 });
       const peerId = (1 - id) as PlayerId;
       const peerConn = conns.get(peerId);
@@ -350,7 +355,8 @@ wss.on("connection", (ws) => {
         music: radio.view(id),
       });
       radio.joined(id);
-      sendTo(peerId, { t: "peer-joined", id });
+      if (previous) previous.ws.close();
+      else sendTo(peerId, { t: "peer-joined", id });
       refreshLobbies();
       console.log(`[planet] ${store.names()[id]} (${id}) joined`);
       return;

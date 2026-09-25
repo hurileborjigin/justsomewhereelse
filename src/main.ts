@@ -5,7 +5,7 @@ import { CharacterView } from "./animate.ts";
 import { loadAssets } from "./assets.ts";
 import { FollowCamera } from "./camera.ts";
 import { Chat } from "./chat.ts";
-import { el, placeMusicBeside, toast } from "./dom.ts";
+import { ask, el, placeMusicBeside, toast } from "./dom.ts";
 import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { BoxLabels } from "./labels.ts";
@@ -136,6 +136,7 @@ async function boot() {
   let setupMode = false; // true until the secret word has been created in-game
   let openMode = false; // true when the planet requires no secret word at all
   let lobbyOnline: [boolean, boolean] = [false, false];
+  let movedNote = "";
 
   const storedAuth = (): { id: PlayerId; pass: string } | null => {
     try {
@@ -170,15 +171,20 @@ async function boot() {
     }
     pendingAuth = { id: pickedId, pass: openMode ? "" : loginPass.value };
     loginError.textContent = "";
+    if (lobbyOnline[pickedId]) {
+      void ask("You're already in Haven from another device. Use this instead?", "Use this instead", "Not now").then((yes) => {
+        if (yes && pendingAuth) net.join(pendingAuth.id, pendingAuth.pass, false, true);
+      });
+      return;
+    }
     net.join(pendingAuth.id, pendingAuth.pass, creating);
   });
 
   function refreshLoginForm(error?: string) {
     if (error !== undefined) loginError.textContent = error;
     whoButtons.forEach((b, i) => {
-      b.textContent = names[i] + (lobbyOnline[i] ? " (already here)" : "");
-      b.disabled = lobbyOnline[i];
-      if (lobbyOnline[i] && pickedId === i) pickedId = null;
+      b.textContent = names[i];
+      b.disabled = false;
       b.classList.toggle("picked", pickedId === i);
     });
     const creating = !openMode && setupMode && pickedId === 0;
@@ -433,7 +439,8 @@ async function boot() {
             pendingAuth = stored;
             net.join(stored.id, stored.pass);
           } else {
-            showLogin();
+            showLogin(movedNote);
+            movedNote = "";
           }
           break;
         }
@@ -442,11 +449,16 @@ async function boot() {
           if (msg.reason === "exists") setupMode = false;
           const reasons = {
             pass: setupMode ? "That word is too short" : "That's not the secret word 🙈",
-            taken: "That one is already playing",
+            taken: "You're already in Haven from another device.",
             setup: `${names[0]} chooses the secret word first 💚`,
             exists: "The secret word is already chosen, just enter it",
           } as const;
           showLogin(reasons[msg.reason]);
+          break;
+        }
+        case "elsewhere": {
+          movedNote = "Haven is open on your other device now.";
+          showLogin(movedNote);
           break;
         }
         case "welcome": {

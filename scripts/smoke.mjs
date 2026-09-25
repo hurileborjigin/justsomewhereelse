@@ -706,6 +706,14 @@ try {
     "gloria opens b0 back to both",
   );
 
+  const phone = client("phone");
+  await phone.open;
+  await phone.next(); // lobby
+  phone.send({ t: "join", id: 0, pass: PASS, take: true });
+  expect((await a4.next()).t === "elsewhere", "gloria's laptop is told Haven moved to another device");
+  const onPhone = await phone.next();
+  expect(onPhone.t === "welcome" && onPhone.id === 0, "the phone continues as gloria");
+
   console.log("SMOKE PASSED");
   done = true;
   server.kill();

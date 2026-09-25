@@ -191,7 +191,7 @@ export type Catalog =
   | { kind: "playlists"; playlists: { id: string; name: string; mine: boolean }[] };
 
 export type ClientMessage =
-  | { t: "join"; id: PlayerId; pass: string; create?: boolean }
+  | { t: "join"; id: PlayerId; pass: string; create?: boolean; take?: boolean }
   | ({ t: "state" } & StateData)
   | { t: "rename"; name: string }
   | { t: "chat"; text: string; media?: MediaRef }
@@ -264,6 +264,7 @@ export type ServerMessage =
   | { t: "recalled"; id: number }
   | { t: "peer-joined"; id: PlayerId }
   | { t: "peer-left"; id: PlayerId }
+  | { t: "elsewhere" } // this device was signed out because the same person continued on another one
   | { t: "box"; box: Box } // one box changed (or answers your box-open)
   | { t: "box-gone"; id: number } // a sealed box was taken back by its creator
   | { t: "box-deny"; op: BoxOp; id?: number; reason: BoxDenyReason } // id present whenever the request named a box (place has none)

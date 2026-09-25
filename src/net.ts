@@ -65,8 +65,8 @@ export class Net {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 
-  join(id: PlayerId, pass: string, create = false) {
-    this.send(create ? { t: "join", id, pass, create: true } : { t: "join", id, pass });
+  join(id: PlayerId, pass: string, create = false, take = false) {
+    this.send({ t: "join", id, pass, ...(create ? { create: true } : {}), ...(take ? { take: true } : {}) });
   }
 
   chat(text: string, media?: MediaRef) {
