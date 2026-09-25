@@ -71,6 +71,15 @@ export type TreasureHooks = {
 };
 
 type Mounted = { box: Box; group: Group; lid: Object3D; world: World };
+/**
+ * One compose card, from "Leave it here" until it closes. A place request that
+ * times out remembers the card that sent it, so its late box settles that card
+ * and never whichever card is open by then.
+ */
+type Card = {
+  /** While this card's box is being placed: ends placing mode and closes the card as if its confirm went through. */
+  placing: (() => void) | null;
+};
 /** One compose dialog's uploads, by file: each file goes up once however often the box is sent. */
 type Uploads = Map<Blob, Promise<MediaRef>>;
 type Pending = {
@@ -103,10 +112,10 @@ export class Treasures {
   private pendingOpen: number | null = null; // box we asked the server to open
   private reading: number | null = null; // box shown in the read view, redrawn or closed when it changes
   private pending: Pending | null = null; // a place / put waiting for its answer
-  /** A new box's request timed out unanswered: it may still land, so no second one goes out until it is settled. */
-  private latePlace = false;
-  /** While a new box is being placed: ends placing mode and closes the card as if its confirm went through. */
-  private placedLate: (() => void) | null = null;
+  /** The card whose new box's request timed out unanswered: it may still land, so no second one goes out until it is settled. */
+  private latePlace: Card | null = null;
+  /** The compose card on screen, if any. */
+  private card: Card | null = null;
   private ui: {
     openBtn: HTMLElement;
     badge: HTMLElement;
@@ -121,7 +130,10 @@ export class Treasures {
     this.hooks = hooks;
     this.postcard = new Postcard((open) => {
       hooks.onDialog(open);
-      if (!open) this.reading = null;
+      if (!open) {
+        this.reading = null;
+        this.card = null;
+      }
     });
     const $ = (id: string) => {
       const e = document.getElementById(id);
@@ -153,7 +165,7 @@ export class Treasures {
 
   /** True while a new box's request that timed out is still unsettled (placing mode waits meanwhile). */
   get unanswered() {
-    return this.latePlace;
+    return this.latePlace !== null;
   }
 
   setPanelOpen(open: boolean) {
@@ -189,16 +201,26 @@ export class Treasures {
     }
     if (this.latePlace) {
       if (boxes.some((b) => !known.has(b.id) && b.creator === this.me)) this.landedLate();
-      else this.latePlace = false; // lost with the line: placing may try again
+      else this.latePlace = null; // lost with the line: placing may try again
     }
   }
 
-  /** The box of a request that timed out landed after all: placing mode ends as if it had been answered. */
+  /**
+   * The box of a request that timed out landed after all. Its card is done: still
+   * placing, placing ends as if it had been answered; back on screen after a
+   * Cancel, it closes (nothing on it is left to send); gone already, only the
+   * toast says so. Any other card open by then is left alone.
+   */
   private landedLate() {
-    const waiting = this.latePlace || this.placedLate !== null;
-    this.latePlace = false;
-    this.placedLate?.();
-    if (waiting) this.toast(LANDED_LATE);
+    const card = this.latePlace;
+    if (!card) return;
+    this.latePlace = null;
+    if (card.placing) card.placing();
+    else if (this.card === card && this.postcard.isOpen) {
+      if (this.postcard.isAway) this.hooks.cancelPicture();
+      this.postcard.dismiss();
+    }
+    this.toast(LANDED_LATE);
   }
 
   /** One box changed, or the server answered our own request. */
@@ -252,7 +274,7 @@ export class Treasures {
       return;
     }
     if (msg.op === "open" && this.pendingOpen === msg.id) this.pendingOpen = null;
-    if (msg.op === "place") this.latePlace = false; // the late answer to a new box: refused, so placing may try again
+    if (msg.op === "place") this.latePlace = null; // the late answer to a new box: refused, so placing may try again
     this.toast(DENY_TEXT[msg.reason]);
   }
 
@@ -322,7 +344,8 @@ export class Treasures {
 
   /** Every box standing somewhere right now, for the floating labels (src/labels.ts). */
   mountedBoxes(): LabeledBox[] {
-    return [...this.mounted.values()].map((m) => ({ box: m.box, pos: m.group.position, world: m.world }));
+    // a chest faded out of the camera's way hides its label too
+    return [...this.mounted.values()].map((m) => ({ box: m.box, pos: m.group.position, world: m.world, lid: m.lid, visible: m.group.visible }));
   }
 
   // ---- placing ----------------------------------------------------------------
@@ -344,6 +367,7 @@ export class Treasures {
     // every file is uploaded once for the life of the card: a refused or cancelled placement
     // tried again sends the same prints; only a new picture or print uploads anew
     const uploads: Uploads = new Map();
+    const card: Card = { placing: null };
     this.postcard.compose({
       mark: this.mark(this.me, this.hooks.currentWorld().id, new Date()),
       takePicture: () => this.photo(),
@@ -352,10 +376,10 @@ export class Treasures {
         new Promise<boolean>((resolve) => {
           this.postcard.setAway(true);
           const placed = () => {
-            this.placedLate = null;
+            card.placing = null;
             resolve(true);
           };
-          this.placedLate = () => {
+          card.placing = () => {
             this.hooks.placing.finish();
             placed();
           };
@@ -368,17 +392,19 @@ export class Treasures {
                 undefined,
                 (b, isNew) => isNew && b.creator === this.me,
                 () => this.hooks.net.placeBox({ size, contents, announce: draft.announce, loc: world.id, tiles, fwd: vec(forward) }),
+                card,
               );
               placed();
             },
             onCancel: () => {
-              this.placedLate = null;
+              card.placing = null;
               this.postcard.setAway(false);
               resolve(false);
             },
           });
         }),
     });
+    this.card = card;
   }
 
   /** What the box will hold: the kept files plus everything new uploaded (each file once, through `uploads`), shaped for the style. */
@@ -462,16 +488,19 @@ export class Treasures {
     this.hooks.net.labelBox(box.id, label.trim());
   }
 
-  /** Send one request; settle on the matching `box` message or on the `box-deny` naming this `op`/`id`. */
-  private request(op: BoxOp, id: number | undefined, matches: Pending["matches"], send: () => void): Promise<void> {
+  /**
+   * Send one request; settle on the matching `box` message or on the `box-deny` naming this `op`/`id`.
+   * A place names the `card` that sent it, for a late answer to find.
+   */
+  private request(op: BoxOp, id: number | undefined, matches: Pending["matches"], send: () => void, card?: Card): Promise<void> {
     if (this.pending) return Promise.reject(new Error("Still waiting for the planet…"));
     return new Promise<void>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         if (this.pending?.timer !== timer) return;
         this.pending = null;
-        if (op === "place") {
+        if (op === "place" && card) {
           // it may still land: until it does (or is refused, or the line drops), no second box goes out
-          this.latePlace = true;
+          this.latePlace = card;
           reject(new Error("No answer from the planet yet…"));
         } else reject(new Error("No answer from the planet. Try again."));
       }, REQUEST_TIMEOUT_MS);

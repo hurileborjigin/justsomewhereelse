@@ -6,7 +6,8 @@
 // mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
 // Every box goes down through placing mode: an all-green shade, then E (or the button).
 // Act 3: placing mode's edges: a size that cannot form is disabled, Cancel brings the
-// card back, and a refusal, a cancel and a retry upload the picture once for one box.
+// card back, a refusal, a cancel and a retry upload the picture once for one box, and a
+// place answered after the timeout settles only the card that sent it.
 // Screenshots land in /tmp/haven-treasure-*.png.
 // Run against a FRESH database so both players start at their spawn tiles:
 //   DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev
@@ -773,6 +774,91 @@ check(lucky.length === 1, `exactly one box came down (${lucky.length})`);
 check(uploaded.length === 1, `the picture went up once across the refusal, the cancel and the retry (${uploaded.length})`);
 check(lucky[0]?.contents.picture?.image.url === uploaded[0], `the box holds that one upload (${lucky[0]?.contents.picture?.image.url})`);
 await shot(a, "E2-retried");
+
+// a place the planet answers late: the outgoing box-place is held back past the 15 s timeout, then sent
+await a.evaluate(() => {
+  const send = WebSocket.prototype.send;
+  window.__held = [];
+  WebSocket.prototype.send = function (data) {
+    if (window.__holdPlace && String(data).includes('"t":"box-place"')) window.__held.push([this, data]);
+    else send.call(this, data);
+  };
+  window.__releasePlace = () => {
+    window.__holdPlace = false;
+    for (const [ws, data] of window.__held.splice(0)) send.call(ws, data);
+  };
+});
+const cardText = () => a.evaluate(() => document.querySelector("#postcard textarea.pc-text")?.value ?? null);
+/** A new card with `text`, sent into placing mode, turned toward an all-green S. */
+async function leaveCard(text) {
+  await a.click("#treasure-open");
+  await a.click("#treasure-leave");
+  await a.waitForSelector("#postcard textarea.pc-text");
+  await a.fill("#postcard textarea.pc-text", text);
+  await tapOrClick(a, "#pc-send");
+  await a.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
+  for (const n of await a.evaluate(() => window.__tp.neighbors(window.__tp.debug().tile).filter((x) => x >= 0))) {
+    if (n === target) continue; // the server still counts the offline B standing there
+    await a.evaluate((t) => window.__tp.lookAt(t), n);
+    await a.waitForTimeout(150);
+    const st = await pl(a);
+    if (st.tiles.length && st.ok.every(Boolean)) return;
+  }
+  throw new Error("no open facing for an S");
+}
+/** Confirms with the box-place held back, and waits for the timeout. */
+async function timeOut() {
+  await a.evaluate(() => (window.__holdPlace = true));
+  await confirmPut(a);
+  await a.waitForFunction(() => document.getElementById("toast").textContent.includes("No answer"), null, { timeout: 20000 });
+}
+const boxesWith = (text) =>
+  a.evaluate((t) => window.__tp.treasures.list().filter((x) => x.contents?.style === "postcard" && x.contents.writing.text === t).length, text);
+
+// the late box belongs to the card that sent it: a newer card stays as it is
+await home(a, SPAWN_A, SPAWN_B);
+await leaveCard("Sent into the void.");
+await timeOut();
+check(
+  (await pl(a)).active && (await a.evaluate(() => document.getElementById("pl-put").disabled && document.getElementById("pl-hint").textContent === "Waiting for the planet…")),
+  "a timed-out place keeps placing mode, Put it down waits for the planet",
+);
+await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
+await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
+a.once("dialog", (d) => d.accept()); // throw that draft away
+await a.click("#pc-close");
+await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
+await leaveCard("A newer card.");
+check(await a.evaluate(() => document.getElementById("pl-put").disabled), "the newer card cannot send while the old place is unanswered");
+await a.evaluate(() => window.__releasePlace());
+await a.waitForFunction(() => document.getElementById("toast").textContent.includes("after all"), null, { timeout: 5000 });
+await a.waitForTimeout(300);
+check((await boxesWith("Sent into the void.")) === 1, "the late box landed once");
+check(
+  (await pl(a)).active && (await a.evaluate(() => !document.getElementById("postcard").hidden)) && (await cardText()) === "A newer card.",
+  "the newer card is untouched: still placing, its draft kept",
+);
+// (its shade may have turned red: the late box landed on the tile it was aimed at)
+check((await a.textContent("#pl-hint")) === "Walk to move the shade", "and the planet is ready for it again");
+await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
+await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
+check((await cardText()) === "A newer card.", "Cancel brings the newer card back with its text");
+check((await boxesWith("A newer card.")) === 0, "and nothing was placed for it");
+a.once("dialog", (d) => d.accept());
+await a.click("#pc-close");
+await a.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
+
+// the late box of a card that is back on screen closes that card
+await leaveCard("Late but loved.");
+await timeOut();
+await (MOBILE ? a.tap("#pl-cancel") : a.keyboard.press("Escape"));
+await a.waitForFunction(() => !window.__tp.placing().active, null, { timeout: 5000 });
+check((await cardText()) === "Late but loved.", "Cancel after the timeout brings its card back");
+await a.evaluate(() => window.__releasePlace());
+await a.waitForFunction(() => document.getElementById("postcard").hidden, null, { timeout: 5000 });
+check((await boxesWith("Late but loved.")) === 1, "its late box lands once and closes the card that sent it");
+check((await a.textContent("#toast")).includes("after all"), "and says so");
+await shot(a, "E3-landed-late");
 
 await browser.close();
 console.log(process.exitCode ? "DRIVE FAILED" : "done - screenshots in /tmp/haven-treasure-*.png");

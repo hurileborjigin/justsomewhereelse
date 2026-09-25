@@ -156,6 +156,12 @@ export class Postcard {
     this.onToggle(false);
   }
 
+  /** Closes the card without asking: what it held has gone out already (a box that landed late). */
+  dismiss() {
+    this.guard = null;
+    this.close();
+  }
+
   /** Releases a previous card's listeners and object URLs before a new one installs its own. */
   private teardown() {
     this.cleanup?.();

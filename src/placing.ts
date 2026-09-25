@@ -291,6 +291,7 @@ export class Placing {
   }
 
   private renderButtons() {
+    this.ready = this.hooks.ready(); // live: the cached value may be a frame old
     const green = this.tiles.length > 0 && this.ok.every(Boolean);
     this.ui.put.disabled = this.busy || !green || !this.ready;
     this.ui.cancel.disabled = this.busy;
@@ -309,7 +310,7 @@ export class Placing {
   private async confirm() {
     const o = this.opts;
     const world = this.world;
-    if (!o || !world || this.busy || !this.ready || this.tiles.length === 0 || !this.ok.every(Boolean)) return;
+    if (!o || !world || this.busy || !this.hooks.ready() || this.tiles.length === 0 || !this.ok.every(Boolean)) return;
     this.busy = true;
     hideToast(); // an earlier refusal no longer applies to this try
     this.renderButtons();
