@@ -110,7 +110,7 @@ galleries later:
 
 Write a postcard with a picture on the back, a plain note with photos and videos, or just tuck in photos and videos, and leave it as a treasure chest anywhere: on the globe or on the floor of any room.
 The chest button (top left) opens your Treasures panel; **Leave a treasure
-here** puts a chest on the squares in front of you.
+here** opens a fresh card.
 Pick **Postcard**, **Note** or **Just photos** at the top of the card.
 On a postcard you can type your own stamp, place, "To" and "from" straight
 onto the dressing; leave them alone and the defaults stay.
@@ -118,8 +118,7 @@ A postcard has two sides: click the card, or the little "picture side" pill, to 
 On the picture side, **Take a picture** opens a viewfinder over the world - drag to look around, even straight up at the sky, walk and zoom as usual, and press the shutter - or **Upload a photo** from your device.
 Drag the photo to frame it, scroll or pinch to zoom, and write a short caption over it in the same handwriting.
 The finder sees the picture first and flips the card to read your words.
-Three sizes: **S** takes one square, **M** four (2 x 2), **L** twelve (3 x 4) -
-the card only offers sizes that fit where you stand.
+Three sizes: **S** takes one square, **M** four (2 x 2), **L** twelve (3 x 4); you pick one while placing the box (see below).
 Chests block walking like trees do.
 
 A sealed chest tells the finder nothing.
@@ -142,6 +141,42 @@ When leaving a box you choose whether the other player gets told that a
 sealed box is waiting (they see a count, never a location).
 Boxes and their media live in SQLite / the media folder next to the chat
 history.
+
+## Treasure houses 🏛️
+
+Each of you has a treasure house: a large gallery where every kept box stands on display with its label in view, so a treasure is easy to find again.
+gloria's **Hive** is a tall honey-gold hexagonal pavilion with a domed cap and glowing honeycomb windows, near the opera house.
+khurlee's **Copper Hall** is a long dark-brick hall with a green copper roof and round windows, near the ger and the Frauenkirche.
+Inside, both share one layout (`src/gallery.ts`) in two skins: a hall 20 squares wide and 42 deep with 88 display places.
+L bays (3 x 4 squares) line both long walls, a spine of M bays (2 x 2) and a spine of S shelves (one square) run down the middle, and more S shelves stand along the far wall and beside the door.
+A bay is a stone plinth half a unit high: nobody walks on it, but a box stands on top of it.
+A box goes into a bay at least its own size (an L bay also takes an M or an S box), or onto the open floor of the aisles and the entrance hall.
+In the halls the camera zooms out far enough to take in most of the gallery, and a wall the camera stands outside hides with its lamps and windows.
+
+### Owners, the sign and knocking
+
+Every building is open to both, or belongs to one of you.
+The Hive is always gloria's and the Copper Hall always khurlee's; every other building starts open to both.
+On a doorstep the **Sign** button under the door button says who owns the building.
+At a building open to both the sign offers **Make it mine**; at your own it offers **Open it to both**.
+An owned building flies a small pennant beside its door in its owner's colour: honey gold for gloria, copper green for khurlee.
+At your partner's building the door button reads **Knock**.
+Your partner gets a toast wherever they are; standing at that door, on the doorstep outside or on the exit square inside, they see **Let khurlee in (E)** (or gloria) and open it for you.
+If your partner is not on the planet, the knock tells you so and nothing else happens.
+The door stays open for one visit: step back out and you knock again next time.
+The server keeps owners in SQLite and knocks and open doors in memory, and both clients honour them.
+
+### Placing a box in two steps
+
+**Leave it here** on a new card, or **Place here** on a kept box, starts placing mode instead of putting anything down.
+A translucent shade lies on the squares in front of you and follows you as you walk: green where the box may stand, red where it may not (a tree, a building, another box, water, a doorstep, your partner, or a bay the box does not fit).
+For a new box the bar at the bottom offers **S**, **M** and **L**; a kept box keeps its size.
+**Put it down (E)** works once every square is green, and the box lands on exactly those squares; **Cancel** (or Esc) brings the card back as it was.
+
+### Floating labels
+
+Every labelled box shows its label as a small tag floating above the chest, in the galleries and anywhere else it stands.
+Sealed boxes show nothing, and tags far away or behind the camera hide.
 
 ## Adding your own models
 
@@ -171,6 +206,10 @@ bee's `WingL`/`WingR`) - see `src/animate.ts`.
 | `npm run smoke` | end-to-end test of the multiplayer server |
 | `node scripts/drive.mjs` | two headless browsers walk around and screenshot to `/tmp/haven-*.png` |
 | `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/haven-treasure-*.png` |
+| `node scripts/drive-doors.mjs` | claiming a house through its sign, knocking, letting in, pennants and the camera fade; screenshots in `/tmp/haven-houses-t6-*.png` |
+| `node scripts/drive-houses.mjs` | the placing shade over a tree and grass, boxes into the Hive's and the Copper Hall's bays, floating labels and a tour of both halls; screenshots in `/tmp/haven-houses-*.png` |
+
+Every drive needs a dev server on a fresh database (`DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev`), and `MOBILE=1` drives a phone instead of a desktop.
 
 Roadmap ideas: hide-and-seek mode (the tile occupancy is already in place),
 buildings with multi-tile footprints, day/night, more animals.

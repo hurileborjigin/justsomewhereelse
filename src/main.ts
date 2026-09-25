@@ -724,11 +724,16 @@ async function boot() {
       buildingVisible: (id: string) => scene.children.find((o) => o.userData.building === id)?.visible,
       neighbors: (tile: number) => neighborsOf(tile),
       walkable: (tile: number) => !isBlockedFor(tile, false) && !doorTileMap.has(tile),
-      treasures: { list: () => treasures.list() },
+      treasures: {
+        list: () => treasures.list(),
+        // where each chest in the current world stands: its height shows a box on a plinth
+        mounted: () => treasures.mountedBoxes().map((m) => ({ id: m.box.id, loc: m.world.id, y: m.pos.y })),
+      },
       photo: takePhoto,
       placing: () => placing.debug(),
       walls: () => (player.world instanceof RoomWorld ? player.world.wallsShown() : null),
       look: () => cam.look,
+      zoom: (f: number) => cam.setZoomFraction(f),
       lookAt: (tile: number) =>
         switchWorld(
           player.tile,
