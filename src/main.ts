@@ -733,6 +733,9 @@ async function boot() {
       placing: () => placing.debug(),
       walls: () => (player.world instanceof RoomWorld ? player.world.wallsShown() : null),
       look: () => cam.look,
+      camPos: () => cam.camera.position.toArray(),
+      // raw requests, for drives that need many boxes set up quickly (drive-houses' labelled hall)
+      net,
       zoom: (f: number) => cam.setZoomFraction(f),
       lookAt: (tile: number) =>
         switchWorld(

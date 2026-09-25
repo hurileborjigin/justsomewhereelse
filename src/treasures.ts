@@ -345,7 +345,7 @@ export class Treasures {
   /** Every box standing somewhere right now, for the floating labels (src/labels.ts). */
   mountedBoxes(): LabeledBox[] {
     // a chest faded out of the camera's way hides its label too
-    return [...this.mounted.values()].map((m) => ({ box: m.box, pos: m.group.position, world: m.world, lid: m.lid, visible: m.group.visible }));
+    return [...this.mounted.values()].map((m) => ({ box: m.box, pos: m.group.position, world: m.world, visible: m.group.visible }));
   }
 
   // ---- placing ----------------------------------------------------------------

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Group, Scene, Vector3 } from "three";
+import { BoxGeometry, Group, Mesh, Scene, Vector3 } from "three";
 import type { Assets } from "./assets.ts";
 import { footprintCheck, footprintTiles } from "./footprint.ts";
 import { GALLERY, GALLERY_H, GALLERY_W, PLINTH_H, bayAt, isPillar } from "./gallery.ts";
@@ -176,4 +176,24 @@ test("tileCorners: the top a box stands on, on the floor, a plinth, or a raised 
   assert.ok(up.length() - center.length() > 0 && up.length() - center.length() < 0.08, `${up.length() - center.length()}`);
   const r = g[0].distanceTo(center);
   for (const p of g) assert.ok(Math.abs(p.distanceTo(center) - r) < 0.05, "a near-square quad");
+});
+
+test("gallery: a modelled wall hides once the camera is past it by a margin and shows only once back inside by it", () => {
+  // the near (door) wall, 0.4 thick, its outer face at z = 42.4
+  const wall = new Mesh(new BoxGeometry(40, 6, 0.4));
+  wall.name = "Hall_wall_near";
+  wall.position.set(0, 3, 42.2);
+  const room = new Group();
+  room.add(wall);
+  const hall = new RoomWorld("hall", "hall", { room_hall: room } as unknown as Assets);
+  const shown = (z: number) => {
+    hall.faceCamera(new Vector3(0, 20, z));
+    return hall.wallsShown().near;
+  };
+  assert.equal(shown(40), true, "inside the hall");
+  assert.equal(shown(42.5), true, "just past the outer face: still drawn");
+  assert.equal(shown(42.8), false, "past it by more than the margin: hidden");
+  assert.equal(shown(42.5), false, "stays hidden while hovering near the face");
+  assert.equal(shown(42.2), false, "back inside, but not yet by the margin");
+  assert.equal(shown(42.0), true, "inside by more than the margin: drawn again");
 });

@@ -6,8 +6,13 @@
 // an L box over the S spine (red), puts it into an L bay, and an S box onto an
 // S shelf. In the Copper Hall B puts one box of each size into a matching bay:
 // the labelled M into an M bay, a new S onto an S shelf, a new L into an L bay.
-// Every box on a bay stands on the plinth. Then a tour of both halls and both
-// exteriors.
+// Every box on a bay stands on the plinth. Then the Copper Hall fills with
+// labelled boxes (set up with raw requests: A leaves each one straight into a
+// bay, B opens the L ones, keeps each with a label and puts it back): zoomed
+// all the way out at the door, a tag on a bay far down the hall still shows,
+// and an opened L chest keeps its tag at the chest, not up on its lid. Then a
+// tour of both halls and both exteriors, and an opened, labelled L box on the
+// globe.
 // Claiming, the sign, knocking, letting in, entering, being kept out before and
 // after a visit, the pennants and the camera fade are covered by
 // scripts/drive-doors.mjs; the placing bar's edges (disabled sizes, cancel,
@@ -416,6 +421,92 @@ bl = await labels(b);
 check(bl.length === 1 && bl[0].text === "our first summer" && onScreen(bl[0], ...viewport), `up close the tag floats on screen (${JSON.stringify(bl)})`);
 await shot(b, "15-hall-label-close");
 
+// ---- the Copper Hall full of labelled boxes -------------------------------------
+/** A leaves a box straight into a bay of `loc`; B opens it (if asked), keeps it with `label` and puts it back. */
+async function labelledBox(loc, size, tiles, fwd, label, open = false) {
+  const ids = (await a.evaluate(() => window.__tp.treasures.list())).map((x) => x.id);
+  await a.evaluate(
+    ([l, sz, t, f]) =>
+      window.__tp.net.placeBox({ size: sz, contents: { style: "note", text: "for the hall", media: [] }, announce: false, loc: l, tiles: t, fwd: f }),
+    [loc, size, tiles, fwd],
+  );
+  await b.waitForFunction((n) => window.__tp.treasures.list().some((x) => !n.includes(x.id)), ids, { timeout: 10000 });
+  const box = await b.evaluate((n) => window.__tp.treasures.list().find((x) => !n.includes(x.id)), ids);
+  if (open) {
+    await b.evaluate((id) => window.__tp.net.openBox(id), box.id);
+    await b.waitForFunction((id) => window.__tp.treasures.list().find((x) => x.id === id)?.opened != null, box.id, { timeout: 10000 });
+  }
+  await b.evaluate(([id, l]) => window.__tp.net.keepBox(id, l), [box.id, label]);
+  await waitBox(b, box.id, "loc", null);
+  await b.evaluate(([id, l, t, f]) => window.__tp.net.putBox(id, l, t, f), [box.id, loc, tiles, fwd]);
+  await waitBox(b, box.id, "loc", loc);
+  return box.id;
+}
+const rect = (i0, i1, j0, j1) => {
+  const out = [];
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) out.push(key(i, j));
+  return out;
+};
+const FAR_LABEL = "grandma's letters";
+const hallBoxes = [
+  // [size, tiles, facing of the one who put it down, label, opened]
+  ["l", rect(0, 3, 30, 32), [-1, 0, 0], "Lisbon, the whole trip", true],
+  ["l", rect(16, 19, 26, 28), [1, 0, 0], "winter things"],
+  ["l", rect(0, 3, 14, 16), [-1, 0, 0], "the far corner"],
+  ["m", rect(6, 7, 23, 24), [1, 0, 0], FAR_LABEL],
+  ["m", rect(6, 7, 29, 30), [1, 0, 0], "concert tickets"],
+  ["m", rect(8, 9, 32, 33), [-1, 0, 0], "recipes"],
+  ["m", rect(8, 9, 17, 18), [-1, 0, 0], "old photos"],
+  ["s", [key(12, 30)], [1, 0, 0], "the ring"],
+  ["s", [key(13, 26)], [-1, 0, 0], "shells"],
+  ["s", [key(12, 22)], [1, 0, 0], "a pressed flower"],
+  ["s", [key(8, 37)], [0, 0, -1], "for later"],
+];
+const hallIds = {};
+for (const [size, tiles, fwd, label, open] of hallBoxes) hallIds[label] = await labelledBox("hall", size, tiles, fwd, label, open);
+check(Object.keys(hallIds).length === hallBoxes.length, `${hallBoxes.length} labelled boxes stand in the Copper Hall`);
+// zoomed all the way out at the door: the tag of the M bay halfway down the hall shows
+await b.evaluate((k) => {
+  const tp = window.__tp;
+  tp.player.enterWorld(tp.player.world, k, tp.player.forward.clone().set(0, 0, -1));
+  tp.zoom(1);
+}, key(10, 40));
+await b.waitForTimeout(1800);
+bl = await labels(b);
+const far = bl.find((l) => l.text === FAR_LABEL);
+const farDist = await b.evaluate(
+  (k) => {
+    const tp = window.__tp;
+    const at = tp.player.world.tilePos(k, 0, tp.player.pos.clone());
+    return at.distanceTo(tp.player.pos.clone().fromArray(tp.camPos()));
+  },
+  key(6, 23),
+);
+check(
+  far !== undefined && onScreen(far, ...viewport) && farDist > 40,
+  `fully zoomed out at the door, a tag on a bay ${farDist.toFixed(0)} units away shows (${bl.length} tags on screen)`,
+);
+await shot(b, "16-hall-labels-wide");
+// the same from halfway down the hall, zoomed out part of the way
+await b.evaluate((k) => {
+  const tp = window.__tp;
+  tp.player.enterWorld(tp.player.world, k, tp.player.forward.clone().set(0, 0, -1));
+  tp.zoom(0.6);
+}, key(10, 36));
+await b.waitForTimeout(1500);
+await shot(b, "17-hall-labels-mid");
+// across the aisle from the opened L box: its tag sits just above the chest, well below the top of the upright lid
+await b.evaluate((k) => {
+  const tp = window.__tp;
+  tp.player.enterWorld(tp.player.world, k, tp.player.forward.clone().set(-1, 0, 0));
+  tp.zoom(0.55);
+}, key(5, 31));
+await b.waitForTimeout(1500);
+bl = await labels(b);
+const lisbon = bl.find((l) => l.text === "Lisbon, the whole trip");
+check(lisbon !== undefined && onScreen(lisbon, ...viewport), `up close the opened L box's tag shows (${JSON.stringify(lisbon)})`);
+await shot(b, "18-hall-opened-l-label");
+
 // ---- a tour of both halls ----------------------------------------------------
 /** Stands `p` on (i, j) facing (dx, dz) at zoom fraction `z`, lets the camera settle, and shoots. */
 async function view(p, name, i, j, dx, dz, z) {
@@ -472,6 +563,31 @@ async function exterior(p, id, name) {
 }
 await exterior(a, "hive", "30-hive-outside");
 await exterior(b, "hall", "31-hall-outside");
+
+// ---- an opened, labelled L box on the globe ----------------------------------------
+// khurlee leaves an L box on open grass; gloria opens it, keeps it with a label and puts it back
+await compose(b, "Something big, out in the open.");
+await tapOrClick(b, '#pl-sizes [data-size="l"]');
+const bSpot = await b.evaluate(() => window.__tp.player.tile);
+st = await aimGreenOnGlobe(b, bSpot, [await a.evaluate(() => window.__tp.player.tile)]);
+check(st !== null && st.size === "l" && st.tiles.length === 12, "an L shade on open grass is all green");
+ids = (await b.evaluate(() => window.__tp.treasures.list())).map((x) => x.id);
+await confirm(b);
+await a.waitForFunction((n) => window.__tp.treasures.list().some((x) => !n.includes(x.id) && x.loc === "globe"), ids, { timeout: 15000 });
+const globeL = await a.evaluate((n) => window.__tp.treasures.list().find((x) => !n.includes(x.id)), ids);
+await a.evaluate((id) => window.__tp.net.openBox(id), globeL.id);
+await a.waitForFunction((id) => window.__tp.treasures.list().find((x) => x.id === id)?.opened != null, globeL.id, { timeout: 10000 });
+await a.evaluate((id) => window.__tp.net.keepBox(id, "our picnic things"), globeL.id);
+await waitBox(a, globeL.id, "loc", null);
+await a.evaluate(([id, t, f]) => window.__tp.net.putBox(id, "globe", t, f), [globeL.id, globeL.tiles, globeL.fwd]);
+await waitBox(b, globeL.id, "loc", "globe");
+await b.waitForTimeout(1200);
+bl = await labels(b);
+check(bl.some((l) => l.text === "our picnic things" && onScreen(l, ...viewport)), `the opened L box's tag floats over it on the globe (${JSON.stringify(bl)})`);
+await shot(b, "32-globe-opened-l-label");
+await b.evaluate(() => window.__tp.zoom(0.1));
+await b.waitForTimeout(1200);
+await shot(b, "33-globe-opened-l-label-close");
 
 await browser.close();
 console.log(process.exitCode ? "HOUSES FAILED" : "HOUSES PASSED");

@@ -37,6 +37,8 @@ export interface World {
   scene: Scene;
   /** How far the camera may zoom out here. */
   zoomMax: number;
+  /** How far from the camera a box's floating label still shows (src/labels.ts). */
+  labelRange: number;
   /** How steeply the follow camera looks down on the character: its elevation above her, in radians. */
   lookDown: number;
   /** True for a tile key that exists in this world (data from the network may not). */
@@ -76,12 +78,18 @@ export interface World {
 
 const _a = new Vector3();
 const _b = new Vector3();
+const LABEL_RANGE = 40; // units from the camera: on the globe and in ordinary rooms
+// A treasure hall is for finding treasures by their labels, so from anywhere
+// in it at its farthest zoom every tag shows: the hall's diagonal (20 x 42
+// tiles of 2 units, about 93) plus the camera's reach at zoom 6 (about 44).
+const LABEL_RANGE_GALLERY = 140;
 const LAKE_DEPTH = -0.05; // globe.py sinks lake tiles this far
 
 export class GlobeWorld implements World {
   id = "globe";
   isGlobe = true;
   zoomMax = 11; // the whole planet fits on screen
+  labelRange = LABEL_RANGE; // zoomed far out, the planet's tags would only be clutter
   lookDown = LOOK_DOWN;
   scene: Scene;
 
@@ -266,6 +274,8 @@ const AXES = [
   { di: 0, dj: -1, v: new Vector3(0, 0, -1) },
 ];
 
+const WALL_BAND = 0.3; // units either side of a modelled wall's outer face where it keeps its state (faceCamera)
+
 /** Each room wall's inward normal (the door is on the near, +Z wall). */
 const WALL_NORMALS: Record<string, Vector3> = {
   far: new Vector3(0, 0, 1),
@@ -282,6 +292,7 @@ export class RoomWorld implements World {
   exitTile: number;
   /** How far the camera may zoom out in this room. */
   zoomMax: number;
+  labelRange: number;
   lookDown: number;
   /** A treasure house hall: bay tiles hold boxes on plinths. */
   gallery: boolean;
@@ -308,6 +319,7 @@ export class RoomWorld implements World {
     this.exitTile = this.key(Math.floor(spec.w / 2), spec.h - 1);
     this.gallery = spec.gallery === true;
     this.zoomMax = this.gallery ? ZOOM_MAX_GALLERY : ZOOM_MAX_ROOM;
+    this.labelRange = this.gallery ? LABEL_RANGE_GALLERY : LABEL_RANGE;
     this.lookDown = this.gallery ? LOOK_DOWN_GALLERY : LOOK_DOWN;
 
     this.scene.background = new Color(`#${spec.bg}`);
@@ -327,9 +339,18 @@ export class RoomWorld implements World {
     });
   }
 
-  /** Every frame, before drawing: a wall the camera stands outside hides with everything hung on it. */
+  /**
+   * Every frame, before drawing: a wall the camera stands outside hides with
+   * everything hung on it. It hides once the camera is WALL_BAND past its
+   * outer face and shows again only once the camera is WALL_BAND back inside,
+   * so a camera hovering at the wall (zooming, turning) does not flicker it.
+   */
   faceCamera(eye: Vector3) {
-    for (const w of this.walls) w.obj.visible = w.normal.dot(eye) > w.outer;
+    for (const w of this.walls) {
+      const inside = w.normal.dot(eye) - w.outer; // < 0: outside the wall
+      if (w.obj.visible && inside < -WALL_BAND) w.obj.visible = false;
+      else if (!w.obj.visible && inside > WALL_BAND) w.obj.visible = true;
+    }
   }
 
   /** For the scripted drives: which modelled walls are drawn right now, by side. */
