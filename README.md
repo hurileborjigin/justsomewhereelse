@@ -21,7 +21,9 @@ fixed word instead (the drive scripts and tests use `planet`). Each browser
 remembers you after the first login.
 
 **Walk with WASD or arrow keys** (one square per step; trees block, grass
-doesn't). The **Swap** button trades characters at any time.
+doesn't). gloria is always the bee and khurlee the donkey.
+**Look around** by dragging the world with the mouse or a finger: the camera swings around your character and tilts up to the sky or down to the ground, and eases back behind the character when you let go.
+Walking during a look goes where the character faces.
 
 **Everything important persists** in SQLite (`DB_PATH`, default
 `data/planet.db`): your last position - including inside buildings, so you can
@@ -111,6 +113,7 @@ galleries later:
 Write a postcard with a picture on the back, a plain note with photos and videos, or just tuck in photos and videos, and leave it as a treasure chest anywhere: on the globe or on the floor of any room.
 The chest button (top left) opens your Treasures panel; **Leave a treasure
 here** opens a fresh card.
+The panel is not a catalogue: a box that stands somewhere is found and read where it stands, so the panel only counts the sealed boxes waiting for you and lists the ones in your pocket.
 Pick **Postcard**, **Note** or **Just photos** at the top of the card.
 On a postcard you can type your own stamp, place, "To" and "from" straight
 onto the dressing; leave them alone and the defaults stay.
@@ -125,17 +128,17 @@ A sealed chest tells the finder nothing.
 Walk up to it and press **E**: the lid swings open (for both of you) and the
 postcard appears, handwritten, stamped and postmarked with where and when it
 was left.
-**Keep it** to take it into your collection, optionally with a label;
+**Keep it** to put it in your pocket, optionally with a label;
 **Leave it here** and it stays, open.
+A box in your pocket rides on your back as a small chest, for both of you to see, until you put it down again.
 You can't keep a box you left yourself, but you can reread it and see whether
 it has been opened.
 While nobody has opened it you can **Edit** it (same card, prefilled) or **Take
 it back**, which deletes the box and its files for both of you.
 Until she keeps it you can also **Pick it up** and **Place here** somewhere
 else.
-From the panel you can relabel a kept box, reread it, or **Place here** to put
-it down again - in your own house, say, which makes it a treasure house you
-can wander through together.
+From the panel's **In your pocket** list you can reread a box, relabel a kept one, or **Place here** to put it down again, in your treasure house, say.
+A kept box standing somewhere is relabelled from the box itself: open it, change the label and press **Save label**; **Pick it up** puts it back in your pocket.
 
 When leaving a box you choose whether the other player gets told that a
 sealed box is waiting (they see a count, never a location).
@@ -207,6 +210,7 @@ bee's `WingL`/`WingR`) - see `src/animate.ts`.
 | `node scripts/drive.mjs` | two headless browsers walk around and screenshot to `/tmp/haven-*.png` |
 | `node scripts/drive-treasure.mjs` | two headless browsers leave, find, keep and place a treasure box; screenshots in `/tmp/haven-treasure-*.png` |
 | `node scripts/drive-doors.mjs` | claiming a house through its sign, knocking, letting in, pennants and the camera fade; screenshots in `/tmp/haven-houses-t6-*.png` |
+| `node scripts/drive-look.mjs` | dragging the world to look around, walking during a look and the view easing back; screenshots in `/tmp/haven-look-*.png` |
 | `node scripts/drive-houses.mjs` | the placing shade over a tree and grass, boxes into the Hive's and the Copper Hall's bays, floating labels and a tour of both halls; screenshots in `/tmp/haven-houses-*.png` |
 
 Every drive needs a dev server on a fresh database (`DB_PATH=/tmp/tp-drive.db PLANET_PASS=planet npm run dev`), and `MOBILE=1` drives a phone instead of a desktop.

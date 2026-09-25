@@ -9,6 +9,7 @@ import { el, toast } from "./dom.ts";
 import { SPAWN_TILES, greatCircleDir, isBlockedFor, neighborsOf, tileCenter } from "./grid.ts";
 import { Input } from "./input.ts";
 import { BoxLabels } from "./labels.ts";
+import { DragLook } from "./look.ts";
 import { Net } from "./net.ts";
 import { Ownership, buildingPhrase, doorChoice, letIn, signText } from "./ownership.ts";
 import { Pennants } from "./pennant.ts";
@@ -90,6 +91,7 @@ async function boot() {
   const cam = new FollowCamera();
   setupTouchControls(input, cam);
   const photo = new PhotoMode(renderer, cam, () => renderer.render(player.world.scene, cam.camera));
+  new DragLook(canvas, cam, () => photo.isActive);
 
   const localView = new CharacterView(assets, "bee", scene);
   const remoteView = new CharacterView(assets, "donkey", scene);
@@ -657,7 +659,7 @@ async function boot() {
     const together = remote.present && remote.loc === world.id;
     player.peerTile = together ? remote.tile : -1;
 
-    player.update(dt, input, cam.camera);
+    player.update(dt, input, cam.camera, cam.turned);
     cam.update(dt, player);
     placing.update();
     // anything hiding the character (say the tall Hive right behind a player who just stepped out, or a chest) fades
@@ -673,6 +675,9 @@ async function boot() {
     }
     wasAdjacent = adjacent;
 
+    // whoever has a box in their pocket carries it on their back
+    localView.setCarrying(treasures.carrying(myId));
+    remoteView.setCarrying(treasures.carrying(myId === 0 ? 1 : 0));
     localView.update(dt, t, world, player.pos, player.quat, player.moving);
 
     if (together) {
@@ -733,6 +738,9 @@ async function boot() {
       placing: () => placing.debug(),
       walls: () => (player.world instanceof RoomWorld ? player.world.wallsShown() : null),
       look: () => cam.look,
+      turned: () => cam.turned,
+      localView,
+      remoteView,
       camPos: () => cam.camera.position.toArray(),
       // raw requests, for drives that need many boxes set up quickly (drive-houses' labelled hall)
       net,

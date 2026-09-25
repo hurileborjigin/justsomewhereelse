@@ -59,6 +59,8 @@ export type ReadOptions = {
   /** The reader already owns it (it stands where they put it): "Pick it up" rather than "Keep it". */
   isOwner: boolean;
   onKeep: (label: string) => void;
+  /** Present only when the reader owns the box: rename it where it stands, without picking it up. */
+  onLabel?: (label: string) => void;
   /** Present only when the reader may take the box back: their own box, still sealed. */
   onDelete?: () => void;
   /** Present only when the reader may change the box: their own box, still sealed. */
@@ -486,19 +488,38 @@ export class Postcard {
         opts.onKeep(label.value.trim());
         this.close();
       });
+      // the owner renames a box where it stands: Save label lights up once the label changed
+      let save: HTMLButtonElement | null = null;
+      const onLabel = opts.onLabel;
+      if (onLabel) {
+        const saveBtn = el("button", "pc-secondary", "Save label");
+        saveBtn.id = "pc-save-label";
+        saveBtn.type = "button";
+        let saved = box.label ?? "";
+        saveBtn.disabled = true;
+        label.addEventListener("input", () => (saveBtn.disabled = label.value.trim() === saved));
+        saveBtn.addEventListener("click", () => {
+          saved = label.value.trim();
+          onLabel(saved);
+          saveBtn.disabled = true;
+        });
+        save = saveBtn;
+      }
       label.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.isComposing) return;
-        // the card closes on keep; the same keystroke must not reach the chat's
+        // the card may close on keep; the same keystroke must not reach the chat's
         // "Enter focuses the chat box" listener afterwards
         e.preventDefault();
         e.stopPropagation();
-        keep.click();
+        if (save) {
+          if (!save.disabled) save.click();
+        } else keep.click();
       });
       const leave = el("button", "pc-secondary", "Leave it here");
       leave.id = "pc-leave";
       leave.type = "button";
       leave.addEventListener("click", () => this.close());
-      controls.append(label, keep, leave);
+      controls.append(label, ...(save ? [save] : []), keep, leave);
     } else {
       if (role === "creator") {
         controls.append(

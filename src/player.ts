@@ -72,7 +72,11 @@ export class Player {
     if (!this.tween) this.world.tilePos(this.tile, this.def.hover, this.pos);
   }
 
-  update(dt: number, input: { x: number; y: number; fast?: boolean }, camera: Camera) {
+  /**
+   * `turned` is how far the camera has swung around the character (photo mode, looking around):
+   * the keys steer from the usual view behind it, so a turned view never sends the character circling.
+   */
+  update(dt: number, input: { x: number; y: number; fast?: boolean }, camera: Camera, turned = 0) {
     const w = this.world;
 
     // advance the current step
@@ -95,6 +99,7 @@ export class Player {
       camF.addScaledVector(up, -camF.dot(up));
       if (camF.lengthSq() > 1e-6) {
         camF.normalize();
+        if (turned !== 0) camF.applyAxisAngle(up, -turned);
         _camR.crossVectors(camF, up);
         _dir.set(0, 0, 0).addScaledVector(camF, input.y).addScaledVector(_camR, input.x).normalize();
 

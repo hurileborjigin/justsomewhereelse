@@ -12,6 +12,8 @@ const _right = new Vector3();
 const ZOOM_MIN = 0.45; // right over the character's shoulder
 const FAR_LOOK_BLEND = 0.85; // how much the far view centers on the planet
 const TILT_MIN = -0.26; // a little below the usual view
+/** Looking around by dragging the world (src/look.ts) may tip further down, toward the ground at the character's feet. */
+export const LOOK_TILT_MIN = -0.35;
 const TILT_MAX = 1.31; // nearly straight up
 const AIM_DEFAULT = 1.2; // the usual view looks a little above the character's head
 const DISTANCE = Math.hypot(3.2, 6.5); // from the character at zoom 1 (World.lookDown sets the angle)
@@ -123,10 +125,18 @@ export class FollowCamera {
     this.camera.lookAt(_look);
   }
 
-  /** Photo mode: turn the camera around the character by `yaw` radians and tilt the view by `tilt` radians (up is positive). */
-  setLook(yaw: number, tilt: number) {
+  /**
+   * Photo mode and looking around: turn the camera around the character by `yaw` radians and tilt
+   * the view by `tilt` radians (up is positive), no lower than `tiltMin`.
+   */
+  setLook(yaw: number, tilt: number, tiltMin = TILT_MIN) {
     this.targetYaw = wrapAngle(yaw);
-    this.targetTilt = Math.min(TILT_MAX, Math.max(TILT_MIN, tilt));
+    this.targetTilt = Math.min(TILT_MAX, Math.max(tiltMin, tilt));
+  }
+
+  /** How far the camera has turned around the character right now: walking keys steer as if it had not. */
+  get turned() {
+    return this.yaw;
   }
 
   /** Moves the projection off-centre by the eased shift; drops the offset once it has eased back to nothing. */

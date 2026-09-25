@@ -35,6 +35,9 @@
         height: 100%;
         touch-action: none;
       }
+      body.looking #game {
+        cursor: grabbing;
+      }
       /* --- mobile controls (shown only on touch devices via body.touch) --- */
       #dpad,
       #zoom-slider {
@@ -583,10 +586,13 @@
         flex-direction: column;
         gap: 6px;
       }
-      .tr-list:empty::before {
-        content: attr(data-empty);
-        opacity: 0.55;
-        font-size: 12px;
+      #treasure-pocket {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #treasure-pocket[hidden] {
+        display: none;
       }
       .tr-row {
         display: grid;
@@ -1024,6 +1030,10 @@
         background: rgba(255, 255, 253, 0.85);
         color: var(--ink);
         cursor: pointer;
+      }
+      .pc-secondary:disabled {
+        opacity: 0.55;
+        cursor: default;
       }
       .pc-label {
         border: none;
@@ -1837,10 +1847,10 @@
       <div id="treasure-body">
         <p id="treasure-waiting"></p>
         <button id="treasure-leave">Leave a treasure here <svg class="chest-icon" viewBox="0 0 32 28" aria-hidden="true"><use href="#i-chest"></use></svg></button>
-        <h3>Your collection</h3>
-        <div id="treasure-mine" class="tr-list" data-empty="Nothing kept yet. Go looking!"></div>
-        <h3>Boxes you left</h3>
-        <div id="treasure-left" class="tr-list" data-empty="You haven't left any treasure yet."></div>
+        <section id="treasure-pocket" hidden>
+          <h3>In your pocket</h3>
+          <div id="treasure-carried" class="tr-list"></div>
+        </section>
       </div>
     </div>
     <div id="chat-panel">

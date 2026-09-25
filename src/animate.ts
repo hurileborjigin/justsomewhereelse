@@ -1,4 +1,5 @@
 import {
+  Box3,
   CircleGeometry,
   Group,
   Mesh,
@@ -8,13 +9,39 @@ import {
   type Quaternion,
   type Scene,
 } from "three";
-import { CHARACTERS, type CharacterId } from "../shared/protocol.ts";
-import { node, type Assets } from "./assets.ts";
+import { CHARACTERS, type BoxSize, type CharacterId } from "../shared/protocol.ts";
+import { node, type AssetName, type Assets } from "./assets.ts";
 import { dampAngle } from "./math.ts";
 import type { World } from "./world.ts";
 
 const _up = new Vector3();
+const _size = new Vector3();
+const _box = new Box3();
 const Z = new Vector3(0, 0, 1);
+
+const CHEST: Record<BoxSize, AssetName> = { s: "chest_s", m: "chest_m", l: "chest_l" };
+/**
+ * A box in a character's pocket rides on its back as a small closed chest,
+ * its longer side along the spine and a bigger box a little bigger. `reach`
+ * is the chest's longer side per size, in model units; the chest's middle
+ * stands `back` units behind the model's origin (a bigger chest further back,
+ * clear of the bee's wings) and its base at `rest(back)` above the origin, on
+ * the curve of the back.
+ */
+const PACK: Record<CharacterId, { reach: Record<BoxSize, number>; back(depth: number): number; rest(back: number): number }> = {
+  // the bee's body is an ellipsoid (0.18 across, 0.27 long, origin at its middle); the wings root at 0.03 behind it
+  bee: {
+    reach: { s: 0.19, m: 0.21, l: 0.23 },
+    back: (depth) => 0.06 + depth / 2,
+    rest: (back) => 0.171 * Math.sqrt(Math.max(0, 1 - (back / 0.27) ** 2)) - 0.03,
+  },
+  // the donkey's body is a box 0.95 long whose middle stands 0.06 behind the origin, its top 0.84 up
+  donkey: {
+    reach: { s: 0.42, m: 0.5, l: 0.62 },
+    back: () => 0.06,
+    rest: () => 0.83,
+  },
+};
 
 /**
  * Owns the visible model for one character (local or remote) and applies all
@@ -35,6 +62,8 @@ export class CharacterView {
   private lastPos = new Vector3();
   private hasLast = false;
   private celebrateUntil = 0;
+  private pack: Group | null = null;
+  private packSize: BoxSize | null = null;
 
   /** A few happy hops - played when the two characters finally meet. */
   celebrate() {
@@ -64,6 +93,7 @@ export class CharacterView {
     const model = this.assets[c].clone(true);
     this.model = model;
     this.container.add(model);
+    this.buildPack();
     if (c === "bee") {
       this.wings = [node(model, "WingL"), node(model, "WingR")];
       this.ears = [];
@@ -75,6 +105,37 @@ export class CharacterView {
       this.legs = ["LegFL", "LegFR", "LegBL", "LegBR"].map((n) => node(model, n));
       this.shadow.scale.setScalar(0.6);
     }
+  }
+
+  /** The size of the chest on this character's back, or null. */
+  get carrying() {
+    return this.packSize;
+  }
+
+  /** The largest box in this character's pocket rides on its back; null takes it off. */
+  setCarrying(size: BoxSize | null) {
+    if (this.packSize === size) return;
+    this.packSize = size;
+    this.buildPack();
+  }
+
+  private buildPack() {
+    this.pack?.removeFromParent();
+    this.pack = null;
+    const size = this.packSize;
+    if (!size || !this.model || !this.character) return;
+    const pack = this.assets[CHEST[size]].clone(true);
+    _box.setFromObject(pack).getSize(_size);
+    const fit = PACK[this.character];
+    // the chests stand long side along Z, the way a character's spine runs
+    const scale = fit.reach[size] / Math.max(_size.x, _size.z);
+    pack.scale.setScalar(scale);
+    const back = fit.back(_size.z * scale);
+    pack.position.set(0, fit.rest(back), -back); // the model faces +Z, so its back half is -Z
+    pack.name = "Pack";
+    this.pack = pack;
+    // a child of the model: it bobs, waddles and tilts with the character
+    this.model.add(pack);
   }
 
   setVisible(v: boolean) {

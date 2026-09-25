@@ -280,7 +280,7 @@ await b.waitForFunction(() => document.getElementById("postcard").hidden, { time
 await waitBox(b, mBox.id, "loc", null);
 check((await boxById(b, mBox.id)).label === "our first summer", "B kept the M box with a label");
 await b.click("#treasure-open");
-await b.click("#treasure-mine .tr-place");
+await b.click("#treasure-carried .tr-place");
 st = await aimGreenOnGlobe(b, mBox.tiles[0], [SPAWN_A]);
 check(st !== null && st.size === "m", "B's kept box shows an all-green M shade on the globe");
 await confirm(b);
@@ -362,7 +362,7 @@ await shot(a, "11-hive-two-boxes");
 await b.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.id === "hall")));
 await b.waitForTimeout(600);
 if (await b.isHidden("#treasure-panel")) await b.click("#treasure-open");
-await b.click("#treasure-mine .tr-place");
+await b.click("#treasure-carried .tr-place");
 await b.waitForFunction(() => window.__tp.placing().active, null, { timeout: 5000 });
 check(await b.isHidden("#pl-sizes"), "a kept box keeps its size: no size buttons");
 // the last M bay facing the left aisle, (6..7, 35..36), from (5, 35)

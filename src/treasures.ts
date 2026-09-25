@@ -27,6 +27,7 @@ const LID_OPEN = -1.75; // radians around the hinge (about 100 degrees); 0 = sea
 const LID_SPEED = 4; // rad/s
 const REQUEST_TIMEOUT_MS = 15_000;
 const LANDED_LATE = "Your box went down after all.";
+const POCKETED = "On your back now: place it from Treasures.";
 const CHEST: Record<BoxSize, AssetName> = { s: "chest_s", m: "chest_m", l: "chest_l" };
 const SIZE_NAME: Record<BoxSize, string> = { s: "S", m: "M", l: "L" };
 // How far below the tile tops a chest's center sits on the globe. A flat base
@@ -95,6 +96,9 @@ const _dir = new Vector3();
 const _p = new Vector3();
 const vec = (v: Vector3): Vec3 => [v.x, v.y, v.z];
 const fmtDate = (ts: number) => new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const SIZE_RANK: Record<BoxSize, number> = { s: 0, m: 1, l: 2 };
+/** Who has a box in their pocket: its owner once kept, its creator while nobody has; null while it stands somewhere. */
+const holderOf = (box: Box): PlayerId | null => (box.loc !== null ? null : (box.owner ?? box.creator));
 
 /**
  * Everything treasure: the box list mirrored from the server, the chests in
@@ -121,8 +125,8 @@ export class Treasures {
     badge: HTMLElement;
     panel: HTMLElement;
     waiting: HTMLElement;
-    mine: HTMLElement;
-    left: HTMLElement;
+    pocket: HTMLElement;
+    carried: HTMLElement;
   };
 
   constructor(assets: Assets, hooks: TreasureHooks) {
@@ -145,8 +149,8 @@ export class Treasures {
       badge: $("treasure-badge"),
       panel: $("treasure-panel"),
       waiting: $("treasure-waiting"),
-      mine: $("treasure-mine"),
-      left: $("treasure-left"),
+      pocket: $("treasure-pocket"),
+      carried: $("treasure-carried"),
     };
     this.ui.openBtn.addEventListener("click", () => this.setPanelOpen(true));
     $("treasure-min").addEventListener("click", () => this.setPanelOpen(false));
@@ -234,6 +238,7 @@ export class Treasures {
     const faded = this.unmount(box.id);
     this.mount(box, lidNow, faded);
     this.renderPanel();
+    if (prev && holderOf(prev) !== this.me && holderOf(box) === this.me) this.toast(POCKETED);
     if (this.pending?.matches(box, !prev)) {
       const p = this.pending;
       this.pending = null;
@@ -340,6 +345,15 @@ export class Treasures {
 
   list(): Box[] {
     return [...this.boxes.values()];
+  }
+
+  /** The largest box `player` has in their pocket, carried on their back; null with empty pockets. */
+  carrying(player: PlayerId): BoxSize | null {
+    let size: BoxSize | null = null;
+    for (const b of this.boxes.values()) {
+      if (holderOf(b) === player && (size === null || SIZE_RANK[b.size] > SIZE_RANK[size])) size = b.size;
+    }
+    return size;
   }
 
   /** Every box standing somewhere right now, for the floating labels (src/labels.ts). */
@@ -482,6 +496,11 @@ export class Treasures {
     });
   }
 
+  private saveLabel(box: Box, label: string) {
+    this.hooks.net.labelBox(box.id, label);
+    this.toast(label ? "Label saved" : "Label taken off");
+  }
+
   private relabel(box: Box) {
     const label = prompt("Label for this treasure:", box.label ?? "");
     if (label === null) return;
@@ -538,6 +557,7 @@ export class Treasures {
       openedBy: this.names[1 - box.creator],
       isOwner: box.owner === this.me,
       onKeep: (label) => this.hooks.net.keepBox(box.id, label || undefined),
+      ...(box.owner === this.me ? { onLabel: (label: string) => this.saveLabel(box, label) } : {}),
       ...(mine && sealed ? { onDelete: () => this.hooks.net.deleteBox(box.id), onEdit: () => this.edit(box) } : {}),
       ...(mine && unkept && box.loc !== null ? { onLift: () => this.lift(box) } : {}),
     });
@@ -612,17 +632,15 @@ export class Treasures {
     }
     this.ui.badge.hidden = waiting === 0;
     this.ui.badge.textContent = String(waiting);
-    this.ui.mine.replaceChildren(...all.filter((b) => b.owner === me).map((b) => this.row(b, "mine")));
-    this.ui.left.replaceChildren(...all.filter((b) => b.creator === me).map((b) => this.row(b, "left")));
+    // boxes that stand somewhere are found and read where they stand; only the ones on your back are listed
+    const carried = all.filter((b) => holderOf(b) === me);
+    this.ui.carried.replaceChildren(...carried.map((b) => this.row(b)));
+    this.ui.pocket.hidden = carried.length === 0;
   }
 
-  private whereText(box: Box): string {
-    // held: by its owner, or by its creator while nobody has kept it
-    if (box.loc === null) return box.owner === null || box.owner === this.me ? "in your pocket" : `kept by ${this.names[box.owner]}`;
-    return box.loc === "globe" ? "on the planet" : `in ${this.hooks.placeName(box.loc)}`;
-  }
-
-  private row(box: Box, kind: "mine" | "left"): HTMLElement {
+  /** A box in your pocket: one you kept, or your own one you picked up to move. */
+  private row(box: Box): HTMLElement {
+    const kept = box.owner === this.me;
     const row = el("div", "tr-row");
     const thumb = el("div", "tr-thumb");
     const c = box.contents;
@@ -634,19 +652,13 @@ export class Treasures {
     const title = el("div", "tr-title");
     if (box.label) title.textContent = box.label;
     else {
-      title.textContent = kind === "mine" ? "no label yet" : `${SIZE_NAME[box.size]} box`;
+      title.textContent = kept ? "no label yet" : `${SIZE_NAME[box.size]} box`;
       title.classList.add("faint");
     }
     const meta = el("div", "tr-meta");
-    const facts =
-      kind === "mine"
-        ? [
-            `from ${this.names[box.creator]}`,
-            SIZE_NAME[box.size],
-            `found ${fmtDate(box.opened ?? box.created)}`,
-            this.whereText(box),
-          ]
-        : [SIZE_NAME[box.size], box.opened === null ? "sealed" : "opened", this.whereText(box)];
+    const facts = kept
+      ? [`from ${this.names[box.creator]}`, SIZE_NAME[box.size], `found ${fmtDate(box.opened ?? box.created)}`]
+      : [SIZE_NAME[box.size], box.opened === null ? "sealed" : "opened"];
     // each fact stays on one line; the row wraps only between them
     facts.forEach((f, i) => {
       if (i > 0) meta.append(" · ");
@@ -661,17 +673,11 @@ export class Treasures {
       b.addEventListener("click", onClick);
       return b;
     };
-    actions.append(button("Open", "tr-open", () => this.open(box)));
-    if (kind === "mine") {
-      actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
-      if (box.loc === null) actions.append(button("Place here", "tr-place", () => this.place(box)));
-    } else {
-      // your own box: change it while sealed, move it until your partner keeps it
+    actions.append(button("Place here", "tr-place", () => this.place(box)), button("Open", "tr-open", () => this.open(box)));
+    if (kept) actions.append(button("Label ✏️", "tr-label", () => this.relabel(box)));
+    else {
+      // your own box, lifted to move it: change it or take it back while it is still sealed
       if (box.opened === null) actions.append(button("Edit", "tr-edit", () => this.edit(box)));
-      if (box.owner === null) {
-        if (box.loc !== null) actions.append(button("Pick up", "tr-lift", () => this.lift(box)));
-        else actions.append(button("Place here", "tr-place", () => this.place(box)));
-      }
       if (box.opened === null) actions.append(button("Take back", "tr-take", () => this.takeBack(box)));
     }
     row.append(thumb, main, actions);

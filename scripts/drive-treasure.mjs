@@ -1,8 +1,8 @@
 // Visual check for treasure boxes: A writes a postcard, dresses it, frames an
 // uploaded photo with a caption on its picture side and leaves an S box; B
 // walks up, sees the picture first, flips to the words, keeps it with a label,
-// carries it into the ger and places it there, relabels it with a long label
-// and picks it up again. Act 1b: a postcard whose picture A takes in photo
+// carries it on the donkey's back into the ger and places it there, relabels
+// it where it stands with a long label and picks it up again. Act 1b: a postcard whose picture A takes in photo
 // mode. Act 2: a plain note, a photo-only box, and A taking a sealed box back.
 // Every box goes down through placing mode: an all-green shade, then E (or the button).
 // Act 3: placing mode's edges: a size that cannot form is disabled, Cancel brings the
@@ -253,12 +253,20 @@ await a.evaluate((front) => {
   const other = w.neighbors(tp.player.tile).find((n) => n !== front && !w.isBlockedFor(n, "donkey"));
   tp.lookAt(other);
 }, box.tiles[0]);
+check((await a.evaluate(() => window.__tp.localView.carrying)) === "s", "the lifted box rides on the bee's back");
+await a.waitForTimeout(300);
+await shot(a, "A2a-carrying");
 await a.click("#treasure-open");
-check((await a.locator("#treasure-left .tr-place").count()) === 1, "the panel offers Place here for the box in her pocket");
-await a.click("#treasure-left .tr-place");
+check(
+  (await a.isVisible("#treasure-pocket")) && (await a.locator("#treasure-carried .tr-row").count()) === 1,
+  "the panel lists the box in her pocket, and only that",
+);
+await shot(a, "A2b-pocket");
+await a.click("#treasure-carried .tr-place");
 await putDown(a);
 await waitBox(a, firstId, "loc", "globe");
 check(await a.isHidden("#treasure-panel"), "once the box stands again the panel stays closed");
+check((await a.evaluate(() => window.__tp.localView.carrying)) === null, "the chest came off her back");
 await a.waitForTimeout(400);
 const moved = await boxById(a, firstId);
 check(moved.tiles[0] !== box.tiles[0] && moved.owner === null && moved.opened === null, "the box stands on another tile, still sealed and nobody's");
@@ -353,15 +361,26 @@ await waitBox(b, firstId, "loc", null);
 const kept = await boxById(b, firstId);
 check(kept.owner === 1 && kept.label === "the softest grass", "B kept it with a label");
 check((await boxById(a, firstId)).loc === null, "the chest left A's world too");
+check(
+  (await b.evaluate(() => window.__tp.localView.carrying)) === "s" && (await a.evaluate(() => window.__tp.remoteView.carrying)) === "s",
+  "the kept box rides on the donkey's back, on both screens",
+);
+check((await b.textContent("#toast")).includes("On your back now"), "a toast says where the kept box went");
+await b.waitForTimeout(400);
+await shot(b, "B5a-carrying");
+await shot(a, "A5a-partner-carrying");
 await b.click("#treasure-open");
-await shot(b, "B5-collection");
+await shot(b, "B5-pocket");
 
 // ---- B carries it into the ger and places it -------------------------------
 await b.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.kind === "ger")));
 await b.waitForTimeout(600);
-await b.click("#treasure-mine .tr-place");
+await b.click("#treasure-carried .tr-place");
 await putDown(b);
 await waitBox(b, firstId, "loc", "ger");
+await b.click("#treasure-open");
+check(await b.isHidden("#treasure-pocket"), "with empty pockets the panel lists no boxes at all");
+await b.click("#treasure-min");
 await b.waitForTimeout(500);
 await shot(b, "B6-in-the-ger");
 await a.evaluate(() => window.__tp.enterBuilding(window.__tp.buildings.find((x) => x.kind === "ger")));
@@ -373,11 +392,17 @@ check(finalA.loc === "ger" && finalA.contents !== undefined, "A sees the placed 
 // ---- B relabels it with a long label, then picks it up again ----------------
 const LONG = "the softest grass on the whole planet!!!"; // BOX_LABEL_MAX_LEN characters
 check(LONG.length === 40, "the long label is 40 characters");
-b.once("dialog", (d) => d.accept(LONG));
-await b.click("#treasure-open");
-await b.click("#treasure-mine .tr-label");
+// the owner renames a standing box from the box itself, without picking it up
+await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
+await b.click("#box-btn"); // B stands on the ger's door tile: E would mean "go back outside"
+await b.waitForFunction(() => !document.getElementById("postcard").hidden, { timeout: 10000 });
+check(await b.isDisabled("#pc-save-label"), "Save label waits for a changed label");
+await b.fill("#postcard input.pc-label", LONG);
+await b.click("#pc-save-label");
 await waitBox(b, firstId, "label", LONG);
-await b.click("#treasure-min");
+check((await boxById(b, firstId)).loc === "ger", "saving the label leaves the box standing where it is");
+await b.click("#pc-leave");
+await b.waitForFunction(() => document.getElementById("postcard").hidden);
 await b.waitForFunction(() => !document.getElementById("box-btn").hidden, { timeout: 5000 });
 await b.waitForTimeout(300);
 const btn = await b.evaluate(() => {
@@ -396,10 +421,13 @@ await b.evaluate(() => document.fonts.ready);
 await shot(b, "B8-pick-up");
 await b.focus("#postcard input.pc-label");
 await b.keyboard.press("Enter");
+await b.waitForTimeout(300);
+check(await b.isVisible("#postcard"), "Enter on an unchanged label picks nothing up");
+await b.click("#pc-keep");
 await b.waitForFunction(() => document.getElementById("postcard").hidden, { timeout: 5000 });
 await waitBox(b, firstId, "loc", null);
 const picked = await boxById(b, firstId);
-check(picked.owner === 1 && picked.label === LONG, "Enter in the label field picks it up, label kept");
+check(picked.owner === 1 && picked.label === LONG, "Pick it up takes it into the pocket, label kept");
 
 // ---- Act 2: back on the globe. A note, a photo box, and taking one back --------
 const SPAWN_A = 646; // key(2, 6, 8)
@@ -660,7 +688,7 @@ await a.waitForFunction(`window.__tp.treasures.list().some(${oopsPred})`, null, 
 const oops = await a.evaluate(`window.__tp.treasures.list().find(${oopsPred})`);
 check(oops && oops.loc === "globe", "A's third box stands sealed on the globe");
 await a.click("#treasure-open");
-check((await a.locator("#treasure-left .tr-take").count()) === 1, "the panel offers Take back on the sealed box only");
+check(await a.isHidden("#treasure-pocket"), "a box standing on the globe is not listed in the panel");
 await a.click("#treasure-min");
 await readOpen(a); // A opens her own sealed box: the creator's view
 check((await a.locator("#pc-take").count()) === 1 && (await a.textContent("#postcard .pc-footer")).startsWith("Still sealed"), "the creator sees Still sealed and Take it back");

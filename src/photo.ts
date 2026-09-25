@@ -6,8 +6,8 @@ import type { WebGLRenderer } from "three";
 import type { CharacterId } from "../shared/protocol.ts";
 import type { FollowCamera } from "./camera.ts";
 
-const YAW_PER_PX = 0.004;
-const TILT_PER_PX = 0.002;
+export const YAW_PER_PX = 0.004;
+export const TILT_PER_PX = 0.002;
 /** How high above its feet photo mode aims at each character: the middle of its body. */
 export const PHOTO_AIM: Record<CharacterId, number> = { bee: 0.3, donkey: 0.5 };
 const SHOT_MIN_WIDTH = 1500; // device pixels across the window, where the device allows
