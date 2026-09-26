@@ -152,6 +152,14 @@ export class Net {
     this.send({ t: "music-add", track });
   }
 
+  musicDrop(index: number) {
+    this.send({ t: "music-drop", index });
+  }
+
+  musicRepeat() {
+    this.send({ t: "music-repeat" });
+  }
+
   musicNow(track: Track) {
     this.send({ t: "music-now", track });
   }

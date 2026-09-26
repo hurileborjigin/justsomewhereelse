@@ -149,21 +149,32 @@ export class Spotify {
   }
 
   async playlist(access: string, id: string): Promise<ApiResult<Track[]>> {
-    const got = await this.json<{ items?: { item?: TrackJson; track?: TrackJson }[] }>(
-      access,
-      `/playlists/${encodeURIComponent(id)}/items?limit=20`,
-    );
-    if (!got.ok) return got;
-    return {
-      ok: true,
-      value: (got.value.items ?? []).map((i) => trackOf(i.item ?? i.track)).filter((t): t is Track => t !== null),
-    };
+    return this.pages(access, (offset) => `/playlists/${encodeURIComponent(id)}/items?limit=50&offset=${offset}`, (row) => {
+      const item = row as { item?: TrackJson; track?: TrackJson };
+      return trackOf(item.item ?? item.track);
+    });
   }
 
   async liked(access: string): Promise<ApiResult<Track[]>> {
-    const got = await this.json<{ items?: { track?: TrackJson }[] }>(access, "/me/tracks?limit=20");
-    if (!got.ok) return got;
-    return { ok: true, value: (got.value.items ?? []).map((i) => trackOf(i.track)).filter((t): t is Track => t !== null) };
+    return this.pages(access, (offset) => `/me/tracks?limit=50&offset=${offset}`, (row) => trackOf((row as { track?: TrackJson }).track));
+  }
+
+  /** Walk a paged list until Spotify has no more, or 200 tracks. */
+  private async pages(access: string, path: (offset: number) => string, read: (row: unknown) => Track | null): Promise<ApiResult<Track[]>> {
+    const tracks: Track[] = [];
+    let offset = 0;
+    for (let page = 0; page < 4 && tracks.length < 200; page++) {
+      const got = await this.json<{ items?: unknown[]; next?: string | null }>(access, path(offset));
+      if (!got.ok) return page === 0 ? got : { ok: true, value: tracks };
+      const items = got.value.items ?? [];
+      for (const row of items) {
+        const track = read(row);
+        if (track) tracks.push(track);
+      }
+      if (!got.value.next || items.length === 0) break;
+      offset += items.length;
+    }
+    return { ok: true, value: tracks };
   }
 
   private async token(body: Record<string, string>): Promise<ApiResult<Tokens>> {

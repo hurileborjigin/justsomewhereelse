@@ -43,6 +43,24 @@ export class Radio {
     this.send = send;
     this.room.sessions[0] = store.musicSession(0);
     this.room.sessions[1] = store.musicSession(1);
+    const clock = setInterval(() => this.pulse(), 1000);
+    clock.unref?.();
+  }
+
+  /** Move a finished song on. A song that is still playing is left alone, so Spotify is not asked again. */
+  private pulse() {
+    const before = this.stamp();
+    const now = Date.now();
+    this.room.apply({ t: "tick", now }, now);
+    if (this.stamp() === before) return;
+    this.persist();
+    this.after(now, true);
+  }
+
+  private stamp(): string {
+    return this.room.sessions
+      .map((s) => `${s.track?.uri ?? ""}:${s.paused}:${s.at}:${s.repeat}:${s.queue.map((t) => t.uri).join(",")}`)
+      .join("|");
   }
 
   view(id: PlayerId, now = Date.now()): MusicView {
@@ -135,6 +153,18 @@ export class Radio {
   add(id: PlayerId, track: unknown, now = Date.now()) {
     if (!isTrack(track)) return;
     this.room.apply({ t: "add", by: id, track }, now);
+    this.persist();
+    this.publish(now);
+  }
+
+  drop(id: PlayerId, index: number, now = Date.now()) {
+    this.room.apply({ t: "drop", by: id, index }, now);
+    this.persist();
+    this.publish(now);
+  }
+
+  repeat(id: PlayerId, now = Date.now()) {
+    this.room.apply({ t: "repeat", by: id }, now);
     this.persist();
     this.publish(now);
   }

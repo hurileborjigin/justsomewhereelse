@@ -736,6 +736,38 @@
         cursor: pointer;
       }
       #music-transport button:hover { background: rgba(43, 58, 42, 0.06); }
+      #music-repeat { color: rgba(43, 58, 42, 0.4); position: relative; }
+      #music-repeat svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
+      #music-repeat.on { color: #1db954; }
+      #music-repeat.one::after {
+        content: "1";
+        position: absolute;
+        right: 6px;
+        bottom: 1px;
+        font-size: 8px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      #music-queue li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .music-drop {
+        flex: none;
+        border: none;
+        background: none;
+        color: inherit;
+        opacity: 0.4;
+        cursor: pointer;
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+        padding: 0 2px;
+      }
+      .music-drop:hover { opacity: 0.9; }
+      #music-queue li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       #music-upnext {
         margin: 8px 0 2px;
         font-size: 10px;
@@ -2247,6 +2279,7 @@
         <div id="music-transport">
           <button id="music-play" type="button" aria-label="Play">▶</button>
           <button id="music-next" type="button" aria-label="Next">⏭</button>
+          <button id="music-repeat" type="button" aria-label="Repeat off" title="Repeat off"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M11.2 2.2a.7.7 0 0 1 .7.7V4.4h1.2a.7.7 0 0 1 .5 1.2l-1.9 1.9a.7.7 0 0 1-1-.98L11.7 5.5H5.4A2.1 2.1 0 0 0 3.3 7.6v.4a.7.7 0 0 1-1.4 0v-.4A3.5 3.5 0 0 1 5.4 4.1h6.3V2.9a.7.7 0 0 1 .7-.7zM4.8 13.8a.7.7 0 0 1-.7-.7v-1.5H2.9a.7.7 0 0 1-.5-1.2l1.9-1.9a.7.7 0 0 1 1 .98L4.3 10.5h6.3a2.1 2.1 0 0 0 2.1-2.1v-.4a.7.7 0 0 1 1.4 0v.4a3.5 3.5 0 0 1-3.5 3.5H4.8v1.2a.7.7 0 0 1-.7.7z"/></svg></button>
         </div>
         <p id="music-upnext" hidden>Up next</p>
         <ol id="music-queue"></ol>

@@ -2,7 +2,7 @@
 // The shared session is one player's personal session, mutated in place.
 // The other session stays frozen until they are alone again.
 
-import type { MusicSession, PlayerId, Track } from "../shared/protocol.ts";
+import type { MusicSession, PlayerId, Repeat, Track } from "../shared/protocol.ts";
 
 export const DRIFT_MS = 2_000;
 export const GRACE_MS = 10_000;
@@ -25,6 +25,8 @@ export type MusicCommand =
   | { t: "seek"; by: PlayerId; positionMs: number }
   | { t: "next"; by: PlayerId }
   | { t: "add"; by: PlayerId; track: Track }
+  | { t: "drop"; by: PlayerId; index: number }
+  | { t: "repeat"; by: PlayerId }
   | { t: "play-now"; by: PlayerId; track: Track }
   | { t: "tick"; now: number };
 
@@ -43,7 +45,10 @@ export const emptySession = (): Session => ({
   positionMs: 0,
   at: 0,
   queue: [],
+  repeat: "off",
 });
+
+const NEXT_REPEAT: Record<Repeat, Repeat> = { off: "all", all: "one", one: "off" };
 
 export function positionAt(session: Session, now: number): number {
   if (!session.track || session.paused) return session.positionMs;
@@ -92,7 +97,11 @@ export class MusicRoom {
   apply(cmd: MusicCommand, now: number): void {
     this.expire(now);
     if (cmd.t === "tick") {
-      this.advance(this.liveSession(0) ?? this.liveSession(1), now);
+      if (this.sharedOwner !== null && this.both()) this.advance(this.sessions[this.sharedOwner], now);
+      else {
+        if (this.flags[0]) this.advance(this.sessions[0], now);
+        if (this.flags[1]) this.advance(this.sessions[1], now);
+      }
       return;
     }
     const owner = this.liveOwner(cmd.by);
@@ -103,6 +112,8 @@ export class MusicRoom {
     else if (cmd.t === "seek") this.seek(session, cmd.positionMs, now);
     else if (cmd.t === "next") this.skip(session, now);
     else if (cmd.t === "add") session.queue.push(cmd.track);
+    else if (cmd.t === "drop") session.queue.splice(cmd.index, 1);
+    else if (cmd.t === "repeat") session.repeat = NEXT_REPEAT[session.repeat] ?? "off";
     else if (cmd.t === "play-now") this.start(owner, cmd.track, now);
   }
 
@@ -128,6 +139,7 @@ export class MusicRoom {
     if (!actual.uri) return { id, do: "ok" };
     const named = titled(actual.track) ?? titled(session.track?.uri === actual.uri ? session.track : null) ?? session.queue.find((t) => t.uri === actual.uri && titled(t));
     if (actual.uri !== session.track?.uri) {
+      if (actual.paused) return { id, do: "ok" };
       session.track = named ?? {
         uri: actual.uri,
         name: "Unknown song",
@@ -142,6 +154,10 @@ export class MusicRoom {
     }
     if (named && session.track && looksLikeId(session.track.name)) {
       session.track = named;
+      return { id, do: "follow" };
+    }
+    if (actual.paused && session.track && atEnd(actual.positionMs, session.track.durationMs)) {
+      this.finish(session, now);
       return { id, do: "follow" };
     }
     if (actual.paused !== session.paused) {
@@ -180,12 +196,6 @@ export class MusicRoom {
   private liveOwner(by: PlayerId): PlayerId {
     if (this.sharedOwner !== null && this.both()) return this.sharedOwner;
     return by;
-  }
-
-  private liveSession(id: PlayerId): Session | null {
-    if (!this.flags[id]) return null;
-    if (this.sharedOwner !== null && this.both()) return this.sessions[this.sharedOwner];
-    return this.sessions[id];
   }
 
   private expire(now: number): void {
@@ -260,19 +270,36 @@ export class MusicRoom {
     let guard = 0;
     while (session.track && !session.paused && positionAt(session, now) >= session.track.durationMs && guard < 20) {
       guard += 1;
-      const over = positionAt(session, now) - session.track.durationMs;
-      const next = session.queue.shift();
-      if (!next) {
-        session.track = null;
-        session.paused = true;
-        session.positionMs = 0;
-        session.at = now;
-        return;
-      }
-      session.track = next;
-      session.paused = false;
-      session.positionMs = over;
-      session.at = now;
+      this.finish(session, now);
     }
   }
+
+  /** The current song has ended. Repeat decides whether it starts again, goes to the back, or stops. */
+  private finish(session: Session, now: number): void {
+    const done = session.track;
+    if (!done) return;
+    if (session.repeat === "one") {
+      session.positionMs = 0;
+      session.paused = false;
+      session.at = now;
+      return;
+    }
+    if (session.repeat === "all") session.queue.push(done);
+    const next = session.queue.shift();
+    if (!next) {
+      session.track = null;
+      session.paused = true;
+      session.positionMs = 0;
+      session.at = now;
+      return;
+    }
+    session.track = next;
+    session.paused = false;
+    session.positionMs = 0;
+    session.at = now;
+  }
+}
+
+function atEnd(positionMs: number, durationMs: number): boolean {
+  return durationMs > 0 && positionMs >= durationMs - 800;
 }

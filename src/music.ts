@@ -50,7 +50,12 @@ export class Music {
   private heardAt = 0;
   private heardPaused = true;
   private heard = false;
+  private heardUri = "";
+  /** True while the progress bar is being dragged, so playback does not pull it back. */
+  private dragging = false;
   private lyrics = new SkyLyrics(() => $("music-lyrics"));
+  private shown: Catalog | null = null;
+  private busyKey = "";
   private sky = true;
   private net: Net;
   open = false;
@@ -65,9 +70,36 @@ export class Music {
     $("music-connect").addEventListener("click", () => this.net.musicConnect());
     $("music-play").addEventListener("click", () => void this.onPlayClick());
     $("music-next").addEventListener("click", () => this.net.musicNext());
-    $("music-bar").addEventListener("change", () => {
-      const bar = $("music-bar") as HTMLInputElement;
-      this.net.musicSeek(Number(bar.value) || 0);
+    $("music-repeat").addEventListener("click", () => this.net.musicRepeat());
+    const bar = $("music-bar") as HTMLInputElement;
+    const place = (ms: number) => {
+      this.heard = true;
+      this.heardUri = this.view?.session.track?.uri ?? "";
+      this.heardPos = ms;
+      this.heardAt = performance.now();
+      this.heardPaused = this.view?.session.paused ?? false;
+      this.paintTime(ms);
+    };
+    bar.addEventListener("pointerdown", () => {
+      this.dragging = true;
+    });
+    bar.addEventListener("input", () => this.paintTime(Number(bar.value) || 0));
+    const release = () => {
+      if (!this.dragging && document.activeElement !== bar) return;
+      this.dragging = false;
+      const ms = Number(bar.value) || 0;
+      place(ms);
+      this.net.musicSeek(ms);
+      bar.blur();
+    };
+    bar.addEventListener("pointerup", release);
+    bar.addEventListener("pointercancel", release);
+    bar.addEventListener("change", () => {
+      this.dragging = false;
+      const ms = Number(bar.value) || 0;
+      place(ms);
+      this.net.musicSeek(ms);
+      bar.blur();
     });
     $("music-search").addEventListener("keydown", (ev) => {
       if ((ev as KeyboardEvent).key !== "Enter") return;
@@ -130,7 +162,22 @@ export class Music {
   }
 
   catalog(catalog: Catalog) {
+    this.shown = catalog;
+    this.busyKey = "";
+    this.paintCatalog();
+  }
+
+  private paintCatalog() {
+    const catalog = this.shown;
+    if (!catalog) return;
     const list = $("music-results");
+    const busy = new Set<string>();
+    const playing = this.view?.session.track?.uri;
+    if (playing) busy.add(playing);
+    for (const item of this.view?.session.queue ?? []) busy.add(item.uri);
+    const key = [...busy].sort().join(" ");
+    if (key === this.busyKey && list.childElementCount > 0) return;
+    this.busyKey = key;
     list.replaceChildren();
     if (catalog.kind === "playlists") {
       if (catalog.playlists.length === 0) {
@@ -152,10 +199,20 @@ export class Music {
       }
       return;
     }
-    for (const track of catalog.tracks) list.append(this.trackRow(track));
+    const tracks = catalog.tracks.filter((track) => !busy.has(track.uri));
+    if (tracks.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "music-empty";
+      empty.textContent = catalog.tracks.length === 0 ? "Nothing here." : "Everything here is already in the queue.";
+      list.append(empty);
+      return;
+    }
+    for (const track of tracks) list.append(this.trackRow(track));
   }
 
   devices(devices: SpotifyDevice[]) {
+    this.shown = null;
+    this.busyKey = "";
     const list = $("music-results");
     list.replaceChildren();
     const here = document.createElement("button");
@@ -191,7 +248,10 @@ export class Music {
     if (tellServer) this.reportAcc = 0;
     void this.player.getCurrentState().then((state) => {
       if (!state) return;
+      const uri = state.track_window.current_track.uri;
+      if (uri !== this.view?.session.track?.uri) return;
       this.heard = true;
+      this.heardUri = uri;
       this.heardPos = state.position;
       this.heardAt = performance.now();
       this.heardPaused = state.paused;
@@ -267,14 +327,31 @@ export class Music {
     const play = $("music-play");
     play.textContent = playing ? "❚❚" : "▶";
     play.setAttribute("aria-label", playing ? "Pause" : "Play");
+    const repeat = view.session.repeat ?? "off";
+    const repeatBtn = $("music-repeat");
+    repeatBtn.classList.toggle("on", repeat !== "off");
+    repeatBtn.classList.toggle("one", repeat === "one");
+    const repeatLabel = repeat === "one" ? "Repeat this song" : repeat === "all" ? "Repeat the queue" : "Repeat off";
+    repeatBtn.title = repeatLabel;
+    repeatBtn.setAttribute("aria-label", repeatLabel);
     const queue = $("music-queue");
     queue.replaceChildren();
     $("music-upnext").hidden = view.session.queue.length === 0;
-    for (const item of view.session.queue) {
+    view.session.queue.forEach((item, index) => {
       const li = document.createElement("li");
-      li.textContent = item.artists ? `${item.name}  ·  ${item.artists}` : item.name;
+      const name = document.createElement("span");
+      name.textContent = item.artists ? `${item.name}  ·  ${item.artists}` : item.name;
+      const drop = document.createElement("button");
+      drop.type = "button";
+      drop.className = "music-drop";
+      drop.textContent = "×";
+      drop.title = "Remove";
+      drop.setAttribute("aria-label", `Remove ${item.name}`);
+      drop.addEventListener("click", () => this.net.musicDrop(index));
+      li.append(name, drop);
       queue.append(li);
-    }
+    });
+    this.paintCatalog();
     this.paintPosition();
   }
 
@@ -282,6 +359,10 @@ export class Music {
     const view = this.view;
     const bar = $("music-bar") as HTMLInputElement;
     if (!view?.session.track) {
+      if (!this.dragging) {
+        bar.value = "0";
+        this.paintTime(0);
+      }
       this.lyrics.update(null, 0, this.sky);
       return;
     }
@@ -289,20 +370,22 @@ export class Music {
       view.session.track.durationMs,
       view.session.positionMs + (view.session.paused ? 0 : performance.now() - this.receivedAt),
     );
-    const ms = this.heard
+    const heardMatches = this.heard && this.heardUri === view.session.track.uri;
+    const ms = heardMatches
       ? Math.min(view.session.track.durationMs, this.heardPaused ? this.heardPos : this.heardPos + (performance.now() - this.heardAt))
       : sessionMs;
-    if (document.activeElement === bar) {
-      this.lyrics.update(view.session.track, ms, this.sky);
+    if (this.dragging) {
+      this.lyrics.update(view.session.track, Number(bar.value) || 0, this.sky);
       return;
     }
     bar.value = String(ms);
     this.lyrics.update(view.session.track, ms, this.sky);
-    const clock = (n: number) => {
-      const s = Math.max(0, Math.floor(n / 1000));
-      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-    };
-    $("music-time").textContent = clock(ms);
+    this.paintTime(ms);
+  }
+
+  private paintTime(ms: number) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    $("music-time").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }
 
   private async onPlayClick() {

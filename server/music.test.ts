@@ -135,6 +135,35 @@ test("a song one account cannot play stays on the session and only that speaker 
   assert.equal(room.hear(0, 100, true).waiting, false);
 });
 
+test("a song that has ended starts the next one, and repeat brings songs back", () => {
+  const room = new MusicRoom();
+  room.sessions[0] = { ...emptySession(), track: A, paused: false, positionMs: 0, at: 0, queue: [B] };
+  room.online(0, 0);
+  const ended = room.report(0, { uri: A.uri, paused: true, positionMs: A.durationMs }, A.durationMs);
+  assert.equal(ended.do, "follow");
+  assert.equal(room.sessions[0].track?.uri, B.uri);
+  assert.equal(room.sessions[0].queue.length, 0);
+  room.apply({ t: "repeat", by: 0 }, A.durationMs);
+  assert.equal(room.sessions[0].repeat, "all");
+  room.apply({ t: "add", by: 0, track: C }, A.durationMs);
+  room.apply({ t: "tick", now: A.durationMs + B.durationMs }, A.durationMs + B.durationMs);
+  assert.equal(room.sessions[0].track?.uri, C.uri);
+  assert.equal(room.sessions[0].queue[0]?.uri, B.uri);
+  room.apply({ t: "repeat", by: 0 }, A.durationMs + B.durationMs);
+  assert.equal(room.sessions[0].repeat, "one");
+  room.apply({ t: "tick", now: A.durationMs + B.durationMs + C.durationMs }, A.durationMs + B.durationMs + C.durationMs);
+  assert.equal(room.sessions[0].track?.uri, C.uri);
+  assert.equal(room.sessions[0].positionMs, 0);
+});
+
+test("a song can be taken off the queue", () => {
+  const room = new MusicRoom();
+  room.sessions[0] = { ...emptySession(), track: A, paused: false, positionMs: 0, at: 0, queue: [B, C] };
+  room.online(0, 0);
+  room.apply({ t: "drop", by: 0, index: 0 }, 1000);
+  assert.deepEqual(room.sessions[0].queue.map((t) => t.uri), [C.uri]);
+});
+
 test("a speaker that is a little behind does not get seeked", () => {
   const room = new MusicRoom();
   room.sessions[0] = { ...emptySession(), track: A, paused: false, positionMs: 0, at: 0 };

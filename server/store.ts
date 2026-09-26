@@ -420,6 +420,7 @@ export class Store {
     try {
       const s = JSON.parse(raw) as MusicSession;
       if (!s || !Array.isArray(s.queue)) return emptySession();
+      if (s.repeat !== "off" && s.repeat !== "all" && s.repeat !== "one") s.repeat = "off";
       return s;
     } catch {
       return emptySession();

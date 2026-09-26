@@ -644,6 +644,10 @@ wss.on("connection", (ws) => {
       radio.seek(id, Number(msg.positionMs) || 0);
     } else if (msg.t === "music-add") {
       radio.add(id, msg.track);
+    } else if (msg.t === "music-drop") {
+      radio.drop(id, Number(msg.index) || 0);
+    } else if (msg.t === "music-repeat") {
+      radio.repeat(id);
     } else if (msg.t === "music-now") {
       radio.now(id, msg.track);
     } else if (msg.t === "music-device") {

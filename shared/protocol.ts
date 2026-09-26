@@ -168,12 +168,16 @@ export type Track = {
   durationMs: number;
 };
 
+/** off: stop at the end of the queue. all: the queue loops. one: the current song starts again. */
+export type Repeat = "off" | "all" | "one";
+
 export type MusicSession = {
   track: Track | null;
   paused: boolean;
   positionMs: number;
   at: number;
   queue: Track[];
+  repeat: Repeat;
 };
 
 /** What one player should draw. `waiting` means the track is on the session but not in their Spotify. */
@@ -222,6 +226,8 @@ export type ClientMessage =
   | { t: "music-seek"; positionMs: number }
   | { t: "music-next" }
   | { t: "music-add"; track: Track }
+  | { t: "music-drop"; index: number }
+  | { t: "music-repeat" }
   | { t: "music-now"; track: Track }
   | { t: "music-device"; deviceId: string | null; haven?: boolean }
   | { t: "music-report"; uri: string | null; paused: boolean; positionMs: number; audible: boolean; track?: Track }
